@@ -1,9 +1,11 @@
-#feature-id    Utilities > Fast Visual History Report
+#feature-id    Utilities > AstroProcessAtlas
 #feature-info  Generates a workspace history graph with image dependencies, masks, thumbnails and process parameters.
 
 #include <pjsr/StdIcon.jsh>
 #include <pjsr/StdButton.jsh>
 #include <pjsr/Sizer.jsh>
+
+var ASTROPROCESS_ATLAS_VERSION = "0.1.0";
 
 var ICON_ERROR = (typeof StdIcon_Error !== "undefined") ? StdIcon_Error : 4;
 var ICON_INFO = (typeof StdIcon_Information !== "undefined") ? StdIcon_Information : 2;
@@ -1002,10 +1004,10 @@ function embedReportThumbnails(records, directory, generatedFiles) {
 
 function showAboutDialog() {
    var dialog = new Dialog;
-   dialog.windowTitle = "About Workspace Visual History";
+   dialog.windowTitle = "About AstroProcessAtlas";
    var label = new Label(dialog);
    label.useRichText = true;
-   label.text = "<b>Workspace Visual History</b><br><br>Author: YoruHikari<br>https://www.yoruhikari.gr/";
+   label.text = "<b>AstroProcessAtlas</b><br>Version: " + ASTROPROCESS_ATLAS_VERSION + "<br><br>Author: YoruHikari<br>https://www.yoruhikari.gr/";
    var website = new PushButton(dialog); website.text = "Visit website";
    website.onClick = function() { Dialog.openBrowser("https://www.yoruhikari.gr/"); };
    var close = new PushButton(dialog); close.text = "Close";
@@ -1020,7 +1022,7 @@ function showAboutDialog() {
 
 function chooseWorkspaceWindows(windows) {
    var dialog = new Dialog;
-   dialog.windowTitle = "Workspace History Report — Select images";
+   dialog.windowTitle = "AstroProcessAtlas — Select images";
    var label = new Label(dialog);
    label.text = "Select the images for your report. The list includes all open PixInsight images, including hidden/iconized images and images in other virtual workspaces.";
    label.wordWrapping = true;
@@ -1081,9 +1083,9 @@ function generateHistoryReport() {
    var windows = chooseWorkspaceWindows(available);
    if (!windows.length) return;
    var save = new SaveFileDialog;
-   save.caption = "Save Workspace History Report HTML";
+   save.caption = "Save AstroProcessAtlas HTML";
    save.filters = [["HTML Files (*.html)", "*.html"]];
-   save.initialPath = "Workspace_VisualHistory.html";
+   save.initialPath = "AstroProcessAtlas_Report.html";
    if (!save.execute()) return;
    var path = save.fileName;
    var baseDir = File.extractDrive(path) + File.extractDirectory(path);
@@ -1103,10 +1105,10 @@ function generateHistoryReport() {
    records=orderWorkspaceGraph(records,graph);
    var thumbnailFiles=collectWorkspaceThumbnails(records, thumbDir, basename + "_thumbs");
    if(windows.embedThumbnails)embedReportThumbnails(records,thumbDir,thumbnailFiles);
-   var html = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Workspace Visual History</title><style>' + reportStyles() +
+   var html = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>AstroProcessAtlas</title><style>' + reportStyles() +
       'h2{color:#89b4fa} .graph-scroll{overflow:auto;max-height:760px;border:1px solid #45475a;margin:14px 0} #workspace_graph{display:block;height:auto;background:#11111b} .edge{fill:none;stroke:#89b4fa;stroke-width:1.8} .edge-input,.edge-reference{stroke:#f9e2af;stroke-dasharray:6 4} .edge-mask{stroke:#f38ba8;stroke-dasharray:6 4} .edge-output{stroke:#a6e3a1;stroke-dasharray:6 4} .edge-manual{stroke:#cba6f7;stroke-dasharray:4 3} .edge-possible{stroke:#94e2d5;stroke-dasharray:2 7;stroke-width:2} .possible-info{color:#94e2d5} .redo-edge,.redo-node{opacity:.45} .graph-node rect{fill:#1e1e2e;stroke:#45475a} .graph-node:hover rect{stroke:#89b4fa} .graph-node text{fill:#cdd6f4;font:13px sans-serif} .graph-node .graph-small{fill:#a6adc8;font-size:10px} .image-snapshot{max-width:160px;max-height:160px;display:block;margin-bottom:10px} .image-report{scroll-margin-top:15px} select,input{max-width:100%;background:#1e1e2e;color:#cdd6f4;border:1px solid #45475a;padding:6px} .step-card{scroll-margin-top:15px} </style></head><body>';
    html += '<p><label>Language / Γλώσσα <select id="report_language" onchange="setReportLanguage(this.value)"><option value="en" data-no-i18n>English</option><option value="el" data-no-i18n>Ελληνικά</option></select></label></p>';
-   html += '<h1>Workspace Visual History</h1><div class="meta-info"><b>Images:</b> ' + records.length + ' · <b>Total Process Steps:</b> ' + total + ' · ' + escapeHTML((new Date()).toLocaleString()) +
+   html += '<h1>AstroProcessAtlas</h1><div class="meta-info"><b>Images:</b> ' + records.length + ' · <b>Total Process Steps:</b> ' + total + ' · ' + escapeHTML((new Date()).toLocaleString()) +
       '<p>Includes the selected open images and their available initial/recent history. Closed images, older mask versions and unrecorded connections cannot be recovered automatically. Image references are detected in PixelMath, ChannelCombination, LRGBCombination, ChannelExtraction, specific image ID parameters and masks. The same initial processing may appear in multiple images.</p></div>';
    html += processingSummaryHTML(records);
    var tools = [], seenTools = {};
@@ -1133,7 +1135,7 @@ function generateHistoryReport() {
    var file = new File;
    file.createForWriting(path);
    try { file.write(ByteArray.stringToUTF8(html)); } finally { file.close(); }
-   new MessageBox("Workspace History Report created.\nImages: " + records.length + " · Steps: " + total + "\n\n" + path, "Success", ICON_INFO, BUTTON_OK).execute();
+   new MessageBox("AstroProcessAtlas created.\nImages: " + records.length + " · Steps: " + total + "\n\n" + path, "Success", ICON_INFO, BUTTON_OK).execute();
 }
 
 var REPORT_TRANSLATIONS = [

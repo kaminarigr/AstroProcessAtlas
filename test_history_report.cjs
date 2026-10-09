@@ -2,7 +2,7 @@
 const fs = require('node:fs');
 const vm = require('node:vm');
 const assert = require('node:assert/strict');
-const source = fs.readFileSync(__dirname + '/Fast_VisualHistoryReport.js', 'utf8')
+const source = fs.readFileSync(__dirname + '/AstroProcessAtlas.js', 'utf8')
   .replace(/^#.*$/gm, '');
 
 function run(count, startIndex, unavailable = false, failedThumbnail = false, customSteps = null, maskSource = null, maskViews = {}) {

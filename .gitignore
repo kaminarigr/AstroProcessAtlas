@@ -1,0 +1,15 @@
+# Generated reports and thumbnail folders
+*_thumbs/
+AstroProcessAtlas_Report*.html
+Workspace_VisualHistory*.html
+
+# Local tools and editor files
+node_modules/
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db
+
+*.cjs
+
+WORKSPACE_HISTORY_README.md
