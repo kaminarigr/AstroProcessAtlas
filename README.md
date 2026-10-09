@@ -4,6 +4,18 @@ Visual processing history for PixInsight, by **YoruHikari**.
 
 Explore the available processing history of your open images, their parameters, masks and image references in an interactive HTML report. Trace your work from selected original channels to the final image.
 
+## Example report
+
+Download [AstroProcessAtlas-demo.html](examples/AstroProcessAtlas-demo.html) and open it locally in Firefox, Chrome or Edge. It is a self-contained example from a real processing session (approximately 7 MB); no thumbnail folder is needed.
+
+For a direct download, use the file's **Download raw file** button on GitHub. GitHub's source view does not run the interactive report.
+
+The embedded previews are reduced to at most 640 pixels and compressed for a smaller download. Full-resolution processing images are not included. The original report is preserved separately.
+
+### Παράδειγμα report
+
+Κατέβασε το [δείγμα HTML](examples/AstroProcessAtlas-demo.html) με το **Download raw file** και άνοιξέ το στον browser. Προέρχεται από πραγματική επεξεργασία και λειτουργεί ως ένα αρχείο. Τα thumbnails έχουν μικρύνει και συμπιεστεί για την επίδειξη· από το **Language / Γλώσσα** μπορείς να επιλέξεις Ελληνικά.
+
 ## Features
 
 - Multi-image history graph with search, tool filters and synchronized image selection.
