@@ -63,4 +63,13 @@ These checks mock the PixInsight APIs and browser DOM. They do not replace testi
 
 **YoruHikari** — [YoruHikari Astrophotography](https://www.yoruhikari.gr/).
 
-A project license has not been selected yet.
+## License
+
+Licensed under the [MIT License](LICENSE). You may use, modify and redistribute
+the software, including commercially, while retaining the copyright and license
+notice. The copyright notice includes **YoruHikari Astrophotography** and
+**https://www.yoruhikari.gr/**. An acknowledgment and link in About or documentation
+are appreciated; an additional visible credit is not a license requirement.
+
+Διατίθεται με την άδεια **MIT**: επιτρέπεται χρήση, τροποποίηση και αναδιανομή,
+με διατήρηση της άδειας και της αναφοράς δημιουργού, η οποία περιλαμβάνει το site.
