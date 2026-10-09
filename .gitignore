@@ -7,6 +7,9 @@ Workspace_VisualHistory*.html
 node_modules/
 __pycache__/
 *.pyc
+dist/
+site/
+*.xssk
 .DS_Store
 Thumbs.db
 

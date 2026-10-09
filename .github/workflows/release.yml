@@ -1,0 +1,42 @@
+name: Build release
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing version tag, e.g. v0.1.0'
+        required: true
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: node test_history_report.cjs
+      - run: node test_workspace_report.cjs
+      - run: python -m unittest discover -s tools -p "test_release.py"
+      - name: Package release
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          test "${TAG:0:1}" = v
+          python tools/build_release.py --version "${TAG#v}" --date "$(date -u +%Y%m%d)"
+      - name: Create draft release with downloads
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --draft --verify-tag --title "AstroProcessAtlas $TAG" --generate-notes
+          fi
+          gh release upload "$TAG" dist/*.zip dist/SHA256SUMS.txt dist/repository-candidate.xri

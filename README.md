@@ -40,7 +40,9 @@ The embedded previews are reduced to at most 640 pixels and compressed for a sma
 
 Current version: **0.1.0**. The version is shown in About.
 
-Updates are currently manual: download the updated script and replace your installed copy. Close any older copy open in PixInsight's editor before reopening the new file. A native PixInsight update repository is not included yet.
+Version tags build downloadable ZIPs and draft GitHub releases automatically. Until the first CPD-signed repository is published, updates remain manual: replace your installed script and reopen it in PixInsight's editor.
+
+The planned PixInsight update URL is `https://kaminarigr.github.io/AstroProcessAtlas/`. It is **not active yet**. See [release and repository setup](docs/RELEASING.md) for signing and activation.
 
 See [CHANGELOG.md](CHANGELOG.md) for changes.
 

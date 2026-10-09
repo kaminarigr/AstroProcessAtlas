@@ -1,0 +1,45 @@
+name: Publish signed PixInsight repository
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Published release containing signed ZIP and updates.xri'
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: pixinsight-pages
+  cancel-in-progress: false
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Download signed release files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          gh release view "$TAG" --json isDraft --jq 'if .isDraft then error("Publish the release first") else . end'
+          gh release download "$TAG" --pattern '*-AstroProcessAtlas-*.zip' --pattern updates.xri --dir site
+      - run: python tools/validate_repository.py site
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+  deploy:
+    needs: prepare
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy repository
+        id: deployment
+        uses: actions/deploy-pages@v4

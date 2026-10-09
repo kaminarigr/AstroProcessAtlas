@@ -1,0 +1,37 @@
+import tempfile
+import unittest
+from pathlib import Path
+from build_release import build, ROOT
+from validate_repository import validate
+import re
+
+VERSION = re.search(r'ASTROPROCESS_ATLAS_VERSION\s*=\s*"([^"]+)"', (ROOT / 'AstroProcessAtlas.js').read_text(encoding='utf-8')).group(1)
+
+
+class ReleaseTests(unittest.TestCase):
+    def test_reproducible_and_minimal(self):
+        with tempfile.TemporaryDirectory() as temp:
+            folder = Path(temp)
+            first = build(VERSION, '20261009', folder).read_bytes()
+            self.assertEqual(first, build(VERSION, '20261009', folder).read_bytes())
+            import zipfile
+            with zipfile.ZipFile(build(VERSION, '20261009', folder)) as archive:
+                self.assertEqual(len(archive.namelist()), 4)
+                self.assertIn('src/scripts/AstroProcessAtlas/LICENSE', archive.namelist())
+
+    def test_version_mismatch(self):
+        with tempfile.TemporaryDirectory() as temp:
+            with self.assertRaises(ValueError):
+                build('999.0.0', '20261009', Path(temp))
+
+    def test_unsigned_repository_rejected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            folder = Path(temp)
+            build(VERSION, '20261009', folder)
+            (folder / 'updates.xri').write_bytes((folder / 'repository-candidate.xri').read_bytes())
+            with self.assertRaises(ValueError):
+                validate(folder)
+
+
+if __name__ == '__main__':
+    unittest.main()
