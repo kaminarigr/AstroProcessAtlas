@@ -24,12 +24,20 @@ class ReleaseTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 build('999.0.0', '20261009', Path(temp))
 
-    def test_unsigned_repository_rejected(self):
+    def test_unsigned_repository_and_optional_signing(self):
         with tempfile.TemporaryDirectory() as temp:
             folder = Path(temp)
             build(VERSION, '20261009', folder)
-            (folder / 'updates.xri').write_bytes((folder / 'repository-candidate.xri').read_bytes())
+            validate(folder)
             with self.assertRaises(ValueError):
+                validate(folder, require_signed=True)
+
+    def test_corrupted_package_rejected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            folder = Path(temp)
+            package = build(VERSION, '20261009', folder)
+            package.write_bytes(package.read_bytes() + b'corruption')
+            with self.assertRaisesRegex(ValueError, 'checksum'):
                 validate(folder)
 
 

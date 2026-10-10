@@ -1,9 +1,11 @@
-name: Publish signed PixInsight repository
+name: Publish PixInsight repository
 on:
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Published release containing signed ZIP and updates.xri'
+        description: 'Published release containing ZIP and updates.xri'
         required: true
 permissions:
   contents: read
@@ -12,16 +14,17 @@ concurrency:
   cancel-in-progress: false
 jobs:
   prepare:
+    if: github.event_name == 'workflow_dispatch' || !github.event.release.prerelease
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Download signed release files
+      - name: Download release files
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ inputs.tag }}
+          TAG: ${{ inputs.tag || github.event.release.tag_name }}
         run: |
           gh release view "$TAG" --json isDraft --jq 'if .isDraft then error("Publish the release first") else . end'
           gh release download "$TAG" --pattern '*-AstroProcessAtlas-*.zip' --pattern updates.xri --dir site

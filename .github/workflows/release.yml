@@ -31,6 +31,7 @@ jobs:
         run: |
           test "${TAG:0:1}" = v
           python tools/build_release.py --version "${TAG#v}" --date "$(date -u +%Y%m%d)"
+          python tools/validate_repository.py dist
       - name: Create draft release with downloads
         env:
           GH_TOKEN: ${{ github.token }}
@@ -39,4 +40,4 @@ jobs:
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             gh release create "$TAG" --draft --verify-tag --title "AstroProcessAtlas $TAG" --generate-notes
           fi
-          gh release upload "$TAG" dist/*.zip dist/SHA256SUMS.txt dist/repository-candidate.xri
+          gh release upload "$TAG" dist/*.zip dist/SHA256SUMS.txt dist/updates.xri

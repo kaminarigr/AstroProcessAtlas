@@ -32,7 +32,6 @@ def build(version, date, output, signature=None):
             archive.writestr(info, data)
     data = (output / filename).read_bytes()
     (output / 'SHA256SUMS.txt').write_text(hashlib.sha256(data).hexdigest() + '  ' + filename + '\n', encoding='utf-8')
-    # The candidate is deliberately not named updates.xri until signed and approved.
     manifest = f'''<?xml version="1.0" encoding="UTF-8"?>
 <xri version="1.0">
   <description>AstroProcessAtlas by YoruHikari — https://www.yoruhikari.gr/</description>
@@ -44,7 +43,7 @@ def build(version, date, output, signature=None):
   </platform>
 </xri>
 '''
-    (output / 'repository-candidate.xri').write_text(manifest, encoding='utf-8')
+    (output / 'updates.xri').write_text(manifest, encoding='utf-8')
     return output / filename
 
 

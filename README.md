@@ -40,9 +40,9 @@ The embedded previews are reduced to at most 640 pixels and compressed for a sma
 
 Current version: **0.1.0**. The version is shown in About.
 
-Version tags build downloadable ZIPs and draft GitHub releases automatically. Until the first CPD-signed repository is published, updates remain manual: replace your installed script and reopen it in PixInsight's editor.
+Version tags build downloadable ZIPs and draft GitHub releases automatically. Publishing a stable release deploys an **unsigned PixInsight update repository** to GitHub Pages. No CPD identity is required; users must allow unsigned repositories and scripts in PixInsight's Security preferences.
 
-The planned PixInsight update URL is `https://kaminarigr.github.io/AstroProcessAtlas/`. It is **not active yet**. See [release and repository setup](docs/RELEASING.md) for signing and activation.
+The PixInsight update URL is `https://kaminarigr.github.io/AstroProcessAtlas/`. It becomes available after the first successful Pages deployment. Add it through **Resources → Updates → Manage Repositories**, check for updates and accept the unsigned-repository confirmation. The feed currently targets PixInsight 1.9.4. See [release and repository setup](docs/RELEASING.md).
 
 See [CHANGELOG.md](CHANGELOG.md) for changes.
 
@@ -60,7 +60,7 @@ Replay code requires the correct preceding image state, references and mask sett
 
 Κατέβασε το `AstroProcessAtlas.js`, άνοιξέ το στον Script Editor του PixInsight και εκτέλεσέ το. Επίλεξε τις εικόνες του report και όρισε ρητά τις πραγματικές αρχικές εικόνες. Η προεπιλεγμένη εξαγωγή ενσωματώνει τα thumbnails στο HTML. Από το **Language / Γλώσσα** επίλεξε **Ελληνικά**.
 
-Οι ενημερώσεις γίνονται προς το παρόν με αντικατάσταση του script. Αναλυτικές οδηγίες και περιορισμοί: [WORKSPACE_HISTORY_README.md](WORKSPACE_HISTORY_README.md).
+Μετά την πρώτη δημοσίευση στο GitHub Pages, οι ενημερώσεις διατίθενται και μέσω του PixInsight. Το αποθετήριο είναι unsigned: χρειάζονται οι επιλογές **Allow unsigned update repositories** και **Allow execution of unsigned scripts** στο **Preferences → Security**. Οδηγίες: [RELEASING.md](docs/RELEASING.md). Αναλυτικές οδηγίες του report: [WORKSPACE_HISTORY_README.md](WORKSPACE_HISTORY_README.md).
 
 ## Development
 
