@@ -6,7 +6,7 @@ Explore the available processing history of your open images, their parameters, 
 
 ## Example report
 
-Download [AstroProcessAtlas-demo.html](examples/AstroProcessAtlas-demo.html) and open it locally in Firefox, Chrome or Edge. It is a self-contained example from a real processing session (approximately 7 MB); no thumbnail folder is needed.
+Download [AstroProcessAtlas-demo.html](examples/AstroProcessAtlas-demo.html) and open it locally in Firefox, Chrome or Edge. It is a self-contained example from a real processing session (approximately 36 MB, including full process data); no thumbnail folder is needed.
 
 For a direct download, use the file's **Download raw file** button on GitHub. GitHub's source view does not run the interactive report.
 

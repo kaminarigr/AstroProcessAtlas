@@ -37,6 +37,7 @@ def compact(match):
 
 text = re.sub(r'data:image/png;base64,([A-Za-z0-9+/=]+)', compact, text)
 text = text.replace('<title>Workspace Visual History</title>', '<title>AstroProcessAtlas — Example report</title>')
+text = text.replace('<title>AstroProcessAtlas</title>', '<title>AstroProcessAtlas — Example report</title>')
 text = text.replace('<h1>Workspace Visual History</h1>', '<h1>AstroProcessAtlas</h1>')
 banner = ('<div class="meta-info"><b>AstroProcessAtlas showcase report</b>'
           '<p>This example comes from a real processing session. Embedded previews have been '
