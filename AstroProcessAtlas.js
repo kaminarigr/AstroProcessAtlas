@@ -30,7 +30,7 @@
 #include <pjsr/StdButton.jsh>
 #include <pjsr/Sizer.jsh>
 
-var ASTROPROCESS_ATLAS_VERSION = "0.1.4";
+var ASTROPROCESS_ATLAS_VERSION = "0.1.5";
 
 var ICON_ERROR = (typeof StdIcon_Error !== "undefined") ? StdIcon_Error : 4;
 var ICON_INFO = (typeof StdIcon_Information !== "undefined") ? StdIcon_Information : 2;
@@ -46,6 +46,7 @@ function createThumbnailFromView(view, outputPath, maxSize) {
       var thumbHeight = Math.max(1, Math.round(bitmap.height * scale));
 
       var scaledBitmap = bitmap.scaledTo(thumbWidth, thumbHeight);
+      bitmap = null;
       if (scaledBitmap.save(outputPath) === false) throw new Error("Bitmap.save() failed");
       return true;
    } catch (e) {
@@ -555,9 +556,9 @@ function collectWorkspaceThumbnails(records, thumbDir, relativeDir) {
       var record = records[r];
       var states = {}, dimensions = {};
       var captureState = function(index, filename) {
-         if (states['$'+index]) return states['$'+index];
+         if (Object.prototype.hasOwnProperty.call(states, '$'+index)) return states['$'+index];
          try {
-            record.view.historyIndex = index;
+            if (record.view.historyIndex !== index) record.view.historyIndex = index;
             if (record.view.historyIndex !== index) return '';
             dimensions['$'+index] = {width:record.view.image.width,height:record.view.image.height};
             if (createThumbnailFromView(record.view, thumbDir + '/' + filename, 1200)) {
@@ -565,6 +566,7 @@ function collectWorkspaceThumbnails(records, thumbDir, relativeDir) {
                return states['$'+index] = relativeDir + '/' + filename;
             }
          } catch (e) { Console.writeln(record.id + ' comparison state unavailable: ' + e.message); }
+         states['$'+index] = '';
          return '';
       };
       try {
@@ -576,7 +578,7 @@ function collectWorkspaceThumbnails(records, thumbDir, relativeDir) {
             if (step.phase === "initial") continue;
             step.beforeThumb = captureState(step.liveIndex-1, record.anchor + '_state_' + (step.liveIndex-1) + '.png');
             try {
-               record.view.historyIndex = step.liveIndex;
+               if (record.view.historyIndex !== step.liveIndex) record.view.historyIndex = step.liveIndex;
                if (record.view.historyIndex === step.liveIndex) {
                   var filename = step.anchor + ".png";
                   var after = states['$'+step.liveIndex] || captureState(step.liveIndex, filename);
@@ -1023,14 +1025,20 @@ function processingSummaryHTML(records) {
    return html;
 }
 
-function embedReportThumbnails(records, directory, generatedFiles) {
+function embedReportThumbnails(records, directory, generatedFiles, emitAsset) {
    var cache={},files=[];
    var embed=function(src){
       if(!src||src.indexOf('data:')===0)return src;
       if(cache['$'+src])return cache['$'+src];
       var filename=src.slice(src.lastIndexOf('/')+1),path=directory+'/'+filename;
       files.push(path);
-      return cache['$'+src]='data:image/png;base64,'+File.readFile(path).toBase64();
+      var data = 'data:image/png;base64,'+File.readFile(path).toBase64();
+      if (emitAsset) {
+         var key = '#apa_asset_' + files.length;
+         emitAsset(key, data);
+         return cache['$'+src] = key;
+      }
+      return cache['$'+src] = data;
    };
    try {
       for(var r=0;r<records.length;++r){var record=records[r];
@@ -1150,7 +1158,6 @@ function generateHistoryReport() {
    var graph = workspaceGraph(records);
    records=orderWorkspaceGraph(records,graph);
    var thumbnailFiles=collectWorkspaceThumbnails(records, thumbDir, basename + "_thumbs");
-   if(windows.embedThumbnails)embedReportThumbnails(records,thumbDir,thumbnailFiles);
    var html = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>AstroProcessAtlas</title><style>' + reportStyles() +
       'h2{color:#89b4fa} .graph-scroll{overflow:auto;max-height:760px;border:1px solid #45475a;margin:14px 0} #workspace_graph{display:block;height:auto;background:#11111b} .edge{fill:none;stroke:#89b4fa;stroke-width:1.8} .edge-input,.edge-reference{stroke:#f9e2af;stroke-dasharray:6 4} .edge-mask{stroke:#f38ba8;stroke-dasharray:6 4} .edge-output{stroke:#a6e3a1;stroke-dasharray:6 4} .edge-manual{stroke:#cba6f7;stroke-dasharray:4 3} .edge-possible{stroke:#94e2d5;stroke-dasharray:2 7;stroke-width:2} .possible-info{color:#94e2d5} .redo-edge,.redo-node{opacity:.45} .graph-node rect{fill:#1e1e2e;stroke:#45475a} .graph-node:hover rect{stroke:#89b4fa} .graph-node text{fill:#cdd6f4;font:13px sans-serif} .graph-node .graph-small{fill:#a6adc8;font-size:10px} .image-snapshot{max-width:160px;max-height:160px;display:block;margin-bottom:10px} .image-report{scroll-margin-top:15px} select,input{max-width:100%;background:#1e1e2e;color:#cdd6f4;border:1px solid #45475a;padding:6px} .step-card{scroll-margin-top:15px} </style></head><body>';
    html += '<p><label>Language / Γλώσσα <select id="report_language" onchange="setReportLanguage(this.value)"><option value="en" data-no-i18n>English</option><option value="el" data-no-i18n>Ελληνικά</option></select></label></p>';
@@ -1174,6 +1181,15 @@ function generateHistoryReport() {
    file.createForWriting(path);
    try {
    writeReportText(file, html); html = '';
+   if (windows.embedThumbnails) {
+      writeReportText(file, '<script>var reportEmbeddedAssets={};');
+      embedReportThumbnails(records, thumbDir, thumbnailFiles, function(key, data) {
+         writeReportText(file, 'reportEmbeddedAssets["' + key + '"]="');
+         writeReportText(file, data);
+         writeReportText(file, '";');
+      });
+      writeReportText(file, '</script>');
+   }
    var emit = function(fragment) { writeReportText(file, fragment); };
    for (var i = 0; i < records.length; ++i) imageReportHTML(records[i], emit);
    html += '<footer class="report-footer"><a href="https://www.yoruhikari.gr/" target="_blank" rel="noopener noreferrer">© 2026 YoruHikari Astrophotography</a></footer>';
@@ -1704,6 +1720,13 @@ function reportBrowserScript() {
 // Browser code is embedded as text: PJSR must not parse or reserialize browser-only JavaScript.
 var WORKSPACE_BROWSER_SOURCE = [
    "function workspaceBrowserMain() {",
+   "   if(typeof reportEmbeddedAssets!=='undefined'){",
+   "      var assets=document.querySelectorAll('[src],[href],[data-before],[data-after]');",
+   "      for(var ai=0;ai<assets.length;++ai)for(var aj=0;aj<4;++aj){",
+   "         var attribute=['src','href','data-before','data-after'][aj],asset=assets[ai].getAttribute(attribute);",
+   "         if(asset&&reportEmbeddedAssets[asset])assets[ai].setAttribute(attribute,reportEmbeddedAssets[asset]);",
+   "      }",
+   "   }",
    "   window.addEventListener('error',function(event){",
    "      var status=document.getElementById('filter_status');",
    "      if(status)status.textContent='Report controls failed: '+(event.message||'Unknown error');",

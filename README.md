@@ -38,7 +38,7 @@ The embedded previews are reduced to at most 640 pixels and compressed for a sma
 
 ## Updates
 
-Current version: **0.1.4**. The version is shown in About.
+Current version: **0.1.5**. The version is shown in About.
 
 Version tags build downloadable ZIPs and draft GitHub releases automatically. Publishing a stable release deploys an **unsigned PixInsight update repository** to GitHub Pages. No CPD identity is required; users must allow unsigned repositories and scripts in PixInsight's Security preferences.
 

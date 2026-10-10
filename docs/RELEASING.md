@@ -26,7 +26,7 @@ target, not completed native compatibility testing. Extend the platform range in
    deploys them to Pages. Prereleases are not deployed automatically.
 5. Test both the ZIP and `updates.xri` at the repository URL, then test installation in PixInsight.
 
-The current script version is `0.1.4`; use the matching tag `v0.1.4`.
+The current script version is `0.1.5`; use the matching tag `v0.1.5`.
 **Build release → Run workflow** also accepts an existing tag. Deployment can be retried
 with **Publish PixInsight repository → Run workflow** and the published release tag.
 Manual publication accepts prereleases too; choose the intended stable version.
@@ -68,7 +68,7 @@ authenticity. Replace all matching draft assets before publishing. Never upload 
 node test_history_report.cjs
 node test_workspace_report.cjs
 python -m unittest discover -s tools -p "test_release.py"
-python tools/build_release.py --version 0.1.4 --date 20261010
+python tools/build_release.py --version 0.1.5 --date 20261010
 python tools/validate_repository.py dist
 ```
 

@@ -114,8 +114,8 @@ assert.ok(output.includes('id="final_image"'));
 assert.ok(output.includes('Copy step for replay'));
 assert.equal((output.match(/class="image-report"/g)||[]).length,5);
 assert.equal((output.match(/class="step-card"/g)||[]).length,7);
-assert.equal((output.match(/<script>/g)||[]).length,1);
-new vm.Script(/<script>([\s\S]*?)<\/script>/.exec(output)[1]);
+assert.equal((output.match(/<script>/g)||[]).length,2);
+for(const match of output.matchAll(/<script>([\s\S]*?)<\/script>/g))new vm.Script(match[1]);
 for(let i=0;i<windows.length;++i) assert.equal(windows[i].mainView.historyIndex,i===4?2:windows[i].mainView.processing.length);
 const fullOutput=output;
 // Run the browser controls against a small DOM substitute; no browser/file access needed.
@@ -130,7 +130,11 @@ const elements={manual_edges:element(),manual_status:element(),manual_from:eleme
 const sections=[{getAttribute:()=> 'image_0'},{getAttribute:()=> 'image_4'}];
 const graphGroups=graph.nodes.map(n=>{const group=element();group.setAttribute('data-node',n.id);return group;});
 const graphPaths=graph.edges.map(e=>{const path=element();path.setAttribute('data-from',e.from);path.setAttribute('data-to',e.to);return path;});
+const assetImage=element();assetImage.setAttribute('src','#apa_asset_1');
+const assetComparison=element();assetComparison.setAttribute('data-before','#apa_asset_1');assetComparison.setAttribute('data-after','#apa_asset_2');
+const assetLink=element();assetLink.setAttribute('href','#apa_asset_2');
 function querySelectorAll(selector){
+  if(selector==='[src],[href],[data-before],[data-after]')return [assetImage,assetComparison,assetLink];
   if(selector==='.image-report')return sections;
   if(selector==='#workspace_graph .graph-node')return graphGroups;
   if(selector==='#workspace_graph path[data-from]')return [...graphPaths,...elements.manual_edges.children];
@@ -139,13 +143,16 @@ function querySelectorAll(selector){
 }
 let exportedBlob, scrollOptions, reducedMotion=false;
 const listeners={};
-const browser={workspaceGraphData:graph,window:{scrollY:0,
+const browser={reportEmbeddedAssets:{'#apa_asset_1':'data:image/png;base64,UE5H','#apa_asset_2':'data:image/png;base64,QUJD'},workspaceGraphData:graph,window:{scrollY:0,
   addEventListener:(name,listener)=>{listeners[name]=listener;},scrollTo:options=>{scrollOptions=options;},
   matchMedia:()=>({matches:reducedMotion})},navigator:{},setTimeout:()=>{},
   document:{getElementById:id=>elements[id],querySelectorAll,createElementNS:()=>element(),createElement:()=>element()},
   Blob:function(parts){exportedBlob=parts.join('');},URL:{createObjectURL:()=> 'blob:demo',revokeObjectURL(){}},
   FileReader:function(){this.readAsText=file=>{this.result=file.contents;this.onload();};}};
 vm.runInNewContext(helper.reportBrowserScript(),browser);
+assert.equal(assetImage.getAttribute('src'),'data:image/png;base64,UE5H');
+assert.equal(assetComparison.getAttribute('data-before'),assetImage.getAttribute('src'));
+assert.equal(assetComparison.getAttribute('data-after'),assetLink.getAttribute('href'));
 assert.equal((overview.match(/class="legend-item"/g)||[]).length,6);
 assert.ok(overview.includes('onmouseenter="focusGraphImage'));
 browser.window.focusGraphImage('image_0');
@@ -346,6 +353,14 @@ helper.embedReportThumbnails(embedRecords,'/scratch');
 assert.equal(reads.length,3,'Read each unique PNG once');
 assert.equal(embedRecords[0].steps[0].beforeThumb,'data:image/png;base64,UE5H');
 assert.equal(sharedMask.src,'data:image/png;base64,UE5H');assert.equal(removed.length,4);
+reads.length=0;
+const compactRecords=[{currentThumb:'assets/shared.png',steps:[{thumb:'assets/shared.png',beforeThumb:'assets/shared.png',afterThumb:'assets/after.png'}]}];
+const uniqueAssets=[];
+helper.embedReportThumbnails(compactRecords,'/scratch',null,(key,data)=>uniqueAssets.push({key,data}));
+assert.equal(uniqueAssets.length,2);
+assert.equal(reads.length,2);
+assert.equal(compactRecords[0].currentThumb,compactRecords[0].steps[0].beforeThumb);
+assert.ok(!JSON.stringify(compactRecords).includes('base64'),'Records retain compact references, not image data');
 let finalStored='';browser.window.location={href:'file:///report.html'};
 browser.window.localStorage={setItem:(key,value)=>{finalStored=value;}};
 elements.final_image=element('');elements.final_preview=element();

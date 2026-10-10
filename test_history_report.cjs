@@ -130,7 +130,7 @@ assert.ok(sample.includes('Input (X)'));
 assert.equal((sample.match(/<b>[RGB]<\/b>/g) || []).length, 6);
 assert.ok(sample.includes('data:image/png;base64,'));
 assert.ok(sample.includes('copyCode(this)'));
-const browserScript = /<script>([\s\S]*?)<\/script>/.exec(sample)[1];
+const browserScript = Array.from(sample.matchAll(/<script>([\s\S]*?)<\/script>/g)).find(match=>match[1].includes('workspaceGraphData'))[1];
 new vm.Script(browserScript);
 curveProc.S = [[0,0],[0.5,0.7],[1,1]];
 const unsupported = helper.pixelMathSection(curveProc, curveProc.toSource(), true);
@@ -187,7 +187,8 @@ assert.ok(brokenThumb.reason.includes('thumbnail creation failed'));
 assert.equal(maskSaves, 1);
 // Full report: render an available historical mask and keep missing-mask text for another.
 const maskPreviewReport = run(3, 2, false, false, null, masksSource, {StarMask: availableMask});
-assert.ok(maskPreviewReport.includes('src="data:image/png;base64,'));
+assert.ok(maskPreviewReport.includes('src="#apa_asset_'));
+assert.ok(maskPreviewReport.includes('data:image/png;base64,'));
 assert.ok(maskPreviewReport.includes('class="mask-inverted"'));
 assert.ok(maskPreviewReport.includes('The mask image is closed'));
 console.log('Passed: mask thumbnails, aspect ratio, shared PNG cache, inversion display, missing/failed mask images and full report integration.');

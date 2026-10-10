@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.5
+
+- Embed each unique thumbnail once and stream it directly to disk. Steps share
+  compact references resolved by the report, reducing repeated base64 data and
+  memory retained during export without reducing preview resolution.
+- Avoid redundant history navigation and repeated attempts to capture failed states.
+- Release the full-size rendered bitmap reference before saving its scaled preview.
+
 ## 0.1.4
 
 - Show the first five entries of large parameter arrays, or five lines of multiline
