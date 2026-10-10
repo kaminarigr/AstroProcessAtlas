@@ -38,7 +38,7 @@ function run(count, startIndex, unavailable = false, failedThumbnail = false, cu
   File.readFile=()=>({toBase64:()=>Buffer.from('PNG').toString('base64')});
   File.remove=()=>{};File.removeDirectory=()=>{};
   File.prototype.createForWriting = () => {};
-  File.prototype.write = bytes => { html = bytes.toString('utf8'); };
+  File.prototype.write = bytes => { html += bytes.toString('utf8'); };
   File.prototype.close = () => {};
   const context = {
     Dialog: function() {this.adjustToContents=()=>{};this.execute=()=>true;this.scaledResource=x=>x;},

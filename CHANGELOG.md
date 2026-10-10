@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.2
+
+- Stream workspace reports to disk by step instead of accumulating all images in
+  one HTML string, avoiding allocation overflow for large embedded-thumbnail reports.
+- Write UTF-8 in bounded chunks without splitting Unicode surrogate pairs.
+
 ## 0.1.1
 
 - Include PixInsight 1.9.3 in the update repository's compatibility range. The

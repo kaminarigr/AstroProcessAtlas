@@ -94,7 +94,7 @@ function File(){}
 File.extractDrive=()=>'';File.extractDirectory=()=>'/preview';File.extractName=()=> 'workspace';File.createDirectory=()=>{};
 File.readFile=()=>({toBase64:()=>Buffer.from('PNG').toString('base64')});
 File.remove=()=>{};File.removeDirectory=()=>{};
-File.prototype.createForWriting=()=>{};File.prototype.write=bytes=>{output=bytes.toString('utf8');};File.prototype.close=()=>{};
+File.prototype.createForWriting=()=>{};File.prototype.write=bytes=>{output+=bytes.toString('utf8');};File.prototype.close=()=>{};
 const context={...helper,File,ImageWindow:{windows,activeWindow:{isNull:true}},
   ByteArray:{stringToUTF8:text=>Buffer.from(text,'utf8')},
   Dialog:function(){this.scaledResource=x=>x;this.adjustToContents=()=>{};this.execute=()=>{if(uncheckIndex>=0)lastTree.children[uncheckIndex].checked=false;return !dialogCancelled;};},
@@ -411,3 +411,17 @@ for(const n of ['2.1','2.2','2.3'])assert.ok(numberedHTML.includes('Substep '+n)
 assert.ok(numberedHTML.includes('<details open><summary>Show recorded component steps (3)'));
 assert.equal(numbered.steps.length,5);
 console.log('Passed: shared graph/detail group numbering, open PPP substeps, continued numbering and separate original entry count.');
+
+const streamedParts=[];
+assert.equal(helper.imageReportHTML(numbered,part=>streamedParts.push(part)),'');
+assert.equal(streamedParts.join(''),numberedHTML,'Streaming preserves grouped markup exactly');
+assert.ok(streamedParts.length>numbered.steps.length,'Flush each step rather than accumulating one image');
+helper.ByteArray={stringToUTF8:text=>Buffer.from(text,'utf8')};
+const unicodeText='x'.repeat(65535)+'🌌'+'Ελληνικά'.repeat(20000);
+const byteChunks=[];
+helper.writeReportText({write:bytes=>byteChunks.push(bytes)},unicodeText);
+assert.equal(Buffer.concat(byteChunks).toString('utf8'),unicodeText);
+assert.ok(byteChunks.length>2);
+assert.ok(byteChunks.every(bytes=>bytes.length<=65536*3),'Bound UTF-8 write allocations');
+assert.ok(byteChunks.every(bytes=>!bytes.toString('utf8').includes('\uFFFD')),'No split Unicode surrogate pairs');
+console.log('Passed: streamed grouped report equivalence, bounded UTF-8 writes and Unicode chunk boundaries.');

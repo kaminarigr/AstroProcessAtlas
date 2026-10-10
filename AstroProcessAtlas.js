@@ -29,7 +29,7 @@
 #include <pjsr/StdButton.jsh>
 #include <pjsr/Sizer.jsh>
 
-var ASTROPROCESS_ATLAS_VERSION = "0.1.1";
+var ASTROPROCESS_ATLAS_VERSION = "0.1.2";
 
 var ICON_ERROR = (typeof StdIcon_Error !== "undefined") ? StdIcon_Error : 4;
 var ICON_INFO = (typeof StdIcon_Information !== "undefined") ? StdIcon_Information : 2;
@@ -907,7 +907,7 @@ function comparisonHTML(step) {
       '<button type="button" onclick="openComparison(this)">Enlarge comparison</button></div>';
 }
 
-function imageReportHTML(record) {
+function imageReportHTML(record, emit) {
    var groups = record.displayGroups || workspaceStepGroups(record);
    var html = '<section class="image-report" data-image="' + record.anchor + '" id="' + record.anchor + '"><h2 data-no-i18n>' + escapeHTML(record.id) + '</h2>';
    html += '<div class="meta-info">' + (record.currentThumb ? '<img class="image-snapshot" src="' + escapeHTML(record.currentThumb) + '" alt="Current image">' : '') +
@@ -917,6 +917,7 @@ function imageReportHTML(record) {
       maskThumbnailHTML(record.currentMaskThumbnail, record.currentMaskInverted) + '</div>';
    if (record.error || record.initialNote) html += '<p>' + escapeHTML(record.error || record.initialNote) + '</p>';
    if (!record.steps.length) html += '<p>No history steps were found for this image.</p>';
+   if (emit) { emit(html); html = ''; }
    for (var i = 0; i < record.steps.length; ++i) {
       var step = record.steps[i];
       var groupStart = null, groupEnd = false;
@@ -953,9 +954,27 @@ function imageReportHTML(record) {
       html += replayStepHTML(record, step) + readableParameters(step.proc, step.source) + pixelMathSection(step.proc, step.source, record.isColor) +
          '<details><summary>Full process code / all parameters</summary>' + copyBlock('PixInsight JavaScript', step.source) + '</details></div></div>';
       if (groupEnd) html += '</details></div>';
+      if (emit) { emit(html); html = ''; }
    }
-   for (var i = 0; i < record.historySources.length; ++i) html += '<details><summary>Full history code — ' + record.historySources[i].phase + '</summary>' + copyBlock('History ProcessContainer', record.historySources[i].source) + '</details>';
+   for (var i = 0; i < record.historySources.length; ++i) {
+      html += '<details><summary>Full history code — ' + record.historySources[i].phase + '</summary>' + copyBlock('History ProcessContainer', record.historySources[i].source) + '</details>';
+      if (emit) { emit(html); html = ''; }
+   }
+   if (emit) { emit(html + '</section>'); return ''; }
    return html + '</section>';
+}
+
+// Bound UTF-8 allocations and keep surrogate pairs intact between writes.
+function writeReportText(file, text) {
+   for (var start = 0; start < text.length;) {
+      var end = Math.min(start + 65536, text.length);
+      if (end < text.length) {
+         var last = text.charCodeAt(end - 1);
+         if (last >= 0xD800 && last <= 0xDBFF) --end;
+      }
+      file.write(ByteArray.stringToUTF8(text.substring(start, end)));
+      start = end;
+   }
 }
 
 function replayStepHTML(record, step) {
@@ -1148,7 +1167,12 @@ function generateHistoryReport() {
    html += '<p><label>Show image history <select id="image_filter" onchange="showImage(this.value)"><option value="all">All</option>';
    for (var i = 0; i < records.length; ++i) html += '<option value="' + records[i].anchor + '" data-no-i18n>' + escapeHTML(records[i].id) + '</option>';
    html += '</select></label></p>';
-   for (var i = 0; i < records.length; ++i) html += imageReportHTML(records[i]);
+   var file = new File;
+   file.createForWriting(path);
+   try {
+   writeReportText(file, html); html = '';
+   var emit = function(fragment) { writeReportText(file, fragment); };
+   for (var i = 0; i < records.length; ++i) imageReportHTML(records[i], emit);
    html += '<footer class="report-footer"><a href="https://www.yoruhikari.gr/" target="_blank" rel="noopener noreferrer">© 2026 YoruHikari Astrophotography</a></footer>';
    html += '<button id="back_to_top" type="button" hidden onclick="scrollToReportTop()" aria-label="Back to top">↑ Back to top</button>';
    html += '<div id="comparison_dialog" role="dialog" aria-modal="true" aria-label="Before / after" hidden onclick="if(event.target===this)closeComparison()"><div class="comparison-panel"><button id="comparison_close" type="button" onclick="closeComparison()">Close</button><p>Preview up to 1200 pixels; without STF. Zoom and pan are shared by both images.</p><label class="zoom-control"><span>Zoom</span><input id="comparison_zoom" type="range" min="100" max="400" value="100" oninput="zoomComparison(this.value)" onchange="zoomComparison(this.value)"></label><div id="comparison_viewport"><div id="comparison_content"></div></div></div></div>';
@@ -1156,9 +1180,8 @@ function generateHistoryReport() {
    html += '<style>.report-filters{padding:12px;border:1px solid #45475a;display:flex;gap:12px;align-items:center;flex-wrap:wrap}.report-filters input[type=checkbox]{width:auto}.is-filtered,[hidden]{display:none!important}.compare-stage{position:relative;line-height:0}.compare-stage img{display:block;width:100%;max-width:none!important;max-height:none!important}.compare-before{position:absolute;inset:0;clip-path:inset(0 50% 0 0)}.compare-label{position:absolute;top:10px;background:#111b;padding:5px;line-height:1.3;pointer-events:none}.before-label{left:8px}.after-label{right:8px}.comparison input[type=range]{width:100%;padding:0}.comparison-unavailable{font-size:12px;color:#f9e2af}#comparison_dialog{width:min(1100px,94vw);max-height:94vh;background:#181825;color:#cdd6f4;border:1px solid #89b4fa}#comparison_dialog::backdrop{background:#000b}#comparison_viewport{overflow:auto;max-height:70vh}#comparison_content{width:100%}#comparison_dialog .comparison{width:100%}#comparison_dialog .comparison>button{display:none}.edge:focus{stroke-width:4;outline:none}.provenance-legend{font-size:13px;color:#bac2de}</style>';
    html += '<style>.zoom-control{display:inline-flex;align-items:center;gap:10px;margin:8px 0}.zoom-control span{white-space:nowrap}.zoom-control input[type=range]{width:220px;max-width:55vw;margin:0;vertical-align:middle}.graph-node.is-tool-match rect,.graph-node.is-tool-match:hover rect{stroke:#fab387!important;stroke-width:3px!important}.compare-divider{position:absolute;left:50%;top:0;bottom:0;width:2px;background:#fff;box-shadow:0 0 3px #000;pointer-events:none;z-index:2}.compare-divider span{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);border-radius:50%;padding:10px;background:#181825;border:2px solid #fff;line-height:1;color:#fff}.comparison .compare-stage .compare-slider{position:absolute;inset:0;width:100%;height:100%;margin:0;padding:0;opacity:0;cursor:ew-resize;z-index:3}.compare-stage:focus-within{outline:2px solid #fab387}.compare-label{z-index:4}#comparison_dialog{position:fixed;inset:0;z-index:10000;width:auto;max-height:none;background:#000b;border:0;padding:20px;display:flex;align-items:center;justify-content:center}.comparison-panel{background:#181825;border:1px solid #89b4fa;padding:16px;width:1100px;max-width:94vw;max-height:90vh;overflow:auto}#comparison_viewport{max-height:65vh}</style>';
    html += '<script>var workspaceGraphData=' + JSON.stringify(graph).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026') + ';' + reportBrowserScript() + '</script></body></html>';
-   var file = new File;
-   file.createForWriting(path);
-   try { file.write(ByteArray.stringToUTF8(html)); } finally { file.close(); }
+   writeReportText(file, html);
+   } finally { file.close(); }
    new MessageBox("AstroProcessAtlas created.\nImages: " + records.length + " · Steps: " + total + "\n\n" + path, "Success", ICON_INFO, BUTTON_OK).execute();
 }
 
