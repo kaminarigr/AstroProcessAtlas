@@ -33,7 +33,7 @@ def validate(folder, require_signed=False):
             raise ValueError('Package checksum does not match manifest')
         with zipfile.ZipFile(folder / name) as archive:
             prefix = 'src/scripts/AstroProcessAtlas/'
-            expected = {prefix + n for n in ('AstroProcessAtlas.js', 'LICENSE', 'README.md', 'CHANGELOG.md')}
+            expected = {prefix + n for n in ('AstroProcessAtlas.js', 'AstroProcessAtlas.svg', 'LICENSE', 'README.md', 'CHANGELOG.md')}
             if signature is not None:
                 expected.add(prefix + 'AstroProcessAtlas.xsgn')
             if set(archive.namelist()) != expected or len(archive.namelist()) != len(expected):

@@ -205,12 +205,13 @@ assert.ok(run(1, 1, false, false, [scriptProcess]).includes('<div class="step-ti
 console.log('Passed: script filename titles, serialization fallback, Windows paths, missing paths, native process IDs and report integration.');
 
 const integrationSource = 'var P = new ImageIntegration;\nP.images = [ // enabled, path\n' +
-  '[true,"first,frame.xisf"],\n[true,"second.xisf"],\n[true,"third<&>.xisf"],\n[true,"fourth.xisf"]\n];\nP.rejection = 3;';
+  '[true,"first,frame.xisf"],\n[true,"second.xisf"],\n[true,"third<&>.xisf"],\n[true,"fourth.xisf"],\n[true,"fifth.xisf"],\n[true,"sixth.xisf"],\n[true,"seventh.xisf"]\n];\nP.rejection = 3;';
 const integrationHTML = helper.readableParameters({processId:()=> 'ImageIntegration'}, integrationSource);
 const integrationPreview = integrationHTML.split('<details class="parameter-details">')[0];
 assert.ok(integrationPreview.includes('first,frame.xisf'));
 assert.ok(integrationPreview.includes('second.xisf'));
-assert.ok(!integrationPreview.includes('third'));
+assert.ok(integrationPreview.includes('fifth'));
+assert.ok(!integrationPreview.includes('sixth'));
 assert.ok(integrationHTML.includes('Details — remaining 2 entries'));
 assert.ok(integrationHTML.includes('third&lt;&amp;&gt;.xisf'));
 assert.ok(!integrationHTML.includes('parameter-details" open'), 'Keep large values collapsed initially');
@@ -219,4 +220,16 @@ assert.equal(helper.serializedArrayEntries('["escaped \\\" comma ,", "second", "
 assert.ok(!helper.compactParameterValue('[[1,2],[3,4]]').includes('<details'));
 assert.ok(!helper.compactParameterValue('[\n[1,2],\n[3,4]\n]').includes('<details'), 'Two array entries remain fully visible regardless of formatting');
 assert.ok(helper.readableParameters({processId:()=> 'OtherProcess'}, integrationSource).includes('[true,&quot;fourth.xisf&quot;]'));
-console.log('Passed: ImageIntegration two-row preview, retained details, nested/commented arrays, quoted commas, escaping and unchanged other processes.');
+for (const tool of ['FastIntegration','OtherProcess']) {
+  const result=helper.readableParameters({processId:()=>tool},integrationSource.replace('P.images','P.targets')+'\nP.outputData = [[1],[2],[3],[4],[5],[6]];');
+  assert.equal((result.match(/<details class="parameter-details">/g)||[]).length,2);
+  assert.ok(result.includes('Details — remaining 1 entries'));
+  assert.ok(result.includes('sixth.xisf'));
+}
+assert.ok(!helper.compactParameterValue('[[1],[2],[3],[4],[5]]').includes('<details'));
+const sixLines=helper.compactParameterValue('one\ntwo\nthree\nfour\nfive\nsix');
+assert.ok(!sixLines.split('<details')[0].includes('six'));
+assert.ok(sixLines.includes('Details — remaining 1 lines'));
+assert.ok(helper.parameterTable(['Input (X)','Output (Y)'],[[0,0],[1,1],[2,2],[3,3],[4,4],[5,5]],5).includes('Details — remaining 1 entries'));
+assert.ok(helper.compactParameterValue('[\n[\n1,\n2,\n3,\n4\n]\n]').includes('<details'));
+console.log('Passed: five-entry parameter previews for ImageIntegration, FastIntegration and other processes, full retained values, nested arrays, escaping and multiline boundaries.');

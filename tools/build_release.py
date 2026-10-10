@@ -20,7 +20,7 @@ def build(version, date, output, signature=None):
     filename = f'{date}-AstroProcessAtlas-{version}.zip'
     prefix = 'src/scripts/AstroProcessAtlas/'
     files = {'AstroProcessAtlas.js': source}
-    for name in ('LICENSE', 'README.md', 'CHANGELOG.md'):
+    for name in ('AstroProcessAtlas.svg', 'LICENSE', 'README.md', 'CHANGELOG.md'):
         files[name] = (ROOT / name).read_bytes()
     if signature:
         files['AstroProcessAtlas.xsgn'] = signature.read_bytes()

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.4
+
+- Show the first five entries of large parameter arrays, or five lines of multiline
+  values, with the remaining data in collapsed details for all serialized processes,
+  including FastIntegration targets/outputData and ImageIntegration.
+
+## 0.1.3
+
+- Add a vector feature icon showing three channels connected to a star. Include
+  the icon beside the script in PixInsight installation packages.
+
 ## 0.1.2
 
 - Stream workspace reports to disk by step instead of accumulating all images in

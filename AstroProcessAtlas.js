@@ -1,4 +1,5 @@
 #feature-id    Utilities > AstroProcessAtlas
+#feature-icon  AstroProcessAtlas.svg
 #feature-info  Generates a workspace history graph with image dependencies, masks, thumbnails and process parameters.
 
 /*
@@ -29,7 +30,7 @@
 #include <pjsr/StdButton.jsh>
 #include <pjsr/Sizer.jsh>
 
-var ASTROPROCESS_ATLAS_VERSION = "0.1.2";
+var ASTROPROCESS_ATLAS_VERSION = "0.1.4";
 
 var ICON_ERROR = (typeof StdIcon_Error !== "undefined") ? StdIcon_Error : 4;
 var ICON_INFO = (typeof StdIcon_Information !== "undefined") ? StdIcon_Information : 2;
@@ -198,7 +199,10 @@ function getProcessParameters(proc) {
 
 function numberText(x) { return String(Number(x)); }
 
-function parameterTable(headers, rows) {
+function parameterTable(headers, rows, visibleRows) {
+   if (visibleRows && rows.length > visibleRows)
+      return parameterTable(headers, rows.slice(0, visibleRows)) + '<details class="parameter-details"><summary>Details — remaining ' +
+         (rows.length - visibleRows) + ' entries</summary>' + parameterTable(headers, rows.slice(visibleRows)) + '</details>';
    var html = "<div class=\"table-scroll\"><table><thead><tr>";
    for (var i = 0; i < headers.length; ++i) html += "<th>" + escapeHTML(headers[i]) + "</th>";
    html += "</tr></thead><tbody>";
@@ -237,16 +241,16 @@ function serializedArrayEntries(value) {
 
 function compactParameterValue(value) {
    var entries = serializedArrayEntries(value), preview, rest, label;
-   if (entries && entries.length <= 2) return '<pre class="parameter-value">' + escapeHTML(value) + '</pre>';
-   if (entries && entries.length > 2) {
-      preview = entries.slice(0,2).join(',\n');
-      rest = entries.slice(2).join(',\n');
-      label = 'Details — remaining ' + (entries.length-2) + ' entries';
+   if (entries && entries.length <= 5 && value.split(/\r?\n/).length <= 5) return '<pre class="parameter-value">' + escapeHTML(value) + '</pre>';
+   if (entries && entries.length > 5) {
+      preview = entries.slice(0,5).join(',\n');
+      rest = entries.slice(5).join(',\n');
+      label = 'Details — remaining ' + (entries.length-5) + ' entries';
    } else {
       var lines = value.split(/\r?\n/);
-      if (lines.length > 2) {
-         preview = lines.slice(0,2).join('\n'); rest = lines.slice(2).join('\n');
-         label = 'Details — remaining ' + (lines.length-2) + ' lines';
+      if (lines.length > 5) {
+         preview = lines.slice(0,5).join('\n'); rest = lines.slice(5).join('\n');
+         label = 'Details — remaining ' + (lines.length-5) + ' lines';
       } else if (value.length > 300) {
          preview = value.slice(0,300) + '…'; rest = value.slice(300); label = 'Details — rest of value';
       } else return '<pre class="parameter-value">' + escapeHTML(value) + '</pre>';
@@ -400,15 +404,14 @@ function readableParameters(proc, source) {
             var type = curveType(proc, key, source);
             html += '<details' + (identity ? '' : ' open') + '><summary>' + CURVE_LABELS[c] +
                ' — ' + type + (identity ? ' — unchanged' : ' — ' + points.length + ' points') + '</summary>';
-            html += '<div class="curve-layout">' + curveGraph(points, type) + parameterTable(["Input (X)", "Output (Y)"], points) + '</div></details>';
+            html += '<div class="curve-layout">' + curveGraph(points, type) + parameterTable(["Input (X)", "Output (Y)"], points, 5) + '</div></details>';
          }
          return html;
       }
       // Parse display-only assignments, never evaluate generated process code.
       var assignments = [], match, re = /\b\w+\.([A-Za-z_$][\w$]*)\s*=\s*([\s\S]*?);/g;
       while ((match = re.exec(source)) !== null) assignments.push([match[1], match[2].trim()]);
-      if (name === "ImageIntegration" && assignments.length) return integrationParameterTable(assignments);
-      return assignments.length ? parameterTable(["Parameter", "Value"], assignments) : '<p>Parameters are shown in the full code below.</p>';
+      return assignments.length ? integrationParameterTable(assignments) : '<p>Parameters are shown in the full code below.</p>';
    } catch (e) {
       return html + '<p>Could not format parameters: ' + escapeHTML(e.message) + '</p>';
    }

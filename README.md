@@ -30,7 +30,7 @@ The embedded previews are reduced to at most 640 pixels and compressed for a sma
 
 ## Download and run
 
-1. Download [AstroProcessAtlas.js](https://github.com/kaminarigr/AstroProcessAtlas/blob/main/AstroProcessAtlas.js) using GitHub's raw-file download, or download the repository ZIP.
+1. Download the release ZIP (recommended), or download [AstroProcessAtlas.js](https://github.com/kaminarigr/AstroProcessAtlas/blob/main/AstroProcessAtlas.js) and [AstroProcessAtlas.svg](https://github.com/kaminarigr/AstroProcessAtlas/blob/main/AstroProcessAtlas.svg) into the same folder. The SVG is the PixInsight feature icon.
 2. Open the script in PixInsight's Script Editor and run it with your images open.
 3. Select the images to include. Explicitly select the actual original inputs; images reopened after external editing are not automatically originals.
 4. Leave **Single HTML file (embed thumbnails)** enabled for a portable report.
@@ -38,7 +38,7 @@ The embedded previews are reduced to at most 640 pixels and compressed for a sma
 
 ## Updates
 
-Current version: **0.1.2**. The version is shown in About.
+Current version: **0.1.4**. The version is shown in About.
 
 Version tags build downloadable ZIPs and draft GitHub releases automatically. Publishing a stable release deploys an **unsigned PixInsight update repository** to GitHub Pages. No CPD identity is required; users must allow unsigned repositories and scripts in PixInsight's Security preferences.
 

@@ -19,7 +19,8 @@ class ReleaseTests(unittest.TestCase):
             self.assertEqual(platform.get('version'), '1.9.3:1.9.4')
             import zipfile
             with zipfile.ZipFile(build(VERSION, '20261009', folder)) as archive:
-                self.assertEqual(len(archive.namelist()), 4)
+                self.assertEqual(len(archive.namelist()), 5)
+                self.assertIn('src/scripts/AstroProcessAtlas/AstroProcessAtlas.svg', archive.namelist())
                 self.assertIn('src/scripts/AstroProcessAtlas/LICENSE', archive.namelist())
 
     def test_version_mismatch(self):
