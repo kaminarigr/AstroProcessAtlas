@@ -31,7 +31,7 @@
 #include <pjsr/Sizer.jsh>
 #include <pjsr/CryptographicHash.jsh>
 
-var ASTROPROCESS_ATLAS_VERSION = "0.1.6";
+var ASTROPROCESS_ATLAS_VERSION = "0.1.7";
 
 function createReportProgress() {
    var dialog = null, label = null, bar = null, value = 0;
@@ -273,16 +273,16 @@ function serializedArrayEntries(value) {
 
 function compactParameterValue(value) {
    var entries = serializedArrayEntries(value), preview, rest, label;
-   if (entries && entries.length <= 5 && value.split(/\r?\n/).length <= 5) return '<pre class="parameter-value">' + escapeHTML(value) + '</pre>';
-   if (entries && entries.length > 5) {
-      preview = entries.slice(0,5).join(',\n');
-      rest = entries.slice(5).join(',\n');
-      label = 'Details — remaining ' + (entries.length-5) + ' entries';
+   if (entries && entries.length <= 1 && value.split(/\r?\n/).length <= 1) return '<pre class="parameter-value">' + escapeHTML(value) + '</pre>';
+   if (entries && entries.length > 1) {
+      preview = entries.slice(0,1).join(',\n');
+      rest = entries.slice(1).join(',\n');
+      label = 'Details — remaining ' + (entries.length-1) + ' entries';
    } else {
       var lines = value.split(/\r?\n/);
-      if (lines.length > 5) {
-         preview = lines.slice(0,5).join('\n'); rest = lines.slice(5).join('\n');
-         label = 'Details — remaining ' + (lines.length-5) + ' lines';
+      if (lines.length > 1) {
+         preview = lines.slice(0,1).join('\n'); rest = lines.slice(1).join('\n');
+         label = 'Details — remaining ' + (lines.length-1) + ' lines';
       } else if (value.length > 300) {
          preview = value.slice(0,300) + '…'; rest = value.slice(300); label = 'Details — rest of value';
       } else return '<pre class="parameter-value">' + escapeHTML(value) + '</pre>';
@@ -436,7 +436,7 @@ function readableParameters(proc, source) {
             var type = curveType(proc, key, source);
             html += '<details' + (identity ? '' : ' open') + '><summary>' + CURVE_LABELS[c] +
                ' — ' + type + (identity ? ' — unchanged' : ' — ' + points.length + ' points') + '</summary>';
-            html += '<div class="curve-layout">' + curveGraph(points, type) + parameterTable(["Input (X)", "Output (Y)"], points, 5) + '</div></details>';
+            html += '<div class="curve-layout">' + curveGraph(points, type) + parameterTable(["Input (X)", "Output (Y)"], points, 1) + '</div></details>';
          }
          return html;
       }

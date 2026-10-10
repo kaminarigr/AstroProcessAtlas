@@ -210,27 +210,27 @@ const integrationSource = 'var P = new ImageIntegration;\nP.images = [ // enable
 const integrationHTML = helper.readableParameters({processId:()=> 'ImageIntegration'}, integrationSource);
 const integrationPreview = integrationHTML.split('<details class="parameter-details">')[0];
 assert.ok(integrationPreview.includes('first,frame.xisf'));
-assert.ok(integrationPreview.includes('second.xisf'));
-assert.ok(integrationPreview.includes('fifth'));
+assert.ok(!integrationPreview.includes('second.xisf'));
+assert.ok(!integrationPreview.includes('fifth'));
 assert.ok(!integrationPreview.includes('sixth'));
-assert.ok(integrationHTML.includes('Details — remaining 2 entries'));
+assert.ok(integrationHTML.includes('Details — remaining 6 entries'));
 assert.ok(integrationHTML.includes('third&lt;&amp;&gt;.xisf'));
 assert.ok(!integrationHTML.includes('parameter-details" open'), 'Keep large values collapsed initially');
 assert.equal(helper.serializedArrayEntries('[[1,2], [3,4], /* comment , ] */ [5,6]]').length,3);
 assert.equal(helper.serializedArrayEntries('["escaped \\\" comma ,", "second", "third"]')[0], '"escaped \\\" comma ,"');
-assert.ok(!helper.compactParameterValue('[[1,2],[3,4]]').includes('<details'));
-assert.ok(!helper.compactParameterValue('[\n[1,2],\n[3,4]\n]').includes('<details'), 'Two array entries remain fully visible regardless of formatting');
+assert.ok(helper.compactParameterValue('[[1,2],[3,4]]').includes('<details'));
+assert.ok(helper.compactParameterValue('[\n[1,2],\n[3,4]\n]').includes('<details'), 'Only the first array entry is initially visible');
 assert.ok(helper.readableParameters({processId:()=> 'OtherProcess'}, integrationSource).includes('[true,&quot;fourth.xisf&quot;]'));
 for (const tool of ['FastIntegration','OtherProcess']) {
   const result=helper.readableParameters({processId:()=>tool},integrationSource.replace('P.images','P.targets')+'\nP.outputData = [[1],[2],[3],[4],[5],[6]];');
   assert.equal((result.match(/<details class="parameter-details">/g)||[]).length,2);
-  assert.ok(result.includes('Details — remaining 1 entries'));
+  assert.ok(result.includes('Details — remaining 5 entries'));
   assert.ok(result.includes('sixth.xisf'));
 }
-assert.ok(!helper.compactParameterValue('[[1],[2],[3],[4],[5]]').includes('<details'));
+assert.ok(!helper.compactParameterValue('[[1]]').includes('<details'));
 const sixLines=helper.compactParameterValue('one\ntwo\nthree\nfour\nfive\nsix');
 assert.ok(!sixLines.split('<details')[0].includes('six'));
-assert.ok(sixLines.includes('Details — remaining 1 lines'));
-assert.ok(helper.parameterTable(['Input (X)','Output (Y)'],[[0,0],[1,1],[2,2],[3,3],[4,4],[5,5]],5).includes('Details — remaining 1 entries'));
+assert.ok(sixLines.includes('Details — remaining 5 lines'));
+assert.ok(helper.parameterTable(['Input (X)','Output (Y)'],[[0,0],[1,1],[2,2],[3,3],[4,4],[5,5]],1).includes('Details — remaining 5 entries'));
 assert.ok(helper.compactParameterValue('[\n[\n1,\n2,\n3,\n4\n]\n]').includes('<details'));
-console.log('Passed: five-entry parameter previews for ImageIntegration, FastIntegration and other processes, full retained values, nested arrays, escaping and multiline boundaries.');
+console.log('Passed: one-entry parameter previews, full retained values, nested arrays, escaping and multiline boundaries.');

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.7
+
+- Reduce parameter previews from five entries/lines to one; remaining values stay
+  available in collapsed details, including curve point tables.
+
 ## 0.1.6
 
 - Show a native export progress bar with the current stage and image/step.
