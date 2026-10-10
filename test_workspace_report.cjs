@@ -440,3 +440,28 @@ assert.ok(byteChunks.length>2);
 assert.ok(byteChunks.every(bytes=>bytes.length<=65536*3),'Bound UTF-8 write allocations');
 assert.ok(byteChunks.every(bytes=>!bytes.toString('utf8').includes('\uFFFD')),'No split Unicode surrogate pairs');
 console.log('Passed: streamed grouped report equivalence, bounded UTF-8 writes and Unicode chunk boundaries.');
+
+helper.CryptographicHash_SHA256=256;
+helper.CryptographicHash=function(){this.hash=bytes=>({toHex:()=>require('node:crypto').createHash('sha256').update(bytes).digest('hex')});};
+let base64Conversions=0;
+helper.File.readFile=path=>{const bytes=Buffer.from(path.includes('different')?'different PNG':'same PNG');bytes.toBase64=()=>{++base64Conversions;return bytes.toString('base64');};return bytes;};
+const duplicateRecords=[{currentThumb:'assets/one.png',steps:[{thumb:'assets/two.png',beforeThumb:'assets/one.png',afterThumb:'assets/different.png'}]}];
+const deduplicatedAssets=[];
+helper.embedReportThumbnails(duplicateRecords,'/scratch',null,(key,data)=>deduplicatedAssets.push({key,data}));
+assert.equal(deduplicatedAssets.length,2,'Different filenames with identical bytes share one asset');
+assert.equal(base64Conversions,2,'Skip base64 conversion for duplicate PNG bytes');
+assert.equal(duplicateRecords[0].currentThumb,duplicateRecords[0].steps[0].thumb);
+
+let progressLabel,progressBar,progressClosed=false,eventCount=0;
+helper.Dialog=function(){this.adjustToContents=()=>{};this.show=()=>{};this.hide=()=>{progressClosed=true;};};
+helper.Label=function(){progressLabel=this;};
+helper.Control=function(){progressBar=this;this.setFixedSize=(w,h)=>{this.width=w;this.height=h;};this.update=()=>this.onPaint();};
+helper.Graphics=function(){this.fillRect=()=>{};this.end=()=>{};};helper.Brush=function(){};
+helper.VerticalSizer=function(){this.add=()=>{};};helper.processEvents=()=>{++eventCount;};
+const exportProgress=helper.createReportProgress();
+exportProgress.update(45,'History previews');exportProgress.update(20,'Embedding previews');
+assert.ok(progressLabel.text.startsWith('45%'),'Progress never moves backwards');
+exportProgress.update(100,'Report complete');exportProgress.close();
+assert.equal(progressLabel.text,'100% — Report complete');
+assert.ok(progressClosed);assert.equal(eventCount,3);assert.equal(progressBar.height,18);
+console.log('Passed: lossless content deduplication and native progress drawing, monotonic updates, event processing and cleanup.');

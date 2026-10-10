@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.6
+
+- Show a native export progress bar with the current stage and image/step.
+- Deduplicate byte-identical PNG files by SHA-256 when embedding thumbnails,
+  including identical history states with different filenames. PNG pixels and
+  preview resolution remain unchanged; savings depend on repeated images.
+
 ## 0.1.5
 
 - Embed each unique thumbnail once and stream it directly to disk. Steps share

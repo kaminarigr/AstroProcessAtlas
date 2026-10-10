@@ -29,8 +29,39 @@
 #include <pjsr/StdIcon.jsh>
 #include <pjsr/StdButton.jsh>
 #include <pjsr/Sizer.jsh>
+#include <pjsr/CryptographicHash.jsh>
 
-var ASTROPROCESS_ATLAS_VERSION = "0.1.5";
+var ASTROPROCESS_ATLAS_VERSION = "0.1.6";
+
+function createReportProgress() {
+   var dialog = null, label = null, bar = null, value = 0;
+   if (typeof Control !== 'undefined' && typeof Graphics !== 'undefined') {
+      dialog = new Dialog;
+      dialog.windowTitle = 'AstroProcessAtlas — Export progress';
+      label = new Label(dialog);
+      label.text = 'Preparing report…';
+      bar = new Control(dialog);
+      bar.setFixedSize(440, 18);
+      bar.onPaint = function() {
+         var g = new Graphics(this);
+         g.fillRect(0, 0, this.width, this.height, new Brush(0xff45475a));
+         g.fillRect(0, 0, Math.round(this.width * value / 100), this.height, new Brush(0xff89b4fa));
+         g.end();
+      };
+      dialog.sizer = new VerticalSizer;
+      dialog.sizer.margin = 16; dialog.sizer.spacing = 10;
+      dialog.sizer.add(label); dialog.sizer.add(bar);
+      dialog.adjustToContents(); dialog.show();
+   }
+   return {
+      update:function(percent, text) {
+         value = Math.max(value, Math.min(100, Math.floor(percent)));
+         if (label) { label.text = value + '% — ' + text; bar.update(); }
+         if (typeof processEvents === 'function') processEvents();
+      },
+      close:function() { if (dialog) dialog.hide(); }
+   };
+}
 
 var ICON_ERROR = (typeof StdIcon_Error !== "undefined") ? StdIcon_Error : 4;
 var ICON_INFO = (typeof StdIcon_Information !== "undefined") ? StdIcon_Information : 2;
@@ -532,10 +563,11 @@ function collectWorkspaceRecord(window, index) {
    return record;
 }
 
-function collectWorkspaceThumbnails(records, thumbDir, relativeDir) {
+function collectWorkspaceThumbnails(records, thumbDir, relativeDir, progress) {
    var masks = [], generatedFiles = [];
    // Freeze all current images/masks before navigating any image's history.
    for (var r = 0; r < records.length; ++r) {
+      if (progress) progress(15 + 10*r/records.length, 'Current image and masks: ' + records[r].id);
       var record = records[r], filename = record.anchor + "_current.png";
       if (createThumbnailFromView(record.view, thumbDir + "/" + filename, 440)) {
          record.currentThumb = relativeDir + "/" + filename;generatedFiles.push(thumbDir+'/'+filename);
@@ -571,6 +603,7 @@ function collectWorkspaceThumbnails(records, thumbDir, relativeDir) {
       };
       try {
          for (var i = 0; i < record.steps.length; ++i) {
+            if (progress) progress(25 + 45*(r + i/Math.max(1,record.steps.length))/records.length, 'History previews: ' + record.id + ' — ' + (i+1) + '/' + record.steps.length);
             var step = record.steps[i];
             step.thumb = record.currentThumb;
             step.thumbNote = "Current image — no pixels are available for this step.";
@@ -1025,23 +1058,29 @@ function processingSummaryHTML(records) {
    return html;
 }
 
-function embedReportThumbnails(records, directory, generatedFiles, emitAsset) {
-   var cache={},files=[];
+function embedReportThumbnails(records, directory, generatedFiles, emitAsset, progress) {
+   var cache={},files=[],digests={};
    var embed=function(src){
       if(!src||src.indexOf('data:')===0)return src;
       if(cache['$'+src])return cache['$'+src];
       var filename=src.slice(src.lastIndexOf('/')+1),path=directory+'/'+filename;
       files.push(path);
-      var data = 'data:image/png;base64,'+File.readFile(path).toBase64();
+      var bytes = File.readFile(path), digest = '';
+      if (typeof CryptographicHash !== 'undefined')
+         digest = (new CryptographicHash(CryptographicHash_SHA256)).hash(bytes).toHex();
+      if (digest && digests['$'+digest]) return cache['$'+src] = digests['$'+digest];
+      var data = 'data:image/png;base64,'+bytes.toBase64();
       if (emitAsset) {
          var key = '#apa_asset_' + files.length;
          emitAsset(key, data);
+         if (digest) digests['$'+digest] = key;
          return cache['$'+src] = key;
       }
       return cache['$'+src] = data;
    };
    try {
       for(var r=0;r<records.length;++r){var record=records[r];
+         if(progress)progress(70+20*r/records.length,'Embedding previews: '+record.id);
          record.currentThumb=embed(record.currentThumb);
          if(record.currentMaskThumbnail)record.currentMaskThumbnail.src=embed(record.currentMaskThumbnail.src);
          for(var i=0;i<record.steps.length;++i){var step=record.steps[i];
@@ -1141,6 +1180,8 @@ function generateHistoryReport() {
    save.filters = [["HTML Files (*.html)", "*.html"]];
    save.initialPath = "AstroProcessAtlas_Report.html";
    if (!save.execute()) return;
+   var progress = createReportProgress();
+   try {
    var path = save.fileName;
    var baseDir = File.extractDrive(path) + File.extractDirectory(path);
    var basename = File.extractName(path), thumbDir = baseDir + "/" + basename + "_thumbs";
@@ -1151,13 +1192,14 @@ function generateHistoryReport() {
    var records = [], total = 0;
    // Metadata and process instances are captured before any history navigation.
    for (var i = 0; i < windows.length; ++i) {
+      progress.update(15*i/windows.length, 'Reading history: ' + windows[i].mainView.id);
       var record=collectWorkspaceRecord(windows[i], i);record.isOriginalInput=false;
       for(var j=0;j<windows.originalInputIds.length;++j)if(windows.originalInputIds[j]===record.id)record.isOriginalInput=true;
       records.push(record);total += workspaceStepGroups(record).length;
    }
    var graph = workspaceGraph(records);
    records=orderWorkspaceGraph(records,graph);
-   var thumbnailFiles=collectWorkspaceThumbnails(records, thumbDir, basename + "_thumbs");
+   var thumbnailFiles=collectWorkspaceThumbnails(records, thumbDir, basename + "_thumbs", progress.update);
    var html = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>AstroProcessAtlas</title><style>' + reportStyles() +
       'h2{color:#89b4fa} .graph-scroll{overflow:auto;max-height:760px;border:1px solid #45475a;margin:14px 0} #workspace_graph{display:block;height:auto;background:#11111b} .edge{fill:none;stroke:#89b4fa;stroke-width:1.8} .edge-input,.edge-reference{stroke:#f9e2af;stroke-dasharray:6 4} .edge-mask{stroke:#f38ba8;stroke-dasharray:6 4} .edge-output{stroke:#a6e3a1;stroke-dasharray:6 4} .edge-manual{stroke:#cba6f7;stroke-dasharray:4 3} .edge-possible{stroke:#94e2d5;stroke-dasharray:2 7;stroke-width:2} .possible-info{color:#94e2d5} .redo-edge,.redo-node{opacity:.45} .graph-node rect{fill:#1e1e2e;stroke:#45475a} .graph-node:hover rect{stroke:#89b4fa} .graph-node text{fill:#cdd6f4;font:13px sans-serif} .graph-node .graph-small{fill:#a6adc8;font-size:10px} .image-snapshot{max-width:160px;max-height:160px;display:block;margin-bottom:10px} .image-report{scroll-margin-top:15px} select,input{max-width:100%;background:#1e1e2e;color:#cdd6f4;border:1px solid #45475a;padding:6px} .step-card{scroll-margin-top:15px} </style></head><body>';
    html += '<p><label>Language / Γλώσσα <select id="report_language" onchange="setReportLanguage(this.value)"><option value="en" data-no-i18n>English</option><option value="el" data-no-i18n>Ελληνικά</option></select></label></p>';
@@ -1187,11 +1229,14 @@ function generateHistoryReport() {
          writeReportText(file, 'reportEmbeddedAssets["' + key + '"]="');
          writeReportText(file, data);
          writeReportText(file, '";');
-      });
+      }, progress.update);
       writeReportText(file, '</script>');
    }
    var emit = function(fragment) { writeReportText(file, fragment); };
-   for (var i = 0; i < records.length; ++i) imageReportHTML(records[i], emit);
+   for (var i = 0; i < records.length; ++i) {
+      progress.update(90+9*i/records.length, 'Writing report: ' + records[i].id);
+      imageReportHTML(records[i], emit);
+   }
    html += '<footer class="report-footer"><a href="https://www.yoruhikari.gr/" target="_blank" rel="noopener noreferrer">© 2026 YoruHikari Astrophotography</a></footer>';
    html += '<button id="back_to_top" type="button" hidden onclick="scrollToReportTop()" aria-label="Back to top">↑ Back to top</button>';
    html += '<div id="comparison_dialog" role="dialog" aria-modal="true" aria-label="Before / after" hidden onclick="if(event.target===this)closeComparison()"><div class="comparison-panel"><button id="comparison_close" type="button" onclick="closeComparison()">Close</button><p>Preview up to 1200 pixels; without STF. Zoom and pan are shared by both images.</p><label class="zoom-control"><span>Zoom</span><input id="comparison_zoom" type="range" min="100" max="400" value="100" oninput="zoomComparison(this.value)" onchange="zoomComparison(this.value)"></label><div id="comparison_viewport"><div id="comparison_content"></div></div></div></div>';
@@ -1201,6 +1246,8 @@ function generateHistoryReport() {
    html += '<script>var workspaceGraphData=' + JSON.stringify(graph).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026') + ';' + reportBrowserScript() + '</script></body></html>';
    writeReportText(file, html);
    } finally { file.close(); }
+   progress.update(100, 'Report complete');
+   } finally { progress.close(); }
    new MessageBox("AstroProcessAtlas created.\nImages: " + records.length + " · Steps: " + total + "\n\n" + path, "Success", ICON_INFO, BUTTON_OK).execute();
 }
 
