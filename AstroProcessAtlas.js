@@ -29,7 +29,7 @@
 #include <pjsr/StdButton.jsh>
 #include <pjsr/Sizer.jsh>
 
-var ASTROPROCESS_ATLAS_VERSION = "0.1.0";
+var ASTROPROCESS_ATLAS_VERSION = "0.1.1";
 
 var ICON_ERROR = (typeof StdIcon_Error !== "undefined") ? StdIcon_Error : 4;
 var ICON_INFO = (typeof StdIcon_Information !== "undefined") ? StdIcon_Information : 2;

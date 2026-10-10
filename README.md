@@ -38,11 +38,11 @@ The embedded previews are reduced to at most 640 pixels and compressed for a sma
 
 ## Updates
 
-Current version: **0.1.0**. The version is shown in About.
+Current version: **0.1.1**. The version is shown in About.
 
 Version tags build downloadable ZIPs and draft GitHub releases automatically. Publishing a stable release deploys an **unsigned PixInsight update repository** to GitHub Pages. No CPD identity is required; users must allow unsigned repositories and scripts in PixInsight's Security preferences.
 
-The PixInsight update URL is `https://kaminarigr.github.io/AstroProcessAtlas/`. It becomes available after the first successful Pages deployment. Add it through **Resources → Updates → Manage Repositories**, check for updates and accept the unsigned-repository confirmation. The feed currently targets PixInsight 1.9.4. See [release and repository setup](docs/RELEASING.md).
+The PixInsight update URL is `https://kaminarigr.github.io/AstroProcessAtlas/`. It becomes available after the first successful Pages deployment. Add it through **Resources → Updates → Manage Repositories**, check for updates and accept the unsigned-repository confirmation. The feed targets PixInsight 1.9.3–1.9.4. See [release and repository setup](docs/RELEASING.md).
 
 See [CHANGELOG.md](CHANGELOG.md) for changes.
 

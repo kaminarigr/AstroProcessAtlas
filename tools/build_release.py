@@ -35,7 +35,7 @@ def build(version, date, output, signature=None):
     manifest = f'''<?xml version="1.0" encoding="UTF-8"?>
 <xri version="1.0">
   <description>AstroProcessAtlas by YoruHikari — https://www.yoruhikari.gr/</description>
-  <platform os="all" arch="noarch" version="1.9.4:1.9.4">
+  <platform os="all" arch="noarch" version="1.9.3:1.9.4">
     <package fileName="{filename}" sha1="{hashlib.sha1(data).hexdigest()}" type="script" releaseDate="{date}">
       <title>AstroProcessAtlas {escape(version)}</title>
       <description><p>Workspace processing history reports. Copyright 2026 YoruHikari Astrophotography. MIT License.</p></description>

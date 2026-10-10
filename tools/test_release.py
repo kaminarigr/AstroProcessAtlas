@@ -14,6 +14,9 @@ class ReleaseTests(unittest.TestCase):
             folder = Path(temp)
             first = build(VERSION, '20261009', folder).read_bytes()
             self.assertEqual(first, build(VERSION, '20261009', folder).read_bytes())
+            import xml.etree.ElementTree as ET
+            platform = ET.parse(folder / 'updates.xri').getroot().find('platform')
+            self.assertEqual(platform.get('version'), '1.9.3:1.9.4')
             import zipfile
             with zipfile.ZipFile(build(VERSION, '20261009', folder)) as archive:
                 self.assertEqual(len(archive.namelist()), 4)

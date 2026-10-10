@@ -11,7 +11,7 @@ The URL becomes active after the first successful Pages deployment:
    Token permissions are declared in the files; no personal access token is needed.
 3. In **Settings → Pages**, choose **GitHub Actions** as the source.
 
-The feed currently targets **PixInsight 1.9.4 only**, conservatively. This is a packaging
+The feed currently targets **PixInsight 1.9.3–1.9.4**. This is a packaging
 target, not completed native compatibility testing. Extend the platform range in
 `tools/build_release.py` after testing the corresponding versions.
 
@@ -26,7 +26,7 @@ target, not completed native compatibility testing. Extend the platform range in
    deploys them to Pages. Prereleases are not deployed automatically.
 5. Test both the ZIP and `updates.xri` at the repository URL, then test installation in PixInsight.
 
-For the first release, `v0.1.0` matches the current script version.
+The current script version is `0.1.1`; use the matching tag `v0.1.1`.
 **Build release → Run workflow** also accepts an existing tag. Deployment can be retried
 with **Publish PixInsight repository → Run workflow** and the published release tag.
 Manual publication accepts prereleases too; choose the intended stable version.
@@ -68,7 +68,7 @@ authenticity. Replace all matching draft assets before publishing. Never upload 
 node test_history_report.cjs
 node test_workspace_report.cjs
 python -m unittest discover -s tools -p "test_release.py"
-python tools/build_release.py --version 0.1.0 --date 20261010
+python tools/build_release.py --version 0.1.1 --date 20261010
 python tools/validate_repository.py dist
 ```
 

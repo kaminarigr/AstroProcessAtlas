@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.1
+
+- Include PixInsight 1.9.3 in the update repository's compatibility range. The
+  previous 1.9.4-only manifest hid the package from users running 1.9.3.
+
 ## 0.1.0
 
 Initial repository preparation under the AstroProcessAtlas name.
