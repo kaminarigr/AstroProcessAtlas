@@ -1218,8 +1218,8 @@ function writeReportText(file, text) {
    }
 }
 
-// Replay v1 deliberately handles only independent, in-place native processes.
-// Serialized assignments are accepted; execution calls and arbitrary scripts are not.
+// Validate serialized constructors and assignments before using a supported process.
+// Execution calls and arbitrary scripts are not accepted.
 function replayProcessSource(source, tool) {
    var code = '', i = 0;
    while (i < source.length) {
@@ -1291,6 +1291,38 @@ function paletteReplaySource(group) {
    return {source:parsed.source, variable:parsed.variable, inputs:inputs};
 }
 
+function selectiveColorReplaySource(step) {
+   if (getProcessName(step.proc) !== 'Script' || getProcessTitle(step.proc).toLowerCase() !== 'selectivecolorcorrection') return null;
+   var proc = step.proc, parsed = replayProcessSource(step.source, 'Script');
+   if (!parsed || typeof proc.md5sum !== 'string' || !/^[0-9a-f]{32}$/i.test(proc.md5sum) || !proc.parameters || !proc.parameters.length) return null;
+   var realKeys = ['maskShadows','maskBalance','maskHighlights','cyan','magenta','yellow','red','green','blue','luminance','starMaskIntensity','saturation','contrast','maskSmoothness','maskIntensity'];
+   var boolKeys = ['useStarMask','showMask','invertMask'], values = {}, parameters = [];
+   for (var p = 0; p < proc.parameters.length; ++p) {
+      var row = proc.parameters[p]; if (!row || row.length !== 2 || typeof row[0] !== 'string' || typeof row[1] !== 'string' || values['$'+row[0]] !== undefined) return null;
+      var key = row[0], value = row[1];
+      if (realKeys.indexOf(key) >= 0 || key === 'previewMode') {
+         if (!value.trim() || !isFinite(Number(value)) || (key === 'previewMode' && Number(value) !== Math.floor(Number(value)))) return null;
+      } else if (boolKeys.indexOf(key) >= 0) {
+         if (value !== 'true' && value !== 'false') return null;
+      } else if (key === 'filterMethod') {
+         if (['Red','Green','Blue','Cyan','Magenta','Yellow','Low Saturation','High Saturation','Shadows','Midtones','Highlights','Luminance'].indexOf(value) < 0) return null;
+      } else return null;
+      values['$'+key] = value; parameters.push([key,value]);
+   }
+   var required = realKeys.concat(boolKeys, ['previewMode','filterMethod']);
+   for (var k = 0; k < required.length; ++k) if (values['$'+required[k]] === undefined) return null;
+   return {source:'var P = new Script;\nP.filePath = '+JSON.stringify('$PXI_SRCDIR/scripts/Toolbox/SelectiveColorCorrection.js')+';\nP.md5sum = '+JSON.stringify(proc.md5sum)+';\nP.parameters = '+JSON.stringify(parameters)+';\nP.information = "";',
+      variable:'P', starRequired:values.$useStarMask === 'true'};
+}
+
+function selectiveColorReplayBlockReason(step) {
+   var parameters = step.proc.parameters || [];
+   for (var p = 0; p < parameters.length; ++p)
+      if (parameters[p] && parameters[p][0] === 'filterMethod' && parameters[p][1] === 'Imported Mask')
+         return 'SelectiveColorCorrection imported mask is not recorded and cannot be reconstructed.';
+   return 'SelectiveColorCorrection requires complete saved parameters, valid serialization and a recorded script checksum.';
+}
+
 function workspaceReplayData(records) {
    var data = [];
    var supported = {HistogramTransformation:true, CurvesTransformation:true, RGBWorkingSpace:true,
@@ -1304,14 +1336,21 @@ function workspaceReplayData(records) {
          if (step.redo) continue;
          if (group.members.length > 1) {
             var palette = paletteReplaySource(group);
+            var selective = group.title === 'SelectiveColorCorrection' ? selectiveColorReplaySource(group.members[group.members.length-1]) : null;
+            var selectiveReason = group.title === 'SelectiveColorCorrection' ? selectiveColorReplayBlockReason(group.members[group.members.length-1]) : '';
+            for (var m = 0; selective && m < group.members.length; ++m)
+               if (!group.members[m].mask || group.members[m].mask.status !== 'unrecorded' || (group.members[m].references || []).length) {
+                  selective = null; selectiveReason = 'SelectiveColorCorrection needs an unavailable historical mask or reference image.';
+               }
             image.steps.push({title:group.title, number:step.displayNumber, substep:0,
-               tool:group.title, reason:palette ? '' : 'This process is not yet supported by the replay exporter: ' + group.title,
-               action:palette ? 'palette' : 'process', inputs:palette ? palette.inputs : [],
-               identifier:'', source:palette ? palette.source : '', variable:palette ? palette.variable : ''});
+               tool:group.title, reason:palette || selective ? '' : selectiveReason || 'This process is not yet supported by the replay exporter: ' + group.title,
+               action:palette ? 'palette' : selective ? 'selective' : 'process', inputs:palette ? palette.inputs : [],
+               starRequired:!!(selective && selective.starRequired), identifier:'',
+               source:palette ? palette.source : selective ? selective.source : '', variable:palette ? palette.variable : selective ? selective.variable : ''});
             continue;
          }
          if (isImageOriginStep(step, record.steps.indexOf(step))) continue;
-         var tool = getProcessName(step.proc), reason = '', source = null, identifier = '';
+         var tool = getProcessName(step.proc), reason = '', source = null, identifier = '', selective = selectiveColorReplaySource(step);
          var requiredReferences = (step.references || []).filter(function(ref) {
             return !(tool === 'StarXTerminator' && step.proc.stars === true && ref.kind === 'output');
          });
@@ -1328,19 +1367,20 @@ function workspaceReplayData(records) {
                if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(identifier)) reason = 'The recorded ImageIdentifier value is empty or invalid.';
             }
          }
-         else if (!supported[tool]) reason = 'This process is not yet supported by the replay exporter: ' + tool;
+         else if (!supported[tool] && !selective) reason = getProcessTitle(step.proc).toLowerCase() === 'selectivecolorcorrection' ? selectiveColorReplayBlockReason(step) : 'This process is not yet supported by the replay exporter: ' + tool;
          else if (!step.mask || step.mask.status === 'unknown') reason = 'Historical mask state is unknown.';
          else if (step.mask.status === 'recorded') reason = 'This step needs the original historical mask: ' + step.mask.name;
          else if (requiredReferences.length) reason = 'This step needs historical reference images or creates another image.';
          else if (tool === 'RGBWorkingSpace' && step.proc.applyGlobalRGBWS === true)
             reason = 'This step uses the global RGB working space, whose historical settings are unavailable.';
          else {
-            source = replayProcessSource(step.source, tool);
+            source = selective || replayProcessSource(step.source, tool);
             if (!source) reason = 'Serialized process code is not a supported constructor and parameter assignment sequence.';
          }
          image.steps.push({title:step.title, number:step.displayNumber || s + 1,
-            substep:step.substepNumber || 0, tool:tool, reason:reason,
-            action:tool === 'ImageIdentifier' ? 'identifier' : 'process', identifier:identifier,
+            substep:step.substepNumber || 0, tool:selective ? 'SelectiveColorCorrection' : tool, reason:reason,
+            action:tool === 'ImageIdentifier' ? 'identifier' : selective ? 'selective' : 'process', identifier:identifier,
+            starRequired:!!(selective && selective.starRequired),
             source:source && tool !== 'ImageIdentifier' ? source.source : '', variable:source && tool !== 'ImageIdentifier' ? source.variable : ''});
       }
       data.push(image);
@@ -1357,7 +1397,7 @@ function buildWorkspaceReplayScript(image, start, end) {
       var step = selected[i];
       manifest.push({title:step.title, number:step.number, substep:step.substep,
          reason:step.reason || (step.action === 'palette' && i > 0 ? 'Start the selected range at PerfectPalettePicker and choose its prepared inputs.' : ''),
-         action:step.action, inputs:step.inputs || []});
+         action:step.action, inputs:step.inputs || [], starRequired:!!step.starRequired});
       if (!step.reason && step.action === 'identifier') identifier = step.identifier;
       factories.push(step.reason || step.action === 'identifier' ? 'null' : 'function(){\n' + step.source + '\nreturn ' + step.variable + ';\n}');
    }
@@ -1436,6 +1476,7 @@ function buildWorkspaceReplayScript(image, start, end) {
       '         if(replaySteps[k].reason)throw Error("Stopped before step "+replaySteps[k].number+": "+replaySteps[k].reason);',
       '         if(replaySteps[k].action==="identifier"){Console.writeln("ImageIdentifier handled at creation: "+output.mainView.id);continue;}',
       '         Console.writeln("Replay "+(k+1)+"/"+replaySteps.length+": "+replaySteps[k].title);',
+      '         if(replaySteps[k].starRequired&&typeof StarXTerminator!=="function")throw Error("SelectiveColorCorrection requires StarXTerminator for its star mask.");',
       '         var process=replayFactories[k]();',
       '         if(replaySteps[k].action==="palette"){var keys=["expression","expression1","expression2"];for(var e=0;e<keys.length;++e)process[keys[e]]=process[keys[e]].replace(/(?:[0-9]+(?:[.][0-9]*)?|[.][0-9]+)(?:[eE][+-]?[0-9]+)?|[A-Za-z_][A-Za-z0-9_]*/g,function(token){return Object.prototype.hasOwnProperty.call(mapped,"$"+token)?mapped["$"+token]:token;});}',
       '         if(!process||typeof process.executeOn!=="function")throw Error("Required process is unavailable: "+replaySteps[k].title);',
@@ -2222,6 +2263,9 @@ var REPORT_TRANSLATIONS = [
 ];
 
 REPORT_TRANSLATIONS = REPORT_TRANSLATIONS.concat([
+   ['SelectiveColorCorrection imported mask is not recorded and cannot be reconstructed.','Η εισαγόμενη μάσκα του SelectiveColorCorrection δεν έχει καταγραφεί και δεν μπορεί να ανακατασκευαστεί.'],
+   ['SelectiveColorCorrection requires complete saved parameters, valid serialization and a recorded script checksum.','Το SelectiveColorCorrection απαιτεί πλήρεις αποθηκευμένες παραμέτρους, έγκυρο κώδικα και καταγεγραμμένο checksum του script.'],
+   ['SelectiveColorCorrection needs an unavailable historical mask or reference image.','Το SelectiveColorCorrection χρειάζεται μη διαθέσιμη ιστορική μάσκα ή εικόνα αναφοράς.'],
    ['PerfectPalettePicker: start the range at this step, select grayscale inputs and explicitly choose their state: already prepared, or linear with input stretch to median 0.25. Replays the recorded combination into a new RGB image. Other unrecorded channel preparation is not reconstructed.','PerfectPalettePicker: ξεκίνα το εύρος σε αυτό το βήμα, διάλεξε grayscale εισόδους και όρισε την κατάστασή τους: ήδη προετοιμασμένες ή linear με stretch εισόδου σε διάμεσο 0,25. Επαναλαμβάνει τον καταγεγραμμένο συνδυασμό σε νέα RGB εικόνα. Άλλη μη καταγεγραμμένη προετοιμασία καναλιών δεν ανακατασκευάζεται.'],
    ['PerfectPalettePicker: start the range at this step and select prepared grayscale inputs in PixInsight. Replays the recorded final combination into a new RGB image; earlier channel preparation is not reconstructed.','PerfectPalettePicker: ξεκίνα το εύρος σε αυτό το βήμα και διάλεξε προετοιμασμένες grayscale εισόδους στο PixInsight. Επαναλαμβάνει τον καταγεγραμμένο τελικό συνδυασμό σε νέα RGB εικόνα· η προηγούμενη προετοιμασία καναλιών δεν ανακατασκευάζεται.'],
    ['Start the selected range at PerfectPalettePicker and choose its prepared inputs.','Ξεκίνα το επιλεγμένο εύρος στο PerfectPalettePicker και διάλεξε τις προετοιμασμένες εισόδους του.'],

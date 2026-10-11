@@ -946,3 +946,25 @@ console.log('Passed: arbitrary current/before/after selection, shared comparison
  assert.match(exportedBlob,/"action":"palette"/);
  console.log('Passed: PPP parent readiness, range-start requirement, selectable inputs and downloadable script syntax.');
 }
+
+{
+ const values={maskShadows:'0',maskBalance:'0.5',maskHighlights:'1',previewMode:'0',useStarMask:'false',showMask:'false',filterMethod:'Green',cyan:'0',magenta:'0',yellow:'20',red:'0',green:'-20',blue:'0',luminance:'0',starMaskIntensity:'1.8',saturation:'0',contrast:'0',maskSmoothness:'10',invertMask:'false',maskIntensity:'1'};
+ const ws=makeProcess('RGBWorkingSpace',{channels:[[1,0.648431,0.330856],[1,0.321152,0.597871],[1,0.155886,0.066044]],gamma:2.2,sRGBGamma:true,applyGlobalRGBWS:false});
+ const scc=makeProcess('Script',{filePath:'$PXI_SRCDIR/scripts/Toolbox/SelectiveColorCorrection.js',md5sum:'a48bf2b4ee6f54c284db49149cad221b',parameters:Object.entries(values),information:''});
+ const rec=helper.collectWorkspaceRecord(image('SelectiveReplay',[ws,ws,scc,ht]),117);
+ helper.workspaceGraph([rec]);
+ browser.workspaceReplayData=helper.workspaceReplayData([rec]);elements.replay_image.value='0';
+ browser.window.setReportLanguage('en');browser.window.updateReplayRange(true);
+ assert.equal(elements.replay_start.children.length,2);
+ assert.match(elements.replay_readiness.children[0].textContent,/SelectiveColorCorrection: Ready/);
+ assert.match(elements.replay_status.textContent,/2 consecutive/);
+ browser.window.exportReplayScript();new vm.Script(exportedBlob.replace(/^#.*$/gm,''));
+ assert.match(exportedBlob,/new Script/);
+ assert.ok(!exportedBlob.includes('new RGBWorkingSpace'),'Internal settings are delegated to the installed script');
+ const imported=helper.collectWorkspaceRecord(image('ImportedSelective',[ws,ws,makeProcess('Script',{filePath:scc.filePath,md5sum:scc.md5sum,parameters:Object.entries({...values,filterMethod:'Imported Mask'})})]),118);
+ const plan=helper.workspaceReplayData([imported])[0];
+ assert.match(plan.steps[0].reason,/imported mask/);
+ browser.workspaceReplayData=[plan];browser.window.updateReplayRange(true);
+ assert.equal(elements.replay_export.disabled,true);
+ console.log('Passed: SelectiveColorCorrection grouped parent readiness/download and imported mask blocker.');
+}

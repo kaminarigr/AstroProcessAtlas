@@ -76,7 +76,7 @@ RGBWorkingSpace steps that use historical global settings are blocked.
 Required tools, licenses and matching models must already be available in PixInsight.
 This does not guarantee identical pixels across tool/model versions.
 
-Scripts, PixelMath, integrations, image combinations, unsupported output-generating processes,
+Other scripts, standalone PixelMath, integrations, image combinations, unsupported output-generating processes,
 masked steps and unknown historical mask states are currently blockers. The report
 shows the runnable prefix; the replay dialog states where execution will stop.
 Execution stops at that blocker or a process failure, preserves the partial result,
@@ -197,7 +197,7 @@ SelectiveColorCorrection helper parameters and immediately precede that script
 in the same history phase and applied/redo state, they appear as component steps
 of one SelectiveColorCorrection group. Their parameters and thumbnails remain
 available. These internal RGBWorkingSpace entries are omitted from workflow replay;
-the parent script remains a blocker until script replay is supported. Different
+the parent executes through the installed script when complete settings and checksum are available. Different
 settings, isolated entries and intervening operations remain independent steps.
 
 All grouped operations, including PerfectPalettePicker, appear once in the replay
@@ -217,7 +217,7 @@ This repeats the captured final combination, not the original interactive script
 or its earlier channel extraction and OSC preparation. Supply images at
 that prepared state, or select the linear-input stretch. Missing final PixelMath, masks, single-expression mode,
 custom symbols, alpha expressions or formulas beyond the supported arithmetic
-remain blockers. Other grouped scripts and standalone PixelMath remain unsupported.
+remain blockers. Other grouped scripts besides SelectiveColorCorrection and standalone PixelMath remain unsupported.
 
 NarrowbandNormalization replay preserves the recorded native parameters. If it is
 the first selected step, choose its starting image in the PixInsight replay dialog;
@@ -235,3 +235,14 @@ images, and closes those copies after execution or failure. Choose already
 prepared for channels at the original combination state to avoid stretching twice.
 This recovers the installed PPP linear-input preparation; other unrecorded steps
 (including OSC extraction/averaging or an unidentified Script) are not inferred.
+
+SelectiveColorCorrection replay executes the installed Toolbox script directly
+as a view-target Script instance, with its complete recorded parameter table and
+script checksum. It runs once per grouped operation (or standalone instance), on
+the current replay result, and regenerates its internal RGBWorkingSpace settings
+and masks. No separate internal RGBWorkingSpace entries are exported. The installed
+script and its dependencies must match the recorded settings/version; when
+useStarMask is enabled StarXTerminator is required. Imported Mask is blocked because
+its input view is not saved by the script, as are missing settings, checksums,
+historical masks/references and invalid serialized process code. Other scripts
+remain unsupported. Generate a new report and export to use this support.

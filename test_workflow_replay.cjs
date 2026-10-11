@@ -58,9 +58,9 @@ assert.throws(()=>api.buildWorkspaceReplayScript(plan,0,99),/valid step range/);
 assert.throws(()=>api.buildWorkspaceReplayScript(plan,0.5,1),/valid step range/);
 
 function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImages=false,gradientMissing=false,gradientFail=false,
-  starMissing=false,starFail=false,paletteMissing=false,paletteFail=false,nbMissing=false,nbFail=false,channels=[],choices=[],states=[],prepFail=false,
+  starMissing=false,starFail=false,paletteMissing=false,paletteFail=false,nbMissing=false,nbFail=false,sccMissing=false,sccFail=false,channels=[],choices=[],states=[],prepFail=false,
   inputId='Ha_input',existingIds=['Ha_input_APA_replay']}={}) {
-  const calls=[], messages=[], outputs=[], gradientParameters=[], starParameters=[],paletteParameters=[],nbParameters=[],combos=[];let checkbox;
+  const calls=[], messages=[], outputs=[], gradientParameters=[], starParameters=[],paletteParameters=[],nbParameters=[],sccParameters=[],combos=[];let checkbox;
   const input={isNull:false,rgbWorkingSpace:{gamma:2.2},mainView:{id:inputId,stf:[[1,2]],
     image:{width:2,height:1,numberOfChannels:1,bitsPerSample:32,isReal:true,isColor:false,pixels:[0.1,0.2]}}};
   function ImageWindow(w,h,channelCount,bits,real,color,id){
@@ -94,6 +94,14 @@ function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImage
     return !gradientFail;
   };};
   if(!missing)context.CurvesTransformation=Process;
+  if(!sccMissing)context.Script=function(){this.executeOn=view=>{
+    assert.equal(view,outputs[outputs.length-1].mainView,'Script receives the current replay target');
+    assert.notEqual(view,input.mainView);
+    assert.equal(this.filePath,'$PXI_SRCDIR/scripts/Toolbox/SelectiveColorCorrection.js');
+    calls.push('SCC');sccParameters.push({...this});view.image.pixels[0]+=0.2;
+    ImageWindow.activeWindow={mainView:{id:'SCC_generated_mask'},isNull:false};
+    return !sccFail;
+  };};
   if(!nbMissing) {
     context.NarrowbandNormalization=function(){this.executeOn=view=>{
       assert.equal(view,outputs[0].mainView,'NBN always targets the current replay result');
@@ -132,7 +140,7 @@ function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImage
   vm.runInNewContext(script.replace(/^#.*$/gm,''),context);
   assert.deepEqual(input.mainView.image.pixels,[0.1,0.2],'Input pixels never change');
   assert.equal(input.mainView.id,inputId,'Input ID never changes');
-  return {calls,messages,outputs,input,gradientParameters,starParameters,paletteParameters,nbParameters,windows:ImageWindow.windows};
+  return {calls,messages,outputs,input,gradientParameters,starParameters,paletteParameters,nbParameters,sccParameters,windows:ImageWindow.windows};
 }
 const complete=api.buildWorkspaceReplayScript(plan,0,1);
 const generatorSource=api.buildWorkspaceReplayScript.toString();
@@ -384,4 +392,49 @@ console.log('Passed: StarXTerminator both stars flags, optional output reference
  assert.equal(pmFailure.outputs[1].isNull,false);
  assert.match(pmFailure.messages[0],/Partial result retained/);
  console.log('Passed: explicit PPP input state, real blackpoint/median stretch equivalence, prepared bypass, untouched inputs, shared-copy reuse and cleanup on success/failure.');
+}
+
+{
+ const values={maskShadows:'0',maskBalance:'0.5',maskHighlights:'1',previewMode:'0',useStarMask:'false',showMask:'false',filterMethod:'Green',
+ cyan:'0',magenta:'0',yellow:'20',red:'0',green:'-20',blue:'0',luminance:'0',starMaskIntensity:'1.8',saturation:'0',contrast:'0',maskSmoothness:'10',invertMask:'false',maskIntensity:'1'};
+ const parameters=Object.entries(values),checksum='a48bf2b4ee6f54c284db49149cad221b';
+ const proc={processId:()=> 'Script',filePath:'$PXI_SRCDIR/scripts/Toolbox/SelectiveColorCorrection.js',md5sum:checksum,parameters};
+ const scc=step('Script','P.filePath='+JSON.stringify(proc.filePath)+'; P.md5sum='+JSON.stringify(checksum)+'; P.parameters='+JSON.stringify(parameters)+'; P.information="";',
+ {proc,title:'SelectiveColorCorrection'});
+ const ws=step('RGBWorkingSpace','P.channels=[[1,0.648431,0.330856],[1,0.321152,0.597871],[1,0.155886,0.066044]]; P.gamma=2.2; P.sRGBGamma=true; P.applyGlobalRGBWS=false;');
+ for(const steps of [[ws,ws,scc,ht],[ht,ws,ws,scc,ct],[scc,ht]]) {
+   const plan=api.workspaceReplayData([{id:'SCC_test',steps}])[0];
+   assert.ok(plan.steps.every(s=>!s.reason));
+   const entry=plan.steps.find(s=>s.action==='selective');
+   assert.equal(entry.tool,'SelectiveColorCorrection');
+   assert.equal(plan.steps.filter(s=>s.action==='selective').length,1);
+   assert.ok(!plan.steps.some(s=>s.tool==='RGBWorkingSpace'));
+   const code=api.buildWorkspaceReplayScript(plan,0,plan.steps.length-1),result=run(code);
+   assert.equal(result.calls.filter(c=>c==='SCC').length,1);
+   assert.ok(result.calls.includes(steps[steps.length-1]===ct?'CT':'HT'));
+   assert.equal(result.sccParameters[0].md5sum,checksum);
+   assert.equal(JSON.stringify(result.sccParameters[0].parameters),JSON.stringify(parameters));
+   assert.match(result.messages[0],/Replay complete/);
+   for(const options of [{sccMissing:true},{sccFail:true}]) {
+     const stopped=run(code,options);assert.match(stopped.messages[0],/Script|SelectiveColorCorrection/);
+     assert.match(stopped.messages[0],/Partial result retained/);
+     assert.ok(!stopped.calls.includes('CT'));
+     if(steps[0]===ws||steps[0]===scc)assert.ok(!stopped.calls.includes('HT'));
+   }
+ }
+ for(const extra of [
+   {proc:{...proc,parameters:parameters.filter(([k])=>k!=='maskBalance')}},
+   {proc:{...proc,parameters:parameters.map(([k,v])=>[k,k==='filterMethod'?'Imported Mask':v])}},
+   {proc:{...proc,parameters:[...parameters,['unknownSetting','1']]}},
+   {proc:{...proc,md5sum:''}}, {proc:{...proc,filePath:'UnrelatedScript.js'}},
+   {mask:{status:'recorded',name:'Old_mask'}},{mask:{status:'unknown'}},
+   {references:[{kind:'reference',name:'Old_input'}]},
+   {source:'var P = new Script; P.executeGlobal();'}
+ ]) assert.ok(api.workspaceReplayData([{id:'BlockedSCC',steps:[ws,ws,{...scc,...extra}]}])[0].steps.some(s=>s.reason));
+ const starScc={...scc,proc:{...proc,parameters:parameters.map(([k,v])=>[k,k==='useStarMask'?'true':v])}};
+ const starPlan=api.workspaceReplayData([{id:'StarMaskSCC',steps:[starScc,ht]}])[0];
+ const absent=run(api.buildWorkspaceReplayScript(starPlan,0,1),{starMissing:true});
+ assert.match(absent.messages[0],/requires StarXTerminator/);assert.ok(!absent.calls.includes('SCC'));
+ assert.ok(run(api.buildWorkspaceReplayScript(starPlan,0,1)).calls.includes('SCC'));
+ console.log('Passed: native SelectiveColorCorrection grouped/standalone/first/middle, saved settings/checksum, one parent call, continued target, missing/failing script, imported/historical masks and star-mask dependency.');
 }

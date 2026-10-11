@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Replay SelectiveColorCorrection through its installed native Script instance,
+  preserving complete saved settings and checksum. Run one parent operation on the
+  replay result, regenerating internal masks/RGBWS. Block imported/historical masks,
+  incomplete parameters and invalid serialization; require StarXTerminator when its
+  internally generated star mask is enabled. Other scripts remain unsupported.
+
 - Fix linear PerfectPalettePicker replay by requiring an explicit state for each
   selected input. Optionally apply blackpoint normalization and a median-0.25
   transfer to private channel copies before combination; bypass preparation for
