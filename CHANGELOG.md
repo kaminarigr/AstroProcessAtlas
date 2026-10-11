@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Remove automatic list numbering from replay readiness; retain each step's
+  recorded number without a second counter.
+
 - For a range starting with new-image PixelMath using only explicit image inputs,
   replace the separate target selector with an editable output name. Select actual
   references once before processing and derive the working image from the first

@@ -1754,7 +1754,7 @@ function workspaceReplayHTML(records) {
       html += '<option value="' + i + '" data-no-i18n>' + escapeHTML(records[i].id) + '</option>';
    return html + '</select></label> <label>First process <select id="replay_start" onchange="updateReplayRange(false)"></select></label> ' +
       '<label>Last process <select id="replay_end" onchange="updateReplayRange(false)"></select></label>' +
-      '<p id="replay_status" data-no-i18n aria-live="polite"></p><ol id="replay_readiness" data-no-i18n></ol>' +
+      '<p id="replay_status" data-no-i18n aria-live="polite"></p><ol id="replay_readiness" data-no-i18n style="list-style:none;padding-left:0"></ol>' +
       '<button id="replay_export" type="button" disabled onclick="exportReplayScript()">Download PixInsight replay script</button></details>';
 }
 
