@@ -1021,3 +1021,21 @@ console.log('Passed: arbitrary current/before/after selection, shared comparison
  assert.equal(elements.replay_export.disabled,false);
  console.log('Passed: GAME orange manual warning, EN/EL text, download syntax, range-start blocker and export guard.');
 }
+
+{
+ const invert=makeProcess('Invert');
+ const rec=helper.collectWorkspaceRecord(image('InvertReplay',[invert,ht]),120);
+ browser.workspaceReplayData=helper.workspaceReplayData([rec]);elements.replay_image.value='0';
+ browser.window.setReportLanguage('en');browser.window.updateReplayRange(true);
+ assert.match(elements.replay_readiness.children[0].textContent,/Invert: Ready for replay/);
+ assert.equal(elements.replay_readiness.children[0].className,'replay-supported');
+ assert.equal(elements.replay_export.disabled,false);
+ browser.window.exportReplayScript();assert.match(exportedBlob,/new Invert/);
+ new vm.Script(exportedBlob.replace(/^#.*$/gm,''));
+ const masked=helper.collectWorkspaceRecord(image('MaskedInvertReplay',[invert],[],1,[[0,'OriginalMask',false]]),121);
+ browser.workspaceReplayData=helper.workspaceReplayData([masked]);browser.window.updateReplayRange(true);
+ assert.equal(elements.replay_readiness.children[0].className,'replay-warning');
+ assert.match(elements.replay_readiness.children[0].textContent,/Mask requested in PixInsight: OriginalMask/);
+ assert.equal(elements.replay_export.disabled,false);
+ console.log('Passed: Invert readiness/download and masked orange warning.');
+}

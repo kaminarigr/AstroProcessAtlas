@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Support native Invert replay (pixel-value/color inversion), including prompted
+  historical masks and their independent Mask > Invert Mask setting. Keep the
+  source image unchanged and stop on unavailable/failed processes.
+
 - Support GAME with empty Script parameters as a manual prepared-mask starting
   point. Show an orange warning, select/copy an existing grayscale GAME mask and
   apply following steps without modifying the input. Block GAME in the middle

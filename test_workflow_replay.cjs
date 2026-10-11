@@ -63,7 +63,7 @@ assert.throws(()=>api.buildWorkspaceReplayScript(plan,0.5,1),/valid step range/)
 
 function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImages=false,gradientMissing=false,gradientFail=false,
   starMissing=false,starFail=false,paletteMissing=false,paletteFail=false,nbMissing=false,nbFail=false,sccMissing=false,sccFail=false,sourceChanged=false,scriptRecords=[],initialScripts=false,channels=[],choices=[],states=[],prepFail=false,
-  dseCancel=false,dseOtherTarget=false,dseFail=false,mltMissing=false,historyTarget=false,historyStep,inputColor=false,maskCancel=false,maskBlend=false,unsharpMissing=false,maskChoices=[],maskInvertChoices=[],orientations=[1],inputId='Ha_input',existingIds=['Ha_input_APA_replay']}={}) {
+  dseCancel=false,dseOtherTarget=false,dseFail=false,mltMissing=false,invertMissing=false,historyTarget=false,historyStep,inputColor=false,maskCancel=false,maskBlend=false,unsharpMissing=false,maskChoices=[],maskInvertChoices=[],orientations=[1],inputId='Ha_input',existingIds=['Ha_input_APA_replay']}={}) {
   const calls=[], messages=[], outputs=[], gradientParameters=[], starParameters=[],paletteParameters=[],nbParameters=[],sccParameters=[],combos=[],maskApplications=[],unsharpParameters=[];let checkbox,maskPrompts=0;
   const input={isNull:false,rgbWorkingSpace:{gamma:2.2},mainView:{id:inputId,stf:[[1,2]],
     image:{width:2,height:1,numberOfChannels:inputColor?3:1,bitsPerSample:32,isReal:true,isColor:inputColor,pixels:[0.1,0.2]}}};
@@ -100,6 +100,15 @@ function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImage
     return !gradientFail;
   };};
   if(!missing)context.CurvesTransformation=Process;
+  if(!invertMissing)context.Invert=function(){this.executeOn=view=>{
+    assert.equal(view,outputs[outputs.length-1].mainView);
+    const output=outputs[outputs.length-1];calls.push('Invert');
+    view.image.pixels=view.image.pixels.map((value,i)=>{
+      const m=output.mask&&output.maskEnabled?output.mask.mainView.image.pixels[i]:1;
+      const weight=output.mask&&output.maskEnabled&&output.maskInverted?1-m:m;
+      return value*(1-weight)+(1-value)*weight;
+    });return !fail;
+  };};
   if(!mltMissing)context.MultiscaleLinearTransform=function(){this.executeOn=view=>{assert.equal(view,outputs[outputs.length-1].mainView);calls.push('MLT');assert.equal(this.layers[0][4],0.75);view.image.pixels[0]+=0.2;return !fail;};};
   context.runDSESettingsFixture=(data,target)=>{calls.push('DSE settings');assert.equal(data.targetView,target);if(dseOtherTarget)data.targetView=input.mainView;return !dseCancel;};
   context.runDSEFixture=(data,target)=>{assert.equal(data.targetView,target);calls.push('DSE');if(dseFail)throw Error('DSE failed');target.image.pixels[0]+=0.1;};
@@ -173,6 +182,39 @@ function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImage
   return {calls,messages,outputs,input,gradientParameters,starParameters,paletteParameters,nbParameters,sccParameters,recordedParameters,windows:ImageWindow.windows,maskPrompts,maskApplications,unsharpParameters};
 }
 const complete=api.buildWorkspaceReplayScript(plan,0,1);
+{
+ const invert=step('Invert');
+ const plan=api.workspaceReplayData([{id:'Invert_test',steps:[invert,ht]}])[0];
+ assert.equal(plan.steps[0].reason,'');
+ const code=api.buildWorkspaceReplayScript(plan,0,1);
+ for(const inputColor of [false,true]) {
+   const result=run(api.buildWorkspaceReplayScript(plan,0,0),{inputColor});
+   assert.deepEqual(result.outputs[0].mainView.image.pixels,[0.9,0.8]);
+   assert.equal(result.outputs[0].mainView.image.isColor,inputColor);
+   assert.deepEqual(result.input.mainView.image.pixels,[0.1,0.2]);
+ }
+ assert.deepEqual(run(code).calls.filter(c=>c==='Invert'||c==='HT'),['Invert','HT']);
+ for(const options of [{invertMissing:true},{fail:true}]) {
+   const stopped=run(code,options);assert.match(stopped.messages[0],/Invert/);
+   assert.match(stopped.messages[0],/Partial result retained/);assert.ok(!stopped.calls.includes('HT'));
+ }
+ const mask={isNull:false,mainView:{id:'Invert_mask',image:{width:2,height:1,isColor:false,pixels:[0.25,0.75]}}};
+ for(const inverted of [false,true]) {
+   const masked={...invert,mask:{status:'recorded',name:'Invert_mask',inverted},references:[{kind:'mask',name:'Invert_mask'}]};
+   const maskedCode=api.buildWorkspaceReplayScript(api.workspaceReplayData([{id:'MaskedInvert',steps:[masked]}])[0],0,0);
+   const result=run(maskedCode,{channels:[mask]});
+   const expected=inverted?[0.7,0.35]:[0.3,0.65];
+   result.outputs[0].mainView.image.pixels.forEach((value,i)=>assert.ok(Math.abs(value-expected[i])<1e-12));
+   assert.deepEqual(mask.mainView.image.pixels,[0.25,0.75],'Mask inversion never changes mask pixels');
+   assert.equal(result.outputs[0].mask,null,'Mask removed after execution');
+   assert.ok(!run(maskedCode,{channels:[mask],maskCancel:true}).calls.includes('Invert'));
+ }
+ for(const extra of [{mask:{status:'unknown'}},{references:[{kind:'input',name:'Missing'}]},
+   {source:'var P = new Invert; arbitraryCode();'}])
+   assert.ok(api.workspaceReplayData([{id:'InvalidInvert',steps:[{...invert,...extra}]}])[0].steps[0].reason);
+ assert.equal(run(code,{cancel:true}).outputs.length,0);
+ console.log('Passed: native Invert on grayscale/color copies, subsequent steps, normal/inverted mask blending, mask cleanup, cancellation, missing/failed process and validation blockers.');
+}
 {
  const checksum='1b192a70ab69d136e5d36f929b6f43a9';
  const proc={processId:()=> 'Script',filePath:'$PXI_SRCDIR/scripts/GAME.js',md5sum:checksum,parameters:[]};

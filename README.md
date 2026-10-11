@@ -82,7 +82,8 @@ processing suffixes. Suggestions remain editable.
 
 The first implementation supports independent, in-place HistogramTransformation,
 CurvesTransformation, RGBWorkingSpace, SCNR, ColorSaturation, BlurXTerminator,
-NoiseXTerminator, GradientCorrection, StarXTerminator, NarrowbandNormalization, UnsharpMask and MultiscaleLinearTransform instances with supported serialization and no
+NoiseXTerminator, GradientCorrection, StarXTerminator, NarrowbandNormalization,
+UnsharpMask, MultiscaleLinearTransform and Invert instances with supported serialization and no
 historical input references. StarXTerminator output references are allowed.
 RGBWorkingSpace steps that use historical global settings are blocked.
 Required tools, licenses and matching models must already be available in PixInsight.
@@ -121,6 +122,11 @@ Timestamps can help compare a target step with a mask's Invert/Blur history, but
 are not proof of its pixel version: times can be missing or inherited, and the
 history does not link the target operation to an exact mask-history position.
 Historical pixels, masks and missing inputs are not bundled in the exported script.
+
+Invert replay uses the native PixInsight process to invert pixel values (color or
+grayscale), without changing image geometry. It runs on the replay copy. Recorded
+masks use the same per-step picker and Color invert controls as other native
+processes; this mask setting is independent of the Invert operation itself.
 
 DarkStructureEnhance is supported as an interactive replay step using the installed
 `scripts/misc/DarkStructureEnhance.js` algorithm. Its Script history has no saved

@@ -1374,7 +1374,7 @@ function workspaceReplayData(records) {
    var data = [];
    var supported = {HistogramTransformation:true, CurvesTransformation:true, RGBWorkingSpace:true,
       SCNR:true, ColorSaturation:true, BlurXTerminator:true, NoiseXTerminator:true, GradientCorrection:true,
-      StarXTerminator:true, NarrowbandNormalization:true, UnsharpMask:true, MultiscaleLinearTransform:true};
+      StarXTerminator:true, NarrowbandNormalization:true, UnsharpMask:true, MultiscaleLinearTransform:true, Invert:true};
    for (var r = 0; r < records.length; ++r) {
       var record = records[r], image = {id:record.id, anchor:record.anchor, originalInputs:[], steps:[]};
       for (var oi = 0; oi < records.length; ++oi) if (records[oi].isOriginalInput) image.originalInputs.push(records[oi].id);
