@@ -62,7 +62,7 @@ assert.throws(()=>api.buildWorkspaceReplayScript(plan,0.5,1),/valid step range/)
 
 function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImages=false,gradientMissing=false,gradientFail=false,
   starMissing=false,starFail=false,paletteMissing=false,paletteFail=false,nbMissing=false,nbFail=false,sccMissing=false,sccFail=false,sourceChanged=false,scriptRecords=[],initialScripts=false,channels=[],choices=[],states=[],prepFail=false,
-  maskCancel=false,maskBlend=false,unsharpMissing=false,maskChoices=[],orientations=[1],inputId='Ha_input',existingIds=['Ha_input_APA_replay']}={}) {
+  maskCancel=false,maskBlend=false,unsharpMissing=false,maskChoices=[],maskInvertChoices=[],orientations=[1],inputId='Ha_input',existingIds=['Ha_input_APA_replay']}={}) {
   const calls=[], messages=[], outputs=[], gradientParameters=[], starParameters=[],paletteParameters=[],nbParameters=[],sccParameters=[],combos=[],maskApplications=[],unsharpParameters=[];let checkbox,maskPrompts=0;
   const input={isNull:false,rgbWorkingSpace:{gamma:2.2},mainView:{id:inputId,stf:[[1,2]],
     image:{width:2,height:1,numberOfChannels:1,bitsPerSample:32,isReal:true,isColor:false,pixels:[0.1,0.2]}}};
@@ -82,7 +82,7 @@ function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImage
     calls.push(this.H?'HT':'CT');if(maskBlend&&this.K){const output=outputs[outputs.length-1];view.image.pixels=view.image.pixels.map((value,i)=>{const m=output.mask&&output.maskEnabled?output.mask.mainView.image.pixels[i]:1;const weight=output.mask&&output.maskEnabled&&output.maskInverted?1-m:m;return value*(1-weight)+value*value*weight;});}else view.image.pixels[0]+=1;return !fail;};}
   const context={ImageWindow,View:{viewById:id=>({isNull:!existingIds.includes(id)})},
     Dialog:function(){this.ok=()=>{};this.cancel=()=>{};this.adjustToContents=()=>{};
-      this.execute=()=>{checkbox.checked=confirm;if(this.windowTitle==='AstroProcessAtlas - Mask orientation'){combos[combos.length-1].currentItem=orientations.shift()||0;return !maskCancel;}if(this.windowTitle==='AstroProcessAtlas - Select mask'){const choice=maskChoices[maskPrompts++];if(choice!==undefined)combos[combos.length-1].currentItem=choice;return !maskCancel;}const inputs=combos.filter(c=>c.items[0]!=='Choose input state');const stateBoxes=combos.filter(c=>c.items[0]==='Choose input state');for(let i=0;i<choices.length;i++)inputs[i+1].currentItem=choices[i];stateBoxes.forEach((c,i)=>c.currentItem=states[i]===undefined?1:states[i]);return !cancel;};},
+      this.execute=()=>{if(this.windowTitle==='AstroProcessAtlas - Mask orientation'){combos[combos.length-1].currentItem=orientations.shift()||0;return !maskCancel;}if(this.windowTitle==='AstroProcessAtlas - Select mask'){const choice=maskChoices[maskPrompts];if(maskInvertChoices[maskPrompts]!==undefined)checkbox.checked=maskInvertChoices[maskPrompts];++maskPrompts;if(choice!==undefined)combos[combos.length-1].currentItem=choice;return !maskCancel;}checkbox.checked=confirm;const inputs=combos.filter(c=>c.items[0]!=='Choose input state');const stateBoxes=combos.filter(c=>c.items[0]==='Choose input state');for(let i=0;i<choices.length;i++)inputs[i+1].currentItem=choices[i];stateBoxes.forEach((c,i)=>c.currentItem=states[i]===undefined?1:states[i]);return !cancel;};},
     CheckBox:function(){checkbox=this;}, ComboBox:function(){this.items=[];this.addItem=v=>this.items.push(v);combos.push(this);},
     Label:function(){this.setMinWidth=()=>{};},PushButton:function(){},HorizontalSizer:Sizer,VerticalSizer:Sizer,
     MessageBox:function(message){this.execute=()=>messages.push(message);},
@@ -200,6 +200,10 @@ const complete=api.buildWorkspaceReplayScript(plan,0,1);
  const unknownCode=api.buildWorkspaceReplayScript(unknown,0,1);
  result=run(unknownCode,{channels:[maskWindow]});
  assert.equal(result.maskPrompts,1);assert.deepEqual(result.maskApplications.map(m=>m.inverted),[false,false]);
+ result=run(unknownCode,{channels:[maskWindow],maskInvertChoices:[true]});
+ assert.equal(result.maskPrompts,1);assert.deepEqual(result.maskApplications.map(m=>m.inverted),[true,true],'Remember the user-selected Color invert setting');
+ result=run(code,{channels:[maskWindow],maskInvertChoices:[true]});
+ assert.equal(result.maskPrompts,1);assert.deepEqual(result.maskApplications.filter(m=>m.enabled).map(m=>m.inverted),[true,false,true],'Apply later historical inversion changes relative to the first user choice');
  assert.ok(!unknownCode.includes('Mask orientation'),'No separate inversion-selection dialog');
  result=run(code,{channels:[maskWindow],maskCancel:true});assert.equal(result.calls.filter(c=>c==='USM').length,0);assert.match(result.messages[0],/Mask selection cancelled.*Partial result/s);
  result=run(code,{channels:[maskWindow],fail:true});assert.equal(result.outputs[0].mask,null);assert.equal(result.calls.filter(c=>c==='USM').length,1);

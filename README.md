@@ -90,9 +90,12 @@ redo entries are excluded. Manual or possible graph links do not authorize repla
 
 For supported native processes with a recorded mask name and inversion state,
 replay pauses before the first use and asks you to select an open mask image with
-matching dimensions. Always supply the normal historical mask image, without
-inverting its pixels, and confirm that choice. Replay applies the recorded
-Mask > Invert Mask setting automatically, including an inverted first use.
+matching dimensions. Choose **Color invert (black/white mask values)** in the
+same dialog when the selected mask needs value inversion for this step. The
+checkbox defaults to the recorded inversion, or off when it is unspecified.
+Continue is available with either setting; there is no confirmation checkbox.
+The selected setting is remembered, and later recorded inversion changes are
+applied relative to that first choice through Mask > Invert Mask.
 Inversion means a weight of 1-mask at the same pixel coordinates, not a geometric
 flip. The selection is cached by historical mask name for this replay run; later
 uses need no new mask-image prompt, and opposite states use PixInsight's mask inversion flag.
@@ -101,8 +104,8 @@ stops replay and retains the partial result. The report cannot reconstruct a mas
 historical pixels. Download is enabled only when the entire selected range is supported;
 supported entries are green, mask prompts orange with WARNING, and blockers pink/red.
 If the mask name is recorded but its inversion is unspecified, download remains
-available and replay uses normal mask values, with a warning in the report and
-console. There is no separate inversion-selection dialog. The mask image selection is still reused. An entirely unknown mask state
+available and replay uses your Color invert choice, with a warning in the report
+and console. There is no separate inversion-selection dialog. The mask image selection is still reused. An entirely unknown mask state
 remains a blocker.
 Historical pixels, masks and missing inputs are not bundled in the exported script.
 

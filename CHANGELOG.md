@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Replace mask confirmation with an editable Color invert checkbox in the mask
+  picker. Default to recorded inversion, cache the user's choice, and apply later
+  historical inversion changes relative to it. Continue works for either setting.
+
 - Suggest matching original/base-channel images in PerfectPalettePicker input
   dropdowns, ignoring case and common processing suffixes. Remove the separate
   mask inversion dialog; recorded value inversion remains automatic and missing
