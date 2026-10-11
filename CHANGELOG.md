@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Treat initial ImageIntegration entries as image-origin metadata rather than
+  replay processes; keep later integration operations as explicit blockers.
+- Remove only the identical applied initial prefix from named `_clone`/`_cloneN`
+  images when their source image is included. Compare native process parameters
+  and recorded mask settings, preserve subsequent/redo steps and real live indices,
+  and link the clone to the shared source history. Apply this consistently to the
+  tree, details, summary, thumbnails and replay export.
+
 - Construct replay comment and URL delimiters at runtime to avoid PixInsight
   preprocessing errors in the workflow generator's source strings.
 

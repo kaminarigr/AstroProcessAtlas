@@ -14,6 +14,15 @@ const ct = step('CurvesTransformation','P.K = [[0,0],[1,1]]; P.Kt = P.AkimaSubsp
 const blocked = step('Script', '', {title:'PerfectPalettePicker'});
 const record = {id:'Ha', anchor:'image_0',steps:[ht,ct,blocked,ht,{...ht,redo:true}]};
 const plan = api.workspaceReplayData([record])[0];
+const origin=step('ImageIntegration','P.images=[[true,"light.xisf"]];',{phase:'initial',historyEntryIndex:0});
+const integrated={id:'Integrated',steps:[origin,{...ht,displayNumber:2,historyEntryIndex:1}]};
+assert.equal(api.workspaceReplayData([integrated])[0].steps.length,1);
+assert.equal(api.workspaceReplayData([integrated])[0].steps[0].number,2,'Keep report numbering after origin metadata');
+assert.match(api.replayStepHTML(integrated,origin),/Image origin metadata/);
+assert.ok(!api.replayStepHTML(integrated,origin).includes('Copy step for replay'));
+assert.equal(api.workspaceReplayData([{id:'OriginOnly',steps:[origin]}])[0].steps.length,0);
+assert.ok(api.workspaceReplayData([{id:'Later',steps:[{...origin,phase:'live',historyEntryIndex:5}]}])[0].steps[0].reason,
+  'A later integration cannot be silently skipped as initial metadata');
 assert.equal(plan.steps.length,4,'Exclude redo without omitting blockers');
 assert.equal(plan.steps[0].reason,'');
 assert.equal(plan.steps[1].reason,'');

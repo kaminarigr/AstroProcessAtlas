@@ -554,6 +554,7 @@ function collectWorkspaceRecord(window, index) {
       for (var i = 0; i < items.length; ++i) {
          var proc = items[i], number = record.steps.length;
          record.steps.push({proc:proc, source:getProcessParameters(proc), title:getProcessTitle(proc),
+            historyEntryIndex:number,
             phase:group.phase, liveIndex:group.phase === "live" ? i+1 : null,
             redo:group.phase === "live" && i+1 > record.historyIndex,
             time:executionTime(proc), mask:masks.steps[i], maskThumb:null,
@@ -744,7 +745,79 @@ function imageColorBadge(node) {
    return html + '<circle cx="' + x + '" cy="' + y + '" r="8" fill="none" stroke="#bac2de" stroke-width="1"/></g>';
 }
 
+function historyParameterKey(source) {
+   // Compare serialized values without comments, formatting or instance variable names.
+   // Quoted values remain intact: whitespace inside an expression/path is significant.
+   var tokens = [], i = 0;
+   while (i < source.length) {
+      var c = source.charAt(i), next = source.charAt(i + 1);
+      if (/\s/.test(c)) { ++i; continue; }
+      if (c === '/' && next === '/') {
+         i += 2; while (i < source.length && source.charAt(i) !== '\n') ++i;
+      } else if (c === '/' && next === '*') {
+         var end = source.indexOf('*/', i + 2); if (end < 0) return '';
+         i = end + 2;
+      } else if (c === '"' || c === "'") {
+         var start = i++, quote = c, closed = false;
+         while (i < source.length) {
+            c = source.charAt(i++);
+            if (c === '\\') ++i;
+            else if (c === quote) { closed = true; break; }
+         }
+         if (!closed) return '';
+         var literal = source.slice(start, i);
+         if (quote === '"') {
+            try { literal = JSON.stringify(JSON.parse(literal)); } catch (e) { return ''; }
+         }
+         tokens.push(literal);
+      } else {
+         if (/[A-Za-z_$]/.test(c)) {
+            var start = i++; while (i < source.length && /[\w$]/.test(source.charAt(i))) ++i;
+            tokens.push(source.slice(start, i));
+         } else {
+            var token = /^(?:0[xX][0-9a-fA-F]+|(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)/.exec(source.slice(i, i + 80));
+            if (token) { tokens.push(String(Number(token[0]))); i += token[0].length; }
+            else { tokens.push(c); ++i; }
+         }
+      }
+   }
+   if (!tokens.length || tokens[0] !== 'var' || tokens[2] !== '=' || tokens[3] !== 'new') return '';
+   var instance = tokens[1];
+   for (i = 0; i < tokens.length; ++i) if (tokens[i] === instance) tokens[i] = '$instance';
+   return tokens.join(' ');
+}
+
+function normalizeWorkspaceCloneHistories(records) {
+   var byId = {}, originals = {};
+   for (var r = 0; r < records.length; ++r) {
+      var record = records[r]; byId['$' + record.id] = record;
+      if (record.cloneFullSteps) { record.steps = record.cloneFullSteps; record.cloneShared = null; record.displayGroups = null; }
+      originals['$' + record.id] = record.cloneFullSteps || record.steps;
+   }
+   for (var r = 0; r < records.length; ++r) {
+      var record = records[r], full = originals['$' + record.id];
+      var match = /^(.*)_clone(?:[0-9]+)?$/.exec(record.id);
+      if (!match || !byId['$' + match[1]]) continue;
+      var parent = byId['$' + match[1]], source = originals['$' + parent.id], count = 0;
+      while (count < Math.min(full.length, source.length)) {
+         var a = full[count], b = source[count];
+         if (a.redo || b.redo || getProcessName(a.proc) !== getProcessName(b.proc)) break;
+         var am = a.mask || {}, bm = b.mask || {};
+         if (am.status !== bm.status || am.name !== bm.name || am.inverted !== bm.inverted) break;
+         var ak = historyParameterKey(a.source), bk = historyParameterKey(b.source);
+         if (!ak || ak !== bk) break;
+         ++count;
+      }
+      if (!count) continue;
+      record.cloneFullSteps = full;
+      record.cloneShared = {image:parent.id, anchor:parent.anchor, count:count, lastStep:source[count-1]};
+      record.steps = full.slice(count);
+      record.displayGroups = null;
+   }
+}
+
 function workspaceGraph(records) {
+   normalizeWorkspaceCloneHistories(records);
    var graph = {nodes:[], edges:[], unresolved:[]}, headerById = {};
    for (var r = 0; r < records.length; ++r) {
       var record = records[r];
@@ -770,6 +843,17 @@ function workspaceGraph(records) {
          graph.edges.push({from:previous, to:group.anchor, kind:"sequence", provenance:'recorded', detail:step.phase === "initial" ? "Initial state history" : "History sequence", redo:step.redo});
          previous = group.anchor;
       }
+   }
+   for (var r = 0; r < records.length; ++r) {
+      var shared = records[r].cloneShared;
+      if (!shared) continue;
+      var from = shared.anchor;
+      for (var n = 0; n < graph.nodes.length; ++n) {
+         var node = graph.nodes[n];
+         if (node.id === shared.lastStep.anchor || (node.memberIds && node.memberIds.indexOf(shared.lastStep.anchor) >= 0)) { from = node.id; break; }
+      }
+      graph.edges.push({from:from, to:records[r].anchor, kind:'input', provenance:'parameter', uncertain:true, redo:false,
+         detail:'Clone relationship inferred from matching image name and common initial process parameters (' + shared.count + ' entries). Exact historical pixels are unconfirmed.'});
    }
    for (var r = 0; r < records.length; ++r)
       for (var i = 0; i < records[r].steps.length; ++i) {
@@ -1001,11 +1085,15 @@ function imageReportHTML(record, emit) {
    var html = '<section class="image-report" data-image="' + record.anchor + '" id="' + record.anchor + '"><h2 data-no-i18n>' + escapeHTML(record.id) + '</h2>';
    html += '<div class="meta-info">' + (record.currentThumb ? '<img class="image-snapshot" src="' + escapeHTML(record.currentThumb) + '" alt="Current image">' : '') +
       '<b>File:</b> ' + (record.filePath ? '<span data-no-i18n>' + escapeHTML(record.filePath) + '</span>' : 'No file path') + '<br><b>Total Process Steps:</b> ' + groups.length +
-      (groups.length !== record.steps.length ? ' · <b>Original history entries:</b> ' + record.steps.length : '') +
+      (groups.length !== record.steps.length || record.cloneShared ? ' · <b>Original history entries:</b> ' + (record.cloneFullSteps || record.steps).length : '') +
       ' · Current history position: ' + record.historyIndex + '<br><b>Current mask:</b> ' + record.currentMaskInfo +
       maskThumbnailHTML(record.currentMaskThumbnail, record.currentMaskInverted) + '</div>';
+   if (record.cloneShared) html += '<p>Common initial history is shown on the source image: <a href="#' +
+      escapeHTML(record.cloneShared.anchor) + '" onclick="selectGraphNode(' + escapeHTML(JSON.stringify(record.cloneShared.anchor)) +
+      ');return false" data-no-i18n>' + escapeHTML(record.cloneShared.image) + '</a> (' +
+      record.cloneShared.count + ' entries). Only subsequent clone steps are shown here. This relationship is inferred from the image name and matching parameters.</p>';
    if (record.error || record.initialNote) html += '<p>' + escapeHTML(record.error || record.initialNote) + '</p>';
-   if (!record.steps.length) html += '<p>No history steps were found for this image.</p>';
+   if (!record.steps.length) html += '<p>' + (record.cloneShared ? 'No additional history steps were found for this clone.' : 'No history steps were found for this image.') + '</p>';
    if (emit) { emit(html); html = ''; }
    for (var i = 0; i < record.steps.length; ++i) {
       var step = record.steps[i];
@@ -1045,7 +1133,7 @@ function imageReportHTML(record, emit) {
       if (groupEnd) html += '</details></div>';
       if (emit) { emit(html); html = ''; }
    }
-   for (var i = 0; i < record.historySources.length; ++i) {
+   for (var i = 0; !record.cloneShared && i < record.historySources.length; ++i) {
       html += '<details><summary>Full history code — ' + record.historySources[i].phase + '</summary>' + copyBlock('History ProcessContainer', record.historySources[i].source) + '</details>';
       if (emit) { emit(html); html = ''; }
    }
@@ -1105,6 +1193,11 @@ function replayProcessSource(source, tool) {
    return {source:source, variable:variable};
 }
 
+function isImageOriginStep(step, index) {
+   var position = typeof step.historyEntryIndex === 'number' ? step.historyEntryIndex : index;
+   return !step.redo && getProcessName(step.proc) === 'ImageIntegration' && (step.phase === 'initial' || position === 0);
+}
+
 function workspaceReplayData(records) {
    var data = [];
    var supported = {HistogramTransformation:true, CurvesTransformation:true, RGBWorkingSpace:true,
@@ -1112,7 +1205,7 @@ function workspaceReplayData(records) {
    for (var r = 0; r < records.length; ++r) {
       var record = records[r], image = {id:record.id, anchor:record.anchor, steps:[]};
       for (var s = 0; s < record.steps.length; ++s) {
-         var step = record.steps[s]; if (step.redo) continue;
+         var step = record.steps[s]; if (step.redo || isImageOriginStep(step, s)) continue;
          var tool = getProcessName(step.proc), reason = '', source = null;
          if (!supported[tool]) reason = 'This process is not supported by replay v1: ' + tool;
          else if (!step.mask || step.mask.status === 'unknown') reason = 'Historical mask state is unknown.';
@@ -1231,6 +1324,8 @@ function workspaceReplayHTML(records) {
 }
 
 function replayStepHTML(record, step) {
+   if (isImageOriginStep(step, record.steps.indexOf(step)))
+      return '<p class="thumb-note">Image origin metadata. Replay starts with the already integrated image; this entry is not exported as a replay process.</p>';
    var refs = step.references || [];
    var prefix = String.fromCharCode(47, 47) + ' ';
    var newline = String.fromCharCode(10);
@@ -1411,9 +1506,10 @@ function generateHistoryReport() {
       progress.update(15*i/windows.length, 'Reading history: ' + windows[i].mainView.id);
       var record=collectWorkspaceRecord(windows[i], i);record.isOriginalInput=false;
       for(var j=0;j<windows.originalInputIds.length;++j)if(windows.originalInputIds[j]===record.id)record.isOriginalInput=true;
-      records.push(record);total += workspaceStepGroups(record).length;
+      records.push(record);
    }
    var graph = workspaceGraph(records);
+   for (var i = 0; i < records.length; ++i) total += workspaceStepGroups(records[i]).length;
    records=orderWorkspaceGraph(records,graph);
    var thumbnailFiles=collectWorkspaceThumbnails(records, thumbDir, basename + "_thumbs", progress.update);
    var html = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>AstroProcessAtlas</title><style>' + reportStyles() +
@@ -1471,6 +1567,12 @@ function generateHistoryReport() {
 }
 
 var REPORT_TRANSLATIONS = [
+   ['Image origin metadata. Replay starts with the already integrated image; this entry is not exported as a replay process.',
+    'Στοιχεία προέλευσης εικόνας. Η επανάληψη ξεκινά από την ήδη ολοκληρωμένη εικόνα· αυτή η εγγραφή δεν εξάγεται ως διεργασία επανάληψης.'],
+   ['Common initial history is shown on the source image:','Το κοινό αρχικό ιστορικό εμφανίζεται στην εικόνα προέλευσης:'],
+   ['entries). Only subsequent clone steps are shown here. This relationship is inferred from the image name and matching parameters.',
+    'εγγραφές). Εδώ εμφανίζονται μόνο τα επόμενα βήματα του κλώνου. Η σύνδεση προκύπτει από το όνομα εικόνας και τις ίδιες παραμέτρους.'],
+   ['No additional history steps were found for this clone.','Δεν βρέθηκαν επιπλέον βήματα ιστορικού για αυτόν τον κλώνο.'],
    ['Export workflow for replay (experimental)','Εξαγωγή ροής για επανάληψη (πειραματικό)'],
    ['Replay image','Εικόνα επανάληψης'],['First process','Πρώτη διεργασία'],['Last process','Τελευταία διεργασία'],
    ['Download PixInsight replay script','Λήψη script επανάληψης για το PixInsight'],

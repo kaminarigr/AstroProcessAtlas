@@ -723,3 +723,61 @@ console.log('Passed: arbitrary current/before/after selection, shared comparison
  assert.match(elements.replay_status.textContent,/No applied processes/);
  console.log('Passed: workflow image/range controls, readiness and blockers, empty histories, generated script download and cleanup.');
 }
+
+// A clone branches at its common prefix; retained live indices still address real pixels.
+{
+ const scnr=makeProcess('SCNR',{amount:0.5});
+ const curve=makeProcess('CurvesTransformation',{K:[[0,0],[1,1]]});
+ const parent=helper.collectWorkspaceRecord(image('CloneSource',[ht,curve]),80);
+ const clone=helper.collectWorkspaceRecord(image('CloneSource_clone',[ht,curve,scnr]),81);
+ const branched=helper.workspaceGraph([clone,parent]);
+ assert.equal(clone.steps.length,1);assert.equal(clone.cloneShared.count,2);
+ assert.equal(clone.steps[0].title,'SCNR');assert.equal(clone.steps[0].liveIndex,3);
+ assert.equal(clone.steps[0].historyEntryIndex,2);assert.equal(clone.steps[0].displayNumber,1);
+ assert.equal(branched.nodes.filter(n=>n.image===clone.id&&!n.header).length,1);
+ const relation=branched.edges.find(e=>e.to===clone.anchor&&e.kind==='input');
+ assert.equal(relation.from,parent.steps[1].anchor);assert.equal(relation.uncertain,true);
+ assert.match(relation.detail,/matching image name/);
+ helper.collectWorkspaceThumbnails([parent,clone],'/preview','report_thumbs');
+ assert.ok(clone.steps[0].beforeThumb.endsWith('_state_2.png'));
+ assert.equal(clone.view.historyIndex,3);
+ const detail=helper.imageReportHTML(clone);
+ assert.equal((detail.match(/class="step-card"/g)||[]).length,1);
+ assert.ok(!detail.includes('Full history code'),'Do not duplicate the shared raw container in clone details');
+ assert.match(detail,/Only subsequent clone steps/);
+ assert.match(detail,/onclick="selectGraphNode/,'Source link selects and reveals its image history');
+ assert.match(detail,/Original history entries:<\/b> 3/);
+ assert.equal(helper.workspaceReplayData([clone])[0].steps.length,1);
+ assert.match(helper.processingSummaryHTML([parent,clone]),/HistogramTransformation × 1/);
+ const again=helper.workspaceGraph([parent,clone]);assert.equal(clone.steps.length,1);
+ assert.equal(again.edges.filter(e=>e.to===clone.anchor&&e.kind==='input').length,1);
+ helper.workspaceGraph([clone]);assert.equal(clone.steps.length,3,'Missing parent restores full history');
+ assert.equal(clone.cloneShared,null);
+ const changed=helper.collectWorkspaceRecord(image('CloneSource_clone',[makeProcess('HistogramTransformation',{H:[[0,0.7,1,0,1]]}),curve,scnr]),82);
+ helper.workspaceGraph([parent,changed]);assert.equal(changed.steps.length,3);
+ const laterMatch=helper.collectWorkspaceRecord(image('CloneSource_clone',[ht,scnr,curve]),83);
+ helper.workspaceGraph([parent,laterMatch]);assert.equal(laterMatch.steps.length,2);
+ assert.equal(laterMatch.steps[1].title,'CurvesTransformation','Only remove the consecutive initial prefix');
+ const otherName=helper.collectWorkspaceRecord(image('OtherClone',[ht,curve,scnr]),84);
+ helper.workspaceGraph([parent,otherName]);assert.equal(otherName.steps.length,3);
+ const numbered=helper.collectWorkspaceRecord(image('CloneSource_clone2',[ht,curve,scnr]),89);
+ helper.workspaceGraph([parent,numbered]);assert.equal(numbered.steps.length,1);
+ const masks=helper.collectWorkspaceRecord(image('CloneSource_clone',[ht,curve],[],2,[[0,'DifferentMask',true]]),85);
+ helper.workspaceGraph([parent,masks]);assert.equal(masks.steps.length,2,'Different masks preserve history');
+ const identical=helper.collectWorkspaceRecord(image('CloneSource_clone',[ht,curve]),86);
+ const identicalGraph=helper.workspaceGraph([parent,identical]);assert.equal(identical.steps.length,0);
+ assert.ok(identicalGraph.edges.some(e=>e.to===identical.anchor&&e.kind==='input'));
+ assert.match(helper.imageReportHTML(identical),/No additional history steps/);
+ const redo=helper.collectWorkspaceRecord(image('CloneSource_clone',[ht,curve],[],1),87);
+ helper.workspaceGraph([parent,redo]);assert.equal(redo.steps.length,1);assert.equal(redo.steps[0].redo,true);
+ assert.equal(helper.historyParameterKey('var X = new SCNR; X.amount = 0.5; /* date */'),
+   helper.historyParameterKey('var P=new SCNR;\nP.amount=0.5;'));
+ assert.equal(helper.historyParameterKey('var X=new SCNR;X.amount=1.000;'),helper.historyParameterKey('var P=new SCNR;P.amount=1;'));
+ assert.notEqual(helper.historyParameterKey('var P=new PixelMath;P.expression="Ha + SII";'),
+   helper.historyParameterKey('var P=new PixelMath;P.expression="Ha+SII";'),'Keep literal parameter text intact');
+ assert.equal(helper.historyParameterKey('Could not retrieve parameters'), '');
+ const derived=helper.collectWorkspaceRecord(image('CloneSource_clone_clone',[ht,curve,scnr,makeProcess('NoiseXTerminator',{amount:0.3})]),88);
+ const chain=helper.workspaceGraph([derived,clone,parent]);assert.equal(clone.steps.length,1);assert.equal(derived.steps.length,1);
+ assert.ok(chain.edges.some(e=>e.from===clone.steps[0].anchor&&e.to===derived.anchor));
+ console.log('Passed: common clone prefix removal across tree/details/summary/replay, source branch links, numbering, real live indices, idempotence, missing parent, different parameters/masks, redo and clone chains.');
+}

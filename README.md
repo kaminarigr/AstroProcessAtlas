@@ -84,6 +84,20 @@ correct starting image. Grouped processes retain their step/substep numbering;
 redo entries are excluded. Manual or possible graph links do not authorize replay.
 Historical pixels, masks and missing inputs are not bundled in the exported script.
 
+Initial ImageIntegration entries describe the provenance of an already integrated
+input. They remain available in the report but are omitted from replay, so they do
+not block the subsequent editing steps. An integration later in the editing history
+still blocks replay.
+
+When both `Image` and `Image_clone` (or a numbered `_cloneN`) are included, a common
+consecutive initial prefix with identical processes, parameters and recorded mask
+settings is shown only on the source image. The clone shows its subsequent steps
+and an inferred link to that source history. This also affects summary counts and
+replay export; replay of the clone starts from the state after the shared prefix.
+The original PixInsight histories are unchanged. Missing sources, differing values
+and redo entries are not deduplicated; naming and parameter matches do not prove
+identical historical pixels.
+
 Run `node test_workflow_replay.cjs` for the generator and simulated native execution
 checks, alongside the existing history/report tests. Actual PixInsight execution
 still requires validation with real images and installed processes.
