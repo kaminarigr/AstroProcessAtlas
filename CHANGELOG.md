@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Place images without cross-image connections after connected images, preserving
+  the existing order within each group.
+
 - Link StarXTerminator stars output to its source step when stars=true, an exact
   `<source>_stars` image exists, and its applied history contains StarXTerminator.
 

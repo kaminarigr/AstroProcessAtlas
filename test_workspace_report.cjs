@@ -375,8 +375,8 @@ roots.forEach(r=>{r.isOriginalInput=true;});
 const derived=helper.collectWorkspaceRecord(image('Ha_stars',[makeProcess('PixelMath',{expression:'Ha',useSingleExpression:true})]),23);
 const shuffled=[derived,...roots];const rootGraph=helper.workspaceGraph(shuffled);
 const ordered=helper.orderWorkspaceGraph(shuffled,rootGraph);
-assert.equal(ordered.map(r=>r.id).join(','),'Ha,Sii,OiiI,Ha_stars');
-assert.equal(rootGraph.nodes.find(n=>n.id===derived.anchor).x,24+3*290);
+assert.equal(ordered.map(r=>r.id).join(','),'Ha,Ha_stars,Sii,OiiI');
+assert.equal(rootGraph.nodes.find(n=>n.id===derived.anchor).x,24+290);
 assert.ok(rootGraph.nodes.filter(n=>n.header&&n.originalInput).length===3);
 const rootSummary=helper.processingSummaryHTML(ordered);
 assert.ok(rootSummary.includes('Ha, Sii, OiiI'),'Original inputs included even without explicit process references');
@@ -516,4 +516,21 @@ console.log('Passed: grayscale/color SVG badges on image headers only, current-s
  assert.ok(!helper.workspaceGraph([sourceRecord]).edges.some(e=>e.kind==='output'));
  assert.ok(!helper.workspaceGraph([starsRecord]).edges.some(e=>e.kind==='output'));
  console.log('Passed: StarXTerminator stars output links with exact name and output history, disabled stars, unrelated history, redo and missing output rejection.');
+}
+
+{
+ const isolatedA=helper.collectWorkspaceRecord(image('Unused_A',[ht]),30);
+ const isolatedB=helper.collectWorkspaceRecord(image('Unused_B'),31);
+ const input=helper.collectWorkspaceRecord(image('Input'),32);
+ const output=helper.collectWorkspaceRecord(image('Result',[makeProcess('PixelMath',{expression:'Input',useSingleExpression:true})]),33);
+ const recordsToOrder=[isolatedA,input,isolatedB,output];
+ const g=helper.workspaceGraph(recordsToOrder);
+ assert.equal(helper.orderWorkspaceGraph(recordsToOrder,g).map(r=>r.id).join(','),'Input,Result,Unused_A,Unused_B');
+ assert.equal(g.nodes.find(n=>n.id===isolatedA.anchor).x,24+2*290);
+ const onlyIsolated=[isolatedB,isolatedA];
+ assert.equal(helper.orderWorkspaceGraph(onlyIsolated,helper.workspaceGraph(onlyIsolated)).map(r=>r.id).join(','),'Unused_B,Unused_A');
+ const possibleGraph=helper.workspaceGraph(recordsToOrder);
+ possibleGraph.edges.push({from:isolatedB.anchor,to:output.steps[0].anchor,kind:'possible'});
+ assert.equal(helper.orderWorkspaceGraph(recordsToOrder,possibleGraph).map(r=>r.id).join(','),'Input,Unused_B,Result,Unused_A');
+ console.log('Passed: disconnected images move last, sequence-only histories stay isolated, stable group order, graph positions and possible connections.');
 }

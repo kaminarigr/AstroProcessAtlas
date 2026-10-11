@@ -871,6 +871,22 @@ function orderWorkspaceGraph(records, graph) {
       }
       ordered.push(pending.splice(choice, 1)[0]);
    }
+   // Stable partition: retain the existing dependency order within each group.
+   var related = {}, connected = [], isolated = [];
+   for (e = 0; e < graph.edges.length; ++e) {
+      var relation = graph.edges[e];
+      if (relation.redo || relation.kind === 'sequence') continue;
+      var from = nodesById['$' + relation.from], to = nodesById['$' + relation.to];
+      if (from && to && from.image !== to.image) {
+         related['$' + from.image] = true;
+         related['$' + to.image] = true;
+      }
+   }
+   for (r = 0; r < ordered.length; ++r) {
+      if (related['$' + ordered[r].id]) connected.push(ordered[r]);
+      else isolated.push(ordered[r]);
+   }
+   ordered = connected.concat(isolated);
    for (r = 0; r < ordered.length; ++r) {
       for (n = 0; n < graph.nodes.length; ++n) {
          if (graph.nodes[n].image === ordered[r].id) {
@@ -903,7 +919,7 @@ function workspaceOverviewHTML(records, graph) {
    var height = 170, width = Math.max(310, records.length*290+35);
    for (var i = 0; i < graph.nodes.length; ++i) height = Math.max(height, graph.nodes[i].y+100);
    var html = '<section><h2>Image and process tree</h2><p>Each column represents an image. Solid lines show its history sequence. Dashed lines connect image/mask references; the exact historical version of the source image is unknown. This is not an absolute shared timeline.</p>';
-   html+='<p>Original inputs appear first, followed by known dependencies where possible. Column order does not establish when files were opened or images were created.</p>';
+   html+='<p>Connected images appear first; images without cross-image connections appear last. Existing order is preserved within each group. Column order does not establish when files were opened or images were created.</p>';
    html += '<div class="graph-legend" aria-label="Line legend">';
    var legendKinds = ['sequence', 'input', 'mask', 'output', 'manual', 'possible'];
    var legendLabels = ['Sequence', 'Input / reference', 'Mask', 'Output', 'Your connection', 'Possible connection'];
@@ -1772,7 +1788,7 @@ REPORT_TRANSLATIONS = REPORT_TRANSLATIONS.concat([
    ['Possible connection','Πιθανή σύνδεση'],['Possible connection (unconfirmed)','Πιθανή σύνδεση (μη επιβεβαιωμένη)'],
    ['User-selected original input; actual use by PerfectPalettePicker is unconfirmed','Αρχική εικόνα επιλεγμένη από τον χρήστη· η πραγματική χρήση της από το PerfectPalettePicker δεν έχει επιβεβαιωθεί'],
    ['Possible inputs from user-selected originals (unconfirmed):','Πιθανές είσοδοι από τις επιλεγμένες αρχικές εικόνες (μη επιβεβαιωμένες):'],
-   ['Original input (selected)','Αρχική εικόνα (επιλεγμένη)'],['Original inputs appear first, followed by known dependencies where possible. Column order does not establish when files were opened or images were created.','Οι αρχικές εικόνες εμφανίζονται πρώτες και ακολουθούν οι γνωστές εξαρτήσεις όπου είναι δυνατό. Η σειρά των στηλών δεν αποδεικνύει πότε ανοίχτηκαν αρχεία ή δημιουργήθηκαν εικόνες.'],
+   ['Original input (selected)','Αρχική εικόνα (επιλεγμένη)'],['Connected images appear first; images without cross-image connections appear last. Existing order is preserved within each group. Column order does not establish when files were opened or images were created.','Οι συσχετισμένες εικόνες εμφανίζονται πρώτες και οι εικόνες χωρίς συνδέσεις με άλλες εικόνες στο τέλος. Η υπάρχουσα σειρά διατηρείται μέσα σε κάθε ομάδα. Η σειρά των στηλών δεν αποδεικνύει πότε ανοίχτηκαν αρχεία ή δημιουργήθηκαν εικόνες.'],
    ['Original inputs (selected)','Αρχικές εικόνες (επιλεγμένες)'],['File-backed images (origin unconfirmed)','Εικόνες με αρχείο (μη επιβεβαιωμένη προέλευση)'],
    ['Processing summary','Σύνοψη επεξεργασίας'],['Overview of applied steps across the selected images. Input references do not establish a complete or absolute chronology. Select the final image explicitly.','Σύνοψη των εφαρμοσμένων βημάτων στις επιλεγμένες εικόνες. Οι αναφορές εισόδου δεν τεκμηριώνουν πλήρη ή απόλυτη χρονολογική σειρά. Επίλεξε την τελική εικόνα.'],
    ['Referenced inputs','Αναφορές εισόδου'],['Channel combinations / PixelMath','Συνδυασμοί καναλιών / PixelMath'],['Historical masks','Ιστορικές μάσκες'],['Processes used','Εργαλεία που χρησιμοποιήθηκαν'],['Category','Κατηγορία'],['Images / processes','Εικόνες / εργαλεία'],['Final image','Τελική εικόνα'],['Not selected','Δεν επιλέχθηκε'],
