@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Export one parent replay entry for every grouped operation, including
+  PerfectPalettePicker. Exclude all component steps and their replay-copy buttons;
+  unsupported parents remain explicit blockers with the report's top-level numbers.
+
 - Group the two matching RGBWorkingSpace entries immediately before
   SelectiveColorCorrection as its component steps. Keep parameters/thumbnails and
   consistent tree/detail numbering; omit these internal entries from replay while

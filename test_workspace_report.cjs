@@ -869,11 +869,11 @@ console.log('Passed: arbitrary current/before/after selection, shared comparison
  assert.equal(rec.steps[3].displayNumber,2);
  const plan=helper.workspaceReplayData([rec])[0];
  assert.equal(plan.steps.length,2);
- assert.equal(plan.steps[0].tool,'Script');
+ assert.equal(plan.steps[0].tool,'SelectiveColorCorrection');
  assert.ok(plan.steps[0].reason,'The parent script remains a replay blocker');
  assert.equal(plan.steps[1].tool,'HistogramTransformation');
  assert.ok(!helper.replayStepHTML(rec,rec.steps[0]).includes('Copy step for replay'));
- assert.match(helper.replayStepHTML(rec,rec.steps[0]),/Internal component/);
+ assert.match(helper.replayStepHTML(rec,rec.steps[0]),/Grouped component/);
  helper.workspaceGraph([rec]);
  assert.equal(rec.displayGroups.length,2,'Repeated grouping is stable');
  for(const processes of [
@@ -894,4 +894,31 @@ console.log('Passed: arbitrary current/before/after selection, shared comparison
  assert.ok(html.includes('Show recorded component steps (3)'));
  assert.ok(html.includes('Substep 1.1') && html.includes('Substep 1.2') && html.includes('Substep 1.3'));
  console.log('Passed: SelectiveColorCorrection matching helpers group once, consistent numbering, replay exclusion with parent blocker, and unrelated/changed/redo/phase rejection.');
+}
+
+{
+ const rec=helper.collectWorkspaceRecord(image('GroupedReplay',[ht,pppProcess(),pppProcess(),makeProcess('PixelMath',{expression:'Ha'}),ht]),114);
+ helper.workspaceGraph([rec]);
+ const plan=helper.workspaceReplayData([rec])[0];
+ assert.equal(plan.steps.length,3,'One replay entry per top-level group');
+ assert.equal(plan.steps[1].tool,'PerfectPalettePicker');
+ assert.equal(plan.steps[1].number,2);
+ assert.equal(plan.steps[1].substep,0);
+ assert.equal(plan.steps[1].source,'');
+ assert.match(plan.steps[1].reason,/PerfectPalettePicker/);
+ assert.equal(plan.steps[2].number,3);
+ assert.ok(!plan.steps.some(s=>s.tool==='PixelMath'));
+ for(const component of rec.displayGroups[1].members) {
+   assert.equal(component.componentOf,'PerfectPalettePicker');
+   assert.ok(!helper.replayStepHTML(rec,component).includes('Copy step for replay'));
+ }
+ const exported=helper.buildWorkspaceReplayScript(plan,0,2);
+ assert.ok(!exported.includes('new PixelMath'));
+ const stop=JSON.parse(exported.match(/var replaySteps = (.*);/)[1]);
+ assert.equal(stop.length,3);
+ assert.ok(stop[1].reason);
+ const separate=helper.collectWorkspaceRecord(image('UngroupedReplay',[pppProcess(),ht]),115);
+ helper.workspaceReplayData([separate]);
+ assert.equal(separate.steps[0].componentOf,'','Ungrouped steps retain their copy control');
+ console.log('Passed: grouped replay emits only parent blockers, omits every component including PixelMath, preserves top-level numbering and individual steps.');
 }

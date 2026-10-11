@@ -723,7 +723,6 @@ function workspaceStepGroups(record) {
           record.steps[i+1].phase === first.phase && record.steps[i+2].phase === first.phase) {
          end = i + 3;
          groupTitle = 'SelectiveColorCorrection';
-         first.componentOf = record.steps[i+1].componentOf = groupTitle;
       }
       if (getProcessTitle(first.proc).toLowerCase() === 'perfectpalettepicker') {
          while (end < record.steps.length && record.steps[end].redo === first.redo && getProcessTitle(record.steps[end].proc).toLowerCase() === 'perfectpalettepicker') {
@@ -738,6 +737,7 @@ function workspaceStepGroups(record) {
       var group = {anchor:members.length > 1 ? first.anchor + '_group' : first.anchor, members:members,
          title:groupTitle};
       for (var m = 0; m < members.length; ++m) {
+         members[m].componentOf = members.length > 1 ? group.title : '';
          members[m].groupAnchor = group.anchor;
          members[m].displayNumber = groups.length + 1;
          members[m].substepNumber = members.length > 1 ? m + 1 : 0;
@@ -1268,9 +1268,17 @@ function workspaceReplayData(records) {
       SCNR:true, ColorSaturation:true, BlurXTerminator:true, NoiseXTerminator:true, GradientCorrection:true, StarXTerminator:true};
    for (var r = 0; r < records.length; ++r) {
       var record = records[r], image = {id:record.id, anchor:record.anchor, steps:[]};
-      workspaceStepGroups(record);
-      for (var s = 0; s < record.steps.length; ++s) {
-         var step = record.steps[s]; if (step.redo || step.componentOf || isImageOriginStep(step, s)) continue;
+      var groups = workspaceStepGroups(record);
+      for (var s = 0; s < groups.length; ++s) {
+         var group = groups[s], step = group.members[0];
+         if (step.redo) continue;
+         if (group.members.length > 1) {
+            image.steps.push({title:group.title, number:step.displayNumber, substep:0,
+               tool:group.title, reason:'This process is not yet supported by the replay exporter: ' + group.title,
+               action:'process', identifier:'', source:'', variable:''});
+            continue;
+         }
+         if (isImageOriginStep(step, record.steps.indexOf(step))) continue;
          var tool = getProcessName(step.proc), reason = '', source = null, identifier = '';
          var requiredReferences = (step.references || []).filter(function(ref) {
             return !(tool === 'StarXTerminator' && step.proc.stars === true && ref.kind === 'output');
@@ -1414,7 +1422,7 @@ function workspaceReplayHTML(records) {
 }
 
 function replayStepHTML(record, step) {
-   if (step.componentOf) return '<p class="thumb-note">Internal component of SelectiveColorCorrection; excluded from workflow replay.</p>';
+   if (step.componentOf) return '<p class="thumb-note">Grouped component; excluded from workflow replay. <span data-no-i18n>' + escapeHTML(step.componentOf) + '</span></p>';
    if (isImageOriginStep(step, record.steps.indexOf(step)))
       return '<p class="thumb-note">Image origin metadata. Replay starts with the already integrated image; this entry is not exported as a replay process.</p>';
    var refs = step.references || [];
@@ -2170,7 +2178,7 @@ var REPORT_TRANSLATIONS = [
 ];
 
 REPORT_TRANSLATIONS = REPORT_TRANSLATIONS.concat([
-   ['Internal component of SelectiveColorCorrection; excluded from workflow replay.','Εσωτερικό υποβήμα του SelectiveColorCorrection· εξαιρείται από την επανάληψη της ακολουθίας.'],
+   ['Grouped component; excluded from workflow replay.','Υποβήμα ομάδας· εξαιρείται από την επανάληψη της ακολουθίας.'],
    ['Substep','Υποβήμα'],['Original history entries:','Αρχικές εγγραφές ιστορικού:'],
    ['Grouped from consecutive history entries; original records are preserved below.','Ομαδοποίηση από διαδοχικές εγγραφές ιστορικού· οι αρχικές εγγραφές διατηρούνται παρακάτω.'],['Show recorded component steps','Προβολή επιμέρους καταγεγραμμένων βημάτων'],
    ['Possible connection','Πιθανή σύνδεση'],['Possible connection (unconfirmed)','Πιθανή σύνδεση (μη επιβεβαιωμένη)'],

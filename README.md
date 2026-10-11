@@ -81,7 +81,7 @@ masked steps and unknown historical mask states are currently blockers. The repo
 shows the runnable prefix; the replay dialog states where execution will stop.
 Execution stops at that blocker or a process failure, preserves the partial result,
 and does not skip ahead. A later range can be replayed only when you supply its own
-correct starting image. Grouped processes retain their step/substep numbering;
+correct starting image. Grouped processes export one parent entry with the report step number;
 redo entries are excluded. Manual or possible graph links do not authorize replay.
 Historical pixels, masks and missing inputs are not bundled in the exported script.
 
@@ -199,3 +199,8 @@ of one SelectiveColorCorrection group. Their parameters and thumbnails remain
 available. These internal RGBWorkingSpace entries are omitted from workflow replay;
 the parent script remains a blocker until script replay is supported. Different
 settings, isolated entries and intervening operations remain independent steps.
+
+All grouped operations, including PerfectPalettePicker, appear once in the replay
+list. Component steps (including internal PixelMath or RGBWorkingSpace) remain
+visible in the report but have no independent replay-copy control and are not
+exported. Unsupported parent tools remain blockers; execution cannot bypass them.
