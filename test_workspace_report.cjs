@@ -465,3 +465,24 @@ exportProgress.update(100,'Report complete');exportProgress.close();
 assert.equal(progressLabel.text,'100% — Report complete');
 assert.ok(progressClosed);assert.equal(eventCount,3);assert.equal(progressBar.height,18);
 console.log('Passed: lossless content deduplication and native progress drawing, monotonic updates, event processing and cleanup.');
+
+{
+// One mask object can be shared across images and multiple history steps.
+const sharedMask={src:'assets/shared_mask.png'};
+const sharedMaskRecords=[
+ {currentThumb:'',currentMaskThumbnail:sharedMask,steps:[{thumb:'',maskThumb:sharedMask}]},
+ {currentThumb:'',steps:[{thumb:'',maskThumb:sharedMask},{thumb:'',maskThumb:sharedMask}]},
+];
+const maskReads=[],maskAssets=[];
+helper.File.readFile=path=>{maskReads.push(path);if(path.includes('#apa_asset_'))throw Error('Embedded asset used as a file');const bytes=Buffer.from('mask PNG');bytes.toBase64=()=>bytes.toString('base64');return bytes;};
+helper.embedReportThumbnails(sharedMaskRecords,'/scratch',null,(key,data)=>maskAssets.push({key,data}));
+assert.equal(maskReads.length,1,'Read a shared mask only once');
+assert.equal(maskAssets.length,1,'Emit a shared mask only once');
+assert.equal(sharedMask.src,maskAssets[0].key);
+assert.equal(sharedMaskRecords[1].steps[1].maskThumb.src,maskAssets[0].key);
+const firstMaskMarkup=helper.imageReportHTML({...records[4],currentMaskThumbnail:sharedMask});
+assert.ok(firstMaskMarkup.includes(maskAssets[0].key));
+assert.ok(firstMaskMarkup.includes('class="step-card"'),'Continue emitting details after shared-mask embedding');
+console.log('Passed: shared current/historical masks across images embed once without opening asset references as files, and report details remain available.');
+
+}

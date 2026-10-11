@@ -1061,7 +1061,8 @@ function processingSummaryHTML(records) {
 function embedReportThumbnails(records, directory, generatedFiles, emitAsset, progress) {
    var cache={},files=[],digests={};
    var embed=function(src){
-      if(!src||src.indexOf('data:')===0)return src;
+      // Shared mask thumbnail objects may already have been embedded by an earlier step.
+      if(!src||src.indexOf('data:')===0||/^#apa_asset_[0-9]+$/.test(src))return src;
       if(cache['$'+src])return cache['$'+src];
       var filename=src.slice(src.lastIndexOf('/')+1),path=directory+'/'+filename;
       files.push(path);

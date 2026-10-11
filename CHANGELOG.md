@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Fix single-file export when the same mask thumbnail is shared by multiple
+  history steps or images. Embedded asset references are no longer opened as files.
+
 ## 0.1.7
 
 - Reduce parameter previews from five entries/lines to one; remaining values stay
