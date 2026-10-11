@@ -120,7 +120,7 @@ for(let i=0;i<windows.length;++i) assert.equal(windows[i].mainView.historyIndex,
 const fullOutput=output;
 // Run the browser controls against a small DOM substitute; no browser/file access needed.
 function element(value='') {const classes=new Set();return {value,textContent:'',children:[],firstChild:null,files:[],
-  classList:{toggle(name,enabled){if(enabled)classes.add(name);else classes.delete(name);},remove(name){classes.delete(name);},contains:name=>classes.has(name)},
+  classList:{add(name){classes.add(name);},toggle(name,enabled){if(enabled)classes.add(name);else classes.delete(name);},remove(name){classes.delete(name);},contains:name=>classes.has(name)},
   getAttribute(key){return this[key] || null;},
   appendChild(child){this.children.push(child);this.firstChild=this.children[0]||null;},
   removeChild(child){this.children.splice(this.children.indexOf(child),1);this.firstChild=this.children[0]||null;},
@@ -533,4 +533,109 @@ console.log('Passed: grayscale/color SVG badges on image headers only, current-s
  possibleGraph.edges.push({from:isolatedB.anchor,to:output.steps[0].anchor,kind:'possible'});
  assert.equal(helper.orderWorkspaceGraph(recordsToOrder,possibleGraph).map(r=>r.id).join(','),'Input,Unused_B,Result,Unused_A');
  console.log('Passed: disconnected images move last, sequence-only histories stay isolated, stable group order, graph positions and possible connections.');
+}
+
+{
+// Arbitrary stage comparison and report-specific annotation persistence.
+const storedLinks=new Map();
+browser.window.localStorage={getItem:key=>storedLinks.get(key)||null,setItem:(key,value)=>storedLinks.set(key,value)};
+const stageSource=element();stageSource.setAttribute('src','data:image/png;base64,CURRENT');
+const stagePair=element();stagePair.setAttribute('data-before','data:image/png;base64,BEFORE');stagePair.setAttribute('data-after','data:image/png;base64,AFTER');
+for(const node of graph.nodes)elements[node.id]={querySelector:()=>null};
+elements.image_0={querySelector:selector=>selector==='.comparison'?stagePair:stageSource};
+elements.image_0_step_0={querySelector:selector=>selector==='.comparison'?stagePair:null};
+elements.stage_compare_a=element();elements.stage_compare_b=element();elements.stage_compare_status=element();
+const normalCreate=browser.document.createElement;
+let lastWrapper;
+browser.document.createElement=tag=>{
+  const el=element();el.childNodes=[];el.cloneNode=()=>el;el.focus=()=>{};
+  if(tag==='div'){
+    const after=element(),before=element();
+    el.querySelector=selector=>selector==='img'?after:before;
+    el.cloneNode=()=>el;
+    lastWrapper=el;
+  }return el;
+};
+browser.document.querySelector=()=>null;vm.runInNewContext(helper.reportBrowserScript(),browser);
+assert.deepEqual(elements.stage_compare_a.children.map(o=>o.value),['image_0:current','image_0_step_0:before','image_0_step_0:after']);
+assert.equal(elements.stage_compare_b.value,'image_0_step_0:before');
+elements.stage_compare_a.value='image_0:current';elements.stage_compare_b.value='image_0_step_0:after';
+browser.window.compareSelectedStages({focus(){}});
+assert.equal(lastWrapper.querySelector('img').src,'data:image/png;base64,AFTER');
+assert.equal(lastWrapper.querySelector('.compare-before').src,'data:image/png;base64,CURRENT');
+assert.ok(lastWrapper.children[0].textContent.includes('Current image'));
+assert.equal(elements.comparison_dialog.hidden,false);
+browser.window.closeComparison();
+elements.stage_compare_b.value=elements.stage_compare_a.value;
+browser.window.compareSelectedStages({focus(){}});
+assert.ok(elements.stage_compare_status.textContent.includes('different'));
+assert.equal(elements.comparison_dialog.hidden,true);
+elements.manual_to.value="image_4_step_1";browser.window.clearManualEdges();
+browser.window.addManualEdge();browser.window.addManualEdge();
+assert.equal(elements.manual_edges.children.length,1,'Do not duplicate a manual connection');
+assert.equal(storedLinks.size,1);
+browser.document.querySelector=()=>null;vm.runInNewContext(helper.reportBrowserScript(),browser);
+assert.equal(elements.manual_edges.children.length,1,'Restore annotations after reopening');
+const savedPayload=[...storedLinks.values()][0];
+const badPayload=JSON.parse(savedPayload);badPayload.edges[0].to='missing_node';
+browser.window.importManualEdges({files:[{contents:JSON.stringify(badPayload)}]});
+assert.equal(elements.manual_edges.children.length,1,'Invalid imports preserve current annotations');
+browser.window.importManualEdges({files:[{size:5000001,contents:savedPayload}]});
+assert.ok(elements.manual_status.textContent.includes('too large'));
+browser.window.clearManualEdges();
+browser.document.querySelector=()=>null;vm.runInNewContext(helper.reportBrowserScript(),browser);
+assert.equal(elements.manual_edges.children.length,0,'Clearing persists and cannot resurrect old links');
+browser.window.localStorage={getItem(){throw Error('blocked');},setItem(){throw Error('blocked');}};
+browser.window.addManualEdge();
+assert.ok(elements.manual_status.textContent.includes('storage unavailable'));
+browser.window.exportManualEdges();assert.equal(JSON.parse(exportedBlob).edges.length,1);
+
+// Drag a process into a slot, then directly onto another node. Dropdowns stay in sync.
+elements.stage_compare_button={focus(){}};
+elements.stage_comparison_controls={open:false};
+elements.stage_name_a=element();elements.stage_name_b=element();
+let dragged='';const transfer={types:['application/x-astroprocessatlas-node'],setData:(type,value)=>{dragged=value;},getData:()=>dragged};
+browser.window.dragComparisonStage({dataTransfer:transfer,stopPropagation(){}},'image_0_step_0');
+assert.equal(elements.stage_comparison_controls.open,true);
+assert.equal(dragged,'image_0_step_0');
+let prevented=false;const dropEvent={dataTransfer:transfer,currentTarget:element(),preventDefault(){prevented=true;},stopPropagation(){}};
+browser.window.stageDragOver(dropEvent);assert.ok(prevented);
+browser.window.dropComparisonStage(dropEvent,'b');
+assert.equal(elements.stage_compare_b.value,'image_0_step_0:after');
+assert.ok(elements.stage_name_b.textContent.includes('After'));
+browser.window.closeComparison();
+browser.window.dropComparedNodes(dropEvent,'image_0');
+assert.equal(elements.stage_compare_a.value,'image_0_step_0:after');
+assert.equal(elements.stage_compare_b.value,'image_0:current');
+assert.equal(elements.comparison_dialog.hidden,false);
+browser.window.closeComparison();
+elements.stage_compare_a.value='image_0_step_0:before';browser.window.syncComparisonStages();
+assert.ok(elements.stage_name_a.textContent.includes('Before'),'Dropdown updates selected stage labels');
+dragged='image_4_step_0';browser.window.dropComparisonStage(dropEvent,'a');
+assert.ok(elements.stage_compare_status.textContent.includes('No preview'));
+assert.equal(elements.stage_compare_a.value,'image_0_step_0:before','Unavailable drop leaves selection intact');
+dragged='not_a_node';browser.window.dropComparedNodes(dropEvent,'image_0');
+assert.equal(elements.comparison_dialog.hidden,true);
+console.log('Passed: node drag to A/B and node-to-node comparison, synchronized selectors/labels, dropdown changes and unavailable/foreign-node rejection.');
+
+const pointerTarget=element();pointerTarget.setAttribute('data-node','image_0');
+browser.document.elementFromPoint=()=>({closest:selector=>selector==='.stage-drop'?null:pointerTarget});
+browser.window.beginComparisonDrag({button:0,pointerId:7,clientX:10,clientY:10},'image_0_step_0');
+listeners.pointermove({pointerId:7,clientX:40,clientY:10,preventDefault(){}});
+listeners.pointerup({pointerId:7,clientX:100,clientY:10,preventDefault(){}});
+assert.equal(elements.stage_compare_a.value,'image_0_step_0:after');
+assert.equal(elements.stage_compare_b.value,'image_0:current');
+assert.equal(elements.comparison_dialog.hidden,false);
+browser.window.closeComparison();
+let clickSuppressed=false;listeners.click({target:{closest:()=>true},preventDefault(){clickSuppressed=true;},stopPropagation(){}});
+assert.ok(clickSuppressed,'Dragging must not also activate the normal graph click');
+browser.window.beginComparisonDrag({button:0,pointerId:8,clientX:10,clientY:10},'image_0');
+listeners.pointerup({pointerId:8,clientX:12,clientY:10,preventDefault(){throw Error('Normal click was treated as drag');}});
+assert.equal(elements.comparison_dialog.hidden,true);
+browser.window.beginComparisonDrag({button:0,pointerId:9,clientX:10,clientY:10},'image_0');listeners.pointercancel();
+listeners.pointerup({pointerId:9,clientX:100,clientY:10,preventDefault(){throw Error('Cancelled drag was handled');}});
+console.log('Passed: real pointer drag handling, click suppression after drag, ordinary clicks and pointer cancellation.');
+browser.document.createElement=normalCreate;
+console.log('Passed: arbitrary current/before/after selection, shared comparison dialog, same-stage rejection, annotation restore/clear, duplicates, invalid/oversized import and storage-denied export fallback.');
+
 }

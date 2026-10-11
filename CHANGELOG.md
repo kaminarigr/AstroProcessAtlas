@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Compare any two available stages with synchronized dropdowns, tree A/B markers
+  and drag/drop into slots or onto another node.
+- Automatically save manual connections in browser storage; preserve portable
+  JSON export/import and reject invalid or mismatched imports.
+
 - Place images without cross-image connections after connected images, preserving
   the existing order within each group.
 

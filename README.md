@@ -87,3 +87,17 @@ are appreciated; an additional visible credit is not a license requirement.
 
 Διατίθεται με την άδεια **MIT**: επιτρέπεται χρήση, τροποποίηση και αναδιανομή,
 με διατήρηση της άδειας και της αναφοράς δημιουργού, η οποία περιλαμβάνει το site.
+
+## Stage comparison and manual connections
+
+Open **Compare any two stages** below the tree. Choose A/B from the dropdowns,
+drag tree nodes to the A/B areas, or drag one node onto another for immediate
+comparison. A is the dragged node, B is the destination. Process nodes use their
+after preview; image nodes use their current snapshot. Dropdowns and A/B tree
+markers stay synchronized. Before previews can also be selected in the dropdown.
+Only available previews are offered; missing historical pixels cannot be recovered.
+
+Manual connections save automatically in browser storage when available. Export
+JSON for a portable backup, and import it alongside the same report in another
+browser. This does not rewrite the HTML. Clearing connections also clears their
+saved state. Invalid imports leave existing connections intact.
