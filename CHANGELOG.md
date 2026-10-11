@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Support StarXTerminator replay with either stars flag and original parameters.
+  Allow its optional output references while retaining mask/input checks; continue
+  subsequent processes on the starless copy even when the stars window is active.
+
 - Handle ImageIdentifier as naming metadata at replay-copy creation. Use the last
   valid identifier in the selected range plus `_APA_replay`, or the selected input
   ID with that suffix when absent. Preview the base name, resolve collisions with

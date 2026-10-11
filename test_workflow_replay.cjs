@@ -58,8 +58,8 @@ assert.throws(()=>api.buildWorkspaceReplayScript(plan,0,99),/valid step range/);
 assert.throws(()=>api.buildWorkspaceReplayScript(plan,0.5,1),/valid step range/);
 
 function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImages=false,gradientMissing=false,gradientFail=false,
-  inputId='Ha_input',existingIds=['Ha_input_APA_replay']}={}) {
-  const calls=[], messages=[], outputs=[], gradientParameters=[];let checkbox;
+  starMissing=false,starFail=false,inputId='Ha_input',existingIds=['Ha_input_APA_replay']}={}) {
+  const calls=[], messages=[], outputs=[], gradientParameters=[], starParameters=[];let checkbox;
   const input={isNull:false,rgbWorkingSpace:{gamma:2.2},mainView:{id:inputId,stf:[[1,2]],
     image:{numberOfChannels:1,bitsPerSample:32,isReal:true,isColor:false,pixels:[0.1,0.2]}}};
   function ImageWindow(w,h,channels,bits,real,color,id){
@@ -91,10 +91,19 @@ function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImage
     return !gradientFail;
   };};
   if(!missing)context.CurvesTransformation=Process;
+  if(!starMissing)context.StarXTerminator=function(){this.executeOn=view=>{
+    assert.equal(view,outputs[0].mainView,'Star removal targets the replay copy');
+    calls.push('SXT');starParameters.push({...this});view.image.pixels[0]-=0.05;
+    if(this.stars) {
+      const stars={isNull:false,mainView:{id:view.id+'_stars',image:{pixels:[0.05,0]}}};
+      ImageWindow.windows.push(stars);ImageWindow.activeWindow=stars;
+    }
+    return !starFail;
+  };};
   vm.runInNewContext(script.replace(/^#.*$/gm,''),context);
   assert.deepEqual(input.mainView.image.pixels,[0.1,0.2],'Input pixels never change');
   assert.equal(input.mainView.id,inputId,'Input ID never changes');
-  return {calls,messages,outputs,input,gradientParameters};
+  return {calls,messages,outputs,input,gradientParameters,starParameters,windows:ImageWindow.windows};
 }
 const complete=api.buildWorkspaceReplayScript(plan,0,1);
 const generatorSource=api.buildWorkspaceReplayScript.toString();
@@ -197,3 +206,31 @@ assert.equal(api.workspaceReplayData([{id:'Escaped',steps:[escaped]}])[0].steps[
 const executable=step('ImageIdentifier','P.id="Target"; P.executeOn(View.viewById("Original"));');
 assert.match(api.workspaceReplayData([{id:'BadCode',steps:[executable]}])[0].steps[0].reason,/Serialized/);
 console.log('Passed: ImageIdentifier naming at creation, native/serialized values, prefix/range/redo selection, multiple IDs, input-ID fallback, collision suffixes, continued execution and invalid-code/value rejection.');
+
+for (const stars of [false,true]) {
+  const sx=step('StarXTerminator','P.stars='+stars+'; P.unscreen=true; P.ai_file="model.pb";',
+    {proc:{processId:()=> 'StarXTerminator',stars},references:stars?[{kind:'output',name:'Ha_stars'}]:[]});
+  const sxPlan=api.workspaceReplayData([{id:'Ha',steps:[sx,ht,ct]}])[0];
+  assert.ok(sxPlan.steps.every(s=>!s.reason));
+  assert.equal(sxPlan.steps[0].source,sx.source);
+  const sxScript=api.buildWorkspaceReplayScript(sxPlan,0,2), result=run(sxScript);
+  assert.deepEqual(result.calls,['begin','copy','end','show','SXT','HT','CT']);
+  assert.equal(result.starParameters[0].stars,stars);
+  assert.equal(result.starParameters[0].unscreen,true);
+  assert.equal(result.starParameters[0].ai_file,'model.pb');
+  assert.equal(result.windows.length,stars?2:1,'Keep optional stars output');
+  assert.match(result.messages[0],/Replay complete/);
+  for(const options of [{starMissing:true},{starFail:true}]) {
+    const stopped=run(sxScript,options);
+    assert.match(stopped.messages[0],/StarXTerminator/);
+    assert.ok(!stopped.calls.includes('HT'));
+    assert.equal(stopped.outputs.length,1);
+  }
+  for(const extra of [
+    {mask:{status:'unknown'}}, {mask:{status:'recorded',name:'Old_mask'}},
+    {references:[{kind:'input',name:'Other'}]},
+    {source:'var P = new StarXTerminator; P.executeGlobal();'},
+    ...(!stars?[{references:[{kind:'output',name:'Unexpected'}]}]:[])
+  ]) assert.ok(api.workspaceReplayData([{id:'Ha',steps:[{...sx,...extra}]}])[0].steps[0].reason);
+}
+console.log('Passed: StarXTerminator both stars flags, optional output references, parameter preservation, continued starless target, masks, missing module and failures.');

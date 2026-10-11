@@ -1246,12 +1246,15 @@ function isImageOriginStep(step, index) {
 function workspaceReplayData(records) {
    var data = [];
    var supported = {HistogramTransformation:true, CurvesTransformation:true, RGBWorkingSpace:true,
-      SCNR:true, ColorSaturation:true, BlurXTerminator:true, NoiseXTerminator:true, GradientCorrection:true};
+      SCNR:true, ColorSaturation:true, BlurXTerminator:true, NoiseXTerminator:true, GradientCorrection:true, StarXTerminator:true};
    for (var r = 0; r < records.length; ++r) {
       var record = records[r], image = {id:record.id, anchor:record.anchor, steps:[]};
       for (var s = 0; s < record.steps.length; ++s) {
          var step = record.steps[s]; if (step.redo || isImageOriginStep(step, s)) continue;
          var tool = getProcessName(step.proc), reason = '', source = null, identifier = '';
+         var requiredReferences = (step.references || []).filter(function(ref) {
+            return !(tool === 'StarXTerminator' && step.proc.stars === true && ref.kind === 'output');
+         });
          if (tool === 'ImageIdentifier') {
             // This changes a view ID, not its pixels. Handle naming once at creation.
             source = replayProcessSource(step.source, tool);
@@ -1268,7 +1271,7 @@ function workspaceReplayData(records) {
          else if (!supported[tool]) reason = 'This process is not yet supported by the replay exporter: ' + tool;
          else if (!step.mask || step.mask.status === 'unknown') reason = 'Historical mask state is unknown.';
          else if (step.mask.status === 'recorded') reason = 'This step needs the original historical mask: ' + step.mask.name;
-         else if (step.references && step.references.length) reason = 'This step needs historical reference images or creates another image.';
+         else if (requiredReferences.length) reason = 'This step needs historical reference images or creates another image.';
          else if (tool === 'RGBWorkingSpace' && step.proc.applyGlobalRGBWS === true)
             reason = 'This step uses the global RGB working space, whose historical settings are unavailable.';
          else {

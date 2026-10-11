@@ -70,8 +70,9 @@ serialized process parameters. It never changes the selected input.
 
 The first implementation supports independent, in-place HistogramTransformation,
 CurvesTransformation, RGBWorkingSpace, SCNR, ColorSaturation, BlurXTerminator,
-NoiseXTerminator and GradientCorrection instances with supported serialization and no recorded mask or
-references. RGBWorkingSpace steps that use historical global settings are blocked.
+NoiseXTerminator, GradientCorrection and StarXTerminator instances with supported serialization and no recorded mask or
+historical input references. StarXTerminator output references are allowed.
+RGBWorkingSpace steps that use historical global settings are blocked.
 Required tools, licenses and matching models must already be available in PixInsight.
 This does not guarantee identical pixels across tool/model versions.
 
@@ -88,7 +89,7 @@ GradientCorrection preserves its original serialized thresholds, scale, converge
 protection and model-generation settings. Diagnostic model/protection images may be
 created when those flags were enabled; subsequent steps still run on the replay image
 copy. Recorded/unknown masks, historical references, invalid serialization and process
-failures remain blockers. StarXTerminator is not yet supported for replay. The report
+failures remain blockers. The report
 labels unsupported tools as not yet supported by the exporter.
 
 ImageIdentifier is handled as naming metadata at creation, without executing its
@@ -185,3 +186,8 @@ selected image and the branches feeding it. Possible and manual connections
 are included in that path; redo entries do not establish dependencies.
 **Expand all branches** restores the complete tree. These controls change the
 tree view only; process records remain available in the report.
+
+StarXTerminator preserves its recorded parameters, including `stars`. With
+`stars=true`, the native tool also creates a stars image; this output reference
+does not block replay. Subsequent steps continue on the starless replay copy,
+even if the stars window becomes active. The separate stars history is not replayed.
