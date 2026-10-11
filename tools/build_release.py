@@ -38,7 +38,7 @@ def build(version, date, output, signature=None):
   <platform os="all" arch="noarch" version="1.9.3:1.9.4">
     <package fileName="{filename}" sha1="{hashlib.sha1(data).hexdigest()}" type="script" releaseDate="{date}">
       <title>AstroProcessAtlas {escape(version)}</title>
-      <description><p>Workspace processing history reports. Copyright 2026 YoruHikari Astrophotography. MIT License.</p></description>
+      <description><p>Workspace processing history reports with dependencies, masks, stage comparisons and workflow replay export. Copyright 2026 YoruHikari Astrophotography. MIT License.</p></description>
     </package>
   </platform>
 </xri>

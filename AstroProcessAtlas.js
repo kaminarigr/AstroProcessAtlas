@@ -1,6 +1,6 @@
 #feature-id    Utilities > AstroProcessAtlas
 #feature-icon  AstroProcessAtlas.svg
-#feature-info  Generates a workspace history graph with image dependencies, masks, thumbnails and process parameters.
+#feature-info  Generates workspace history reports with image dependencies, masks, comparisons, process parameters and workflow replay export.
 
 /*
  * AstroProcessAtlas
@@ -31,7 +31,7 @@
 #include <pjsr/Sizer.jsh>
 #include <pjsr/CryptographicHash.jsh>
 
-var ASTROPROCESS_ATLAS_VERSION = "0.1.18";
+var ASTROPROCESS_ATLAS_VERSION = "0.2.0";
 
 function createReportProgress() {
    var dialog = null, label = null, bar = null, value = 0;
@@ -1440,7 +1440,7 @@ function workspaceReplayData(records) {
       SCNR:true, ColorSaturation:true, BlurXTerminator:true, NoiseXTerminator:true, GradientCorrection:true,
       StarXTerminator:true, NarrowbandNormalization:true, UnsharpMask:true, MultiscaleLinearTransform:true, Invert:true};
    for (var r = 0; r < records.length; ++r) {
-      var record = records[r], image = {id:record.id, anchor:record.anchor, originalInputs:[], steps:[]};
+      var record = records[r], image = {id:record.id, anchor:record.anchor, version:ASTROPROCESS_ATLAS_VERSION, originalInputs:[], steps:[]};
       for (var oi = 0; oi < records.length; ++oi) if (records[oi].isOriginalInput) image.originalInputs.push(records[oi].id);
       var groups = workspaceStepGroups(record);
       for (var s = 0; s < groups.length; ++s) {
@@ -1529,7 +1529,7 @@ function buildWorkspaceReplayScript(image, start, end) {
    // preprocessing can truncate nested comment/URL text inside source strings.
    var comment = String.fromCharCode(47, 47) + ' ';
    var lines = [
-      comment + 'AstroProcessAtlas workflow replay - experimental v1',
+      comment + 'AstroProcessAtlas workflow replay' + (image.version ? ' - version ' + image.version : ''),
       comment + 'Copyright (c) 2026 YoruHikari Astrophotography - https:' + String.fromCharCode(47, 47) + 'www.yoruhikari.gr/',
       comment + 'SPDX-License-Identifier: MIT',
       comment + 'Permission is hereby granted, free of charge, to any person obtaining a copy',
@@ -1742,7 +1742,7 @@ function buildWorkspaceReplayScript(image, start, end) {
 }
 
 function workspaceReplayHTML(records) {
-   var html = '<style>#replay_readiness li{padding:8px 12px;margin:6px 0;border-left:4px solid;border-radius:4px;overflow-wrap:anywhere}#replay_readiness .replay-supported{color:#a6e3a1;background:#a6e3a112;border-color:#a6e3a1}#replay_readiness .replay-warning{color:#fab387;background:#fab38712;border-color:#fab387}#replay_readiness .replay-unsupported{color:#f38ba8;background:#f38ba812;border-color:#f38ba8}#replay_export:disabled{opacity:.45;cursor:not-allowed}</style><details class="replay-workflow"><summary>Export workflow for replay (experimental)</summary>' +
+   var html = '<style>#replay_readiness li{padding:8px 12px;margin:6px 0;border-left:4px solid;border-radius:4px;overflow-wrap:anywhere}#replay_readiness .replay-supported{color:#a6e3a1;background:#a6e3a112;border-color:#a6e3a1}#replay_readiness .replay-warning{color:#fab387;background:#fab38712;border-color:#fab387}#replay_readiness .replay-unsupported{color:#f38ba8;background:#f38ba812;border-color:#f38ba8}#replay_export:disabled{opacity:.45;cursor:not-allowed}</style><details class="replay-workflow"><summary>Export workflow for replay</summary>' +
       '<p>Select an image and a consecutive range of applied processes. Run the downloaded .js in PixInsight with an input in the state BEFORE the first selected step. Replay uses a new copy and stops at the first unsupported step. Recorded masks are requested when needed; historical reference images are not restored.</p>' +
       '<p>Copy naming: the last ImageIdentifier in the selected range, or the selected input name, followed by _APA_replay. Existing names receive a numeric suffix.</p>' +
       '<p>GAME: start the range at this step and select the completed original grayscale mask. Replay copies that mask and applies subsequent steps; it does not recreate the GAME drawing.</p>' +
@@ -2018,7 +2018,7 @@ var REPORT_TRANSLATIONS = [
    ['entries). Only subsequent clone steps are shown here. This relationship is inferred from the image name and matching parameters.',
     'εγγραφές). Εδώ εμφανίζονται μόνο τα επόμενα βήματα του κλώνου. Η σύνδεση προκύπτει από το όνομα εικόνας και τις ίδιες παραμέτρους.'],
    ['No additional history steps were found for this clone.','Δεν βρέθηκαν επιπλέον βήματα ιστορικού για αυτόν τον κλώνο.'],
-   ['Export workflow for replay (experimental)','Εξαγωγή ροής για επανάληψη (πειραματικό)'],
+   ['Export workflow for replay','Εξαγωγή ροής για επανάληψη'],
    ['Replay image','Εικόνα επανάληψης'],['First process','Πρώτη διεργασία'],['Last process','Τελευταία διεργασία'],
    ['Download PixInsight replay script','Λήψη script επανάληψης για το PixInsight'],
    ['Ready for replay','Έτοιμο για επανάληψη'],
