@@ -735,7 +735,7 @@ console.log('Passed: arbitrary current/before/after selection, shared comparison
  assert.equal(elements.replay_export.disabled,false,'A supplied native mask does not block download');
  assert.equal(elements.replay_readiness.children[0].className,'replay-warning');
  assert.match(elements.replay_readiness.children[0].textContent,/WARNING/);
- assert.match(elements.replay_readiness.children[0].textContent,/Mask requested in PixInsight: Mask_history \(inverted pixels\)/);
+ assert.match(elements.replay_readiness.children[0].textContent,/Mask requested in PixInsight: Mask_history \(Mask value inversion ON \(1-mask\)\)/);
  browser.window.setReportLanguage('el');
  assert.match(elements.replay_readiness.children[0].textContent,/Επιλογή μάσκας στο PixInsight/);
  browser.window.setReportLanguage('en');

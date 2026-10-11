@@ -86,10 +86,12 @@ redo entries are excluded. Manual or possible graph links do not authorize repla
 
 For supported native processes with a recorded mask name and inversion state,
 replay pauses before the first use and asks you to select an open mask image with
-matching dimensions. Supply the historical pixels in the requested orientation:
-normal, or already inverted if the first use is inverted. Confirm that orientation.
-The selection is cached by historical mask name for this replay run; later uses
-need no new prompt, and opposite orientations use PixInsight's mask inversion flag.
+matching dimensions. Always supply the normal historical mask image, without
+inverting its pixels, and confirm that choice. Replay applies the recorded
+Mask > Invert Mask setting automatically, including an inverted first use.
+Inversion means a weight of 1-mask at the same pixel coordinates, not a geometric
+flip. The selection is cached by historical mask name for this replay run; later
+uses need no new mask-image prompt, and opposite states use PixInsight's mask inversion flag.
 Mask pixels are never changed. Masks are removed between operations. Cancellation
 stops replay and retains the partial result. The report cannot reconstruct a mask's
 historical pixels. Download is enabled only when the entire selected range is supported;

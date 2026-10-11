@@ -62,7 +62,7 @@ assert.throws(()=>api.buildWorkspaceReplayScript(plan,0.5,1),/valid step range/)
 
 function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImages=false,gradientMissing=false,gradientFail=false,
   starMissing=false,starFail=false,paletteMissing=false,paletteFail=false,nbMissing=false,nbFail=false,sccMissing=false,sccFail=false,sourceChanged=false,scriptRecords=[],initialScripts=false,channels=[],choices=[],states=[],prepFail=false,
-  maskCancel=false,unsharpMissing=false,maskChoices=[],orientations=[1],inputId='Ha_input',existingIds=['Ha_input_APA_replay']}={}) {
+  maskCancel=false,maskBlend=false,unsharpMissing=false,maskChoices=[],orientations=[1],inputId='Ha_input',existingIds=['Ha_input_APA_replay']}={}) {
   const calls=[], messages=[], outputs=[], gradientParameters=[], starParameters=[],paletteParameters=[],nbParameters=[],sccParameters=[],combos=[],maskApplications=[],unsharpParameters=[];let checkbox,maskPrompts=0;
   const input={isNull:false,rgbWorkingSpace:{gamma:2.2},mainView:{id:inputId,stf:[[1,2]],
     image:{width:2,height:1,numberOfChannels:1,bitsPerSample:32,isReal:true,isColor:false,pixels:[0.1,0.2]}}};
@@ -79,7 +79,7 @@ function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImage
   function Sizer(){this.add=()=>{};this.addStretch=()=>{};}
   function Process(){this.executeOn=view=>{assert.notEqual(view,input.mainView);
     assert.equal(view,outputs[outputs.length-1].mainView,'Continue on the replay copy even if diagnostic output becomes active');
-    calls.push(this.H?'HT':'CT');view.image.pixels[0]+=1;return !fail;};}
+    calls.push(this.H?'HT':'CT');if(maskBlend&&this.K){const output=outputs[outputs.length-1];view.image.pixels=view.image.pixels.map((value,i)=>{const m=output.mask&&output.maskEnabled?output.mask.mainView.image.pixels[i]:1;const weight=output.mask&&output.maskEnabled&&output.maskInverted?1-m:m;return value*(1-weight)+value*value*weight;});}else view.image.pixels[0]+=1;return !fail;};}
   const context={ImageWindow,View:{viewById:id=>({isNull:!existingIds.includes(id)})},
     Dialog:function(){this.ok=()=>{};this.cancel=()=>{};this.adjustToContents=()=>{};
       this.execute=()=>{checkbox.checked=confirm;if(this.windowTitle==='AstroProcessAtlas - Mask orientation'){combos[combos.length-1].currentItem=orientations.shift()||0;return !maskCancel;}if(this.windowTitle==='AstroProcessAtlas - Select mask'){const choice=maskChoices[maskPrompts++];if(choice!==undefined)combos[combos.length-1].currentItem=choice;return !maskCancel;}const inputs=combos.filter(c=>c.items[0]!=='Choose input state');const stateBoxes=combos.filter(c=>c.items[0]==='Choose input state');for(let i=0;i<choices.length;i++)inputs[i+1].currentItem=choices[i];stateBoxes.forEach((c,i)=>c.currentItem=states[i]===undefined?1:states[i]);return !cancel;};},
@@ -180,12 +180,12 @@ const complete=api.buildWorkspaceReplayScript(plan,0,1);
  assert.deepEqual(maskWindow.mainView.image.pixels,[0.2,0.8],'Never invert mask pixels');
  const reversed=api.workspaceReplayData([{id:'InvertFirst',steps:[masked(true),masked(false)]}])[0];
  result=run(api.buildWorkspaceReplayScript(reversed,0,1),{channels:[maskWindow]});
- assert.equal(result.maskPrompts,1);assert.deepEqual(result.maskApplications.map(m=>m.inverted),[false,true],'First inverted pixels establish the cached orientation');
+ assert.equal(result.maskPrompts,1);assert.deepEqual(result.maskApplications.map(m=>m.inverted),[true,false],'First inverted use sets the native mask inversion flag on the normal mask image');
  const unknown=api.workspaceReplayData([{id:'UnknownInversion',steps:[masked(null),masked(null)]}])[0];
  assert.ok(unknown.steps.every(s=>!s.reason),'A known mask name with unknown inversion is a prompt, not a blocker');
  const unknownCode=api.buildWorkspaceReplayScript(unknown,0,1);
  result=run(unknownCode,{channels:[maskWindow],orientations:[2,1]});
- assert.equal(result.maskPrompts,1);assert.deepEqual(result.maskApplications.map(m=>m.inverted),[false,true]);
+ assert.equal(result.maskPrompts,1);assert.deepEqual(result.maskApplications.map(m=>m.inverted),[true,false]);
  result=run(unknownCode,{channels:[maskWindow],orientations:[0]});assert.match(result.messages[0],/Mask orientation not confirmed/);assert.equal(result.maskPrompts,0);
  result=run(code,{channels:[maskWindow],maskCancel:true});assert.equal(result.calls.filter(c=>c==='USM').length,0);assert.match(result.messages[0],/Mask selection cancelled.*Partial result/s);
  result=run(code,{channels:[maskWindow],fail:true});assert.equal(result.outputs[0].mask,null);assert.equal(result.calls.filter(c=>c==='USM').length,1);
@@ -193,6 +193,19 @@ const complete=api.buildWorkspaceReplayScript(plan,0,1);
  const two=api.workspaceReplayData([{id:'Two',steps:[masked(false),{...masked(false),references:[{kind:'mask',name:'OtherMask'}],mask:{status:'recorded',name:'OtherMask',inverted:false}}]}])[0];
  assert.equal(run(api.buildWorkspaceReplayScript(two,0,1),{channels:[maskWindow]}).maskPrompts,2);
  console.log('Passed: UnsharpMask settings, prompted masks, cached orientation and automatic inversion, unmasked steps, cancellation/failure cleanup and missing module.');
+}
+{
+ const normalMask={isNull:false,mainView:{id:'CurveMask',image:{width:2,height:1,isColor:false,pixels:[0.2,0.6]}}};
+ for(const inverted of [false,true]){
+   const maskedCurve={...ct,mask:{status:'recorded',name:'CurveMask',inverted},references:[{kind:'mask',name:'CurveMask'}]};
+   const image=api.workspaceReplayData([{id:'Curved',steps:[maskedCurve]}])[0];
+   const result=run(api.buildWorkspaceReplayScript(image,0,0),{channels:[normalMask],maskBlend:true});
+   assert.equal(result.maskPrompts,1);
+   const expected=[0.1,0.2].map((x,i)=>{const weight=inverted?1-normalMask.mainView.image.pixels[i]:normalMask.mainView.image.pixels[i];return x*(1-weight)+x*x*weight;});
+   result.outputs[0].mainView.image.pixels.forEach((x,i)=>assert.ok(Math.abs(x-expected[i])<1e-12,'Curves uses the original per-pixel mask weight, or 1-mask for inverted usage'));
+   assert.deepEqual(normalMask.mainView.image.pixels,[0.2,0.6],'Mask colors and geometry remain unchanged');
+ }
+ console.log('Passed: CurvesTransformation mask blending with normal pixels and native 1-mask inversion, including first inverted usage.');
 }
 const generatorSource=api.buildWorkspaceReplayScript.toString();
 for(const line of generatorSource.split('\n')) {

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Fix first-use inverted replay masks: always select normal mask pixels and apply
+  the recorded Mask > Invert Mask flag directly, rather than assuming the supplied
+  image was physically inverted. Clarify black/white value inversion (1-mask), add
+  console diagnostics, and verify Curves mask blending with a numeric model for
+  both normal and inverted first use. Native PixInsight verification remains needed.
+
 - Treat a recorded native mask with unspecified inversion as an interactive
   warning instead of blocking export. Ask for its historical orientation at the
   affected step without requesting the cached mask image again. Show masked
