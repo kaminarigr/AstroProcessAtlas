@@ -63,10 +63,10 @@ assert.throws(()=>api.buildWorkspaceReplayScript(plan,0.5,1),/valid step range/)
 
 function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImages=false,gradientMissing=false,gradientFail=false,
   starMissing=false,starFail=false,paletteMissing=false,paletteFail=false,nbMissing=false,nbFail=false,sccMissing=false,sccFail=false,sourceChanged=false,scriptRecords=[],initialScripts=false,channels=[],choices=[],states=[],prepFail=false,
-  dseCancel=false,dseOtherTarget=false,dseFail=false,mltMissing=false,historyTarget=false,historyStep,maskCancel=false,maskBlend=false,unsharpMissing=false,maskChoices=[],maskInvertChoices=[],orientations=[1],inputId='Ha_input',existingIds=['Ha_input_APA_replay']}={}) {
+  dseCancel=false,dseOtherTarget=false,dseFail=false,mltMissing=false,historyTarget=false,historyStep,inputColor=false,maskCancel=false,maskBlend=false,unsharpMissing=false,maskChoices=[],maskInvertChoices=[],orientations=[1],inputId='Ha_input',existingIds=['Ha_input_APA_replay']}={}) {
   const calls=[], messages=[], outputs=[], gradientParameters=[], starParameters=[],paletteParameters=[],nbParameters=[],sccParameters=[],combos=[],maskApplications=[],unsharpParameters=[];let checkbox,maskPrompts=0;
   const input={isNull:false,rgbWorkingSpace:{gamma:2.2},mainView:{id:inputId,stf:[[1,2]],
-    image:{width:2,height:1,numberOfChannels:1,bitsPerSample:32,isReal:true,isColor:false,pixels:[0.1,0.2]}}};
+    image:{width:2,height:1,numberOfChannels:inputColor?3:1,bitsPerSample:32,isReal:true,isColor:inputColor,pixels:[0.1,0.2]}}};
   function ImageWindow(w,h,channelCount,bits,real,color,id){
     this.isNull=false;this.mainView={id,beginProcess(){calls.push('begin');},endProcess(){calls.push('end');},
       image:{width:w,height:h,isColor:color,assign(image){this.width=image.width;this.height=image.height;this.pixels=image.pixels.slice();calls.push('copy');},fill(value){this.pixels=[value,value];calls.push('fill');}}};
@@ -173,6 +173,41 @@ function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImage
   return {calls,messages,outputs,input,gradientParameters,starParameters,paletteParameters,nbParameters,sccParameters,recordedParameters,windows:ImageWindow.windows,maskPrompts,maskApplications,unsharpParameters};
 }
 const complete=api.buildWorkspaceReplayScript(plan,0,1);
+{
+ const checksum='1b192a70ab69d136e5d36f929b6f43a9';
+ const proc={processId:()=> 'Script',filePath:'$PXI_SRCDIR/scripts/GAME.js',md5sum:checksum,parameters:[]};
+ const game=step('Script','P.filePath='+JSON.stringify(proc.filePath)+'; P.md5sum='+JSON.stringify(checksum)+'; P.parameters=[]; P.information="";', {proc,title:'GAME'});
+ const plan=api.workspaceReplayData([{id:'Galaxy_mask',steps:[game,ht,ct]}])[0];
+ assert.equal(plan.steps[0].action,'game');assert.equal(plan.steps[0].tool,'GAME');
+ assert.ok(!plan.steps[0].reason);assert.match(plan.steps[0].warning,/not recorded.*original GAME mask/);
+ const code=api.buildWorkspaceReplayScript(plan,0,2),result=run(code);
+ assert.ok(!code.includes('new Script'),'Prepared mask resumption does not construct or invoke GAME');
+ assert.deepEqual(result.calls.filter(c=>c==='HT'||c==='CT'),['HT','CT']);
+ assert.equal(result.outputs.length,1);assert.deepEqual(result.input.mainView.image.pixels,[0.1,0.2]);
+ assert.equal(result.outputs[0].mainView.image.isColor,false);
+ assert.match(result.messages[0],/Replay complete/);
+ const maskOnly=run(api.buildWorkspaceReplayScript(plan,0,0));
+ assert.deepEqual(maskOnly.outputs[0].mainView.image.pixels,[0.1,0.2]);
+ assert.equal(run(code,{cancel:true}).outputs.length,0);
+ assert.equal(run(code,{confirm:false}).outputs.length,0);
+ assert.match(run(code,{noImages:true}).messages[0],/original grayscale GAME mask/);
+ assert.match(run(code,{inputColor:true}).messages[0],/original grayscale GAME mask/);
+ const prepared={isNull:false,mainView:{id:'Galaxy_mask',stf:[],image:{width:2,height:1,numberOfChannels:1,bitsPerSample:32,isReal:true,isColor:false,pixels:[0.4,0.5]}}};
+ const fromMask=run(api.buildWorkspaceReplayScript(plan,0,0),{inputColor:true,channels:[prepared]});
+ assert.equal(fromMask.outputs[0].mainView.id,'Galaxy_mask_APA_replay');
+ assert.deepEqual(fromMask.outputs[0].mainView.image.pixels,[0.4,0.5]);
+ assert.deepEqual(prepared.mainView.image.pixels,[0.4,0.5]);
+ const prefixed=api.workspaceReplayData([{id:'LaterGAME',steps:[ht,game,ct]}])[0];
+ assert.match(api.buildWorkspaceReplayScript(prefixed,0,2),/Start the selected range at GAME/);
+ assert.match(run(api.buildWorkspaceReplayScript(prefixed,1,2)).messages[0],/Replay complete/);
+ for(const extra of [{proc:{...proc,parameters:[['unknown','value']]}},{proc:{...proc,md5sum:''}},
+   {source:game.source+' arbitraryCode();'},{mask:{status:'unknown'}},
+   {mask:{status:'recorded',name:'OtherMask'}},{references:[{kind:'input',name:'MissingImage'}]}]) {
+   assert.ok(api.workspaceReplayData([{id:'InvalidGAME',steps:[{...game,...extra}]}])[0].steps[0].reason);
+ }
+ assert.equal(api.workspaceReplayData([{id:'RedoGAME',steps:[{...game,redo:true}]}])[0].steps.length,0);
+ console.log('Passed: GAME manual prepared-mask resumption, unchanged input, grayscale selection, downstream processes, cancel/missing/color rejection, range-start and validation blockers.');
+}
 {
  const mlt=step('MultiscaleLinearTransform','P.layers=[[true,true,0.1,false,0.75,3,1]]; P.linear=true; P.toLuminance=true;');
  const native=api.workspaceReplayData([{id:'MLT',steps:[mlt,ht]}])[0];

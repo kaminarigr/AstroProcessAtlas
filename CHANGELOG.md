@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Support GAME with empty Script parameters as a manual prepared-mask starting
+  point. Show an orange warning, select/copy an existing grayscale GAME mask and
+  apply following steps without modifying the input. Block GAME in the middle
+  of a selected range. Do not claim automatic reconstruction of drawing settings.
+  Include EN/EL report guidance and native/browser regression checks.
+
 - Add SelectiveColorCorrection step identifiers and view-target dispatch to replay
   exports, so identified History Explorer calls apply only that operation instead
   of reopening the full workflow. Reject missing/invalid identifiers. Native

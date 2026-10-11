@@ -997,3 +997,27 @@ console.log('Passed: arbitrary current/before/after selection, shared comparison
  assert.equal(elements.replay_export.disabled,true);
  console.log('Passed: SelectiveColorCorrection grouped parent readiness/download and imported mask blocker.');
 }
+
+{
+ const game=makeProcess('Script',{filePath:'$PXI_SRCDIR/scripts/GAME.js',md5sum:'1b192a70ab69d136e5d36f929b6f43a9',parameters:[],information:''});
+ const rec=helper.collectWorkspaceRecord(image('GAME_mask',[game,ht]),119);
+ helper.workspaceGraph([rec]);
+ browser.workspaceReplayData=helper.workspaceReplayData([rec]);elements.replay_image.value='0';
+ browser.window.setReportLanguage('en');browser.window.updateReplayRange(true);
+ assert.equal(elements.replay_readiness.children[0].className,'replay-warning');
+ assert.match(elements.replay_readiness.children[0].textContent,/GAME: WARNING.*completed original GAME mask/);
+ assert.equal(elements.replay_export.disabled,false);
+ browser.window.exportReplayScript();new vm.Script(exportedBlob.replace(/^#.*$/gm,''));
+ assert.match(exportedBlob,/"action":"game"/);assert.ok(!exportedBlob.includes('new Script'));
+ browser.window.setReportLanguage('el');browser.window.updateReplayRange(false);
+ assert.match(elements.replay_readiness.children[0].textContent,/έτοιμη αρχική μάσκα GAME/);
+ browser.window.setReportLanguage('en');
+ browser.workspaceReplayData=[{id:'LaterGAME',steps:[browser.workspaceReplayData[0].steps[1],browser.workspaceReplayData[0].steps[0]]}];
+ browser.window.updateReplayRange(true);
+ assert.equal(elements.replay_export.disabled,true);
+ assert.match(elements.replay_readiness.children[1].textContent,/Start the selected range at GAME/);
+ const previousBlob=exportedBlob;browser.window.exportReplayScript();assert.equal(exportedBlob,previousBlob);
+ elements.replay_start.value='1';browser.window.updateReplayRange(false);
+ assert.equal(elements.replay_export.disabled,false);
+ console.log('Passed: GAME orange manual warning, EN/EL text, download syntax, range-start blocker and export guard.');
+}

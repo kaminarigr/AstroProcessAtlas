@@ -134,6 +134,22 @@ full GPL v3 license. Replay exports containing it are GPL-3.0-only; AstroProcess
 itself remains MIT. No recursive native Script execution is used. Native PixInsight
 testing of this new support is still required.
 
+GAME is supported as a **manual prepared-mask starting point**, not automatic
+mask generation. Valid GAME Script entries with empty saved parameters show an
+orange WARNING. Start the selected replay range at GAME, open the completed
+original grayscale mask in PixInsight, and select it in the replay dialog. Confirm
+that it contains the pixels immediately after GAME and before any later edits.
+Replay copies this mask and applies the subsequent supported steps to the copy;
+the selected mask is unchanged. A range containing GAME after other steps is
+blocked: restart the range at GAME instead. Color inputs are excluded.
+
+The Script history does not contain the drawn shapes or output-style choices.
+This implementation does not invoke the GAME editor, reconstruct figures from
+image properties/FITS keywords, or infer an original mask from a subsequently
+processed mask. If the original mask is unavailable, create/select a suitable
+mask manually; fidelity then depends on that supplied mask. Native PixInsight
+validation is still required.
+
 GradientCorrection preserves its original serialized thresholds, scale, convergence,
 protection and model-generation settings. Diagnostic model/protection images may be
 created when those flags were enabled; subsequent steps still run on the replay image
