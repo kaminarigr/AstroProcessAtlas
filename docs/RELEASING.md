@@ -3,7 +3,7 @@
 ## Status and setup
 
 Unsigned repository publishing is configured. No CPD identity or signing secrets are required.
-The URL becomes active after the first successful Pages deployment:
+The publishing origin is GitHub Pages:
 `https://kaminarigr.github.io/AstroProcessAtlas/`
 
 1. Commit and push the workflows and packaging tools to the default branch.
@@ -18,7 +18,7 @@ target, not completed native compatibility testing. Extend the platform range in
 ## Release process
 
 1. Update `ASTROPROCESS_ATLAS_VERSION`, the README version and `CHANGELOG.md`, then commit.
-2. Create and push the matching tag, e.g. `v0.1.1`.
+2. Create and push the matching tag, e.g. `v0.1.18`.
 3. **Build release** runs regression and packaging checks, builds the ZIP and
    `updates.xri`, and uploads them with `SHA256SUMS.txt` to a draft GitHub release.
 4. Review the draft and click **Publish release** in GitHub. For a stable release,
@@ -26,7 +26,7 @@ target, not completed native compatibility testing. Extend the platform range in
    deploys them to Pages. Prereleases are not deployed automatically.
 5. Test both the ZIP and `updates.xri` at the repository URL, then test installation in PixInsight.
 
-The current script version is `0.1.7`; use the matching tag `v0.1.7`.
+The current script version is `0.1.18`; use the matching tag `v0.1.18`.
 **Build release → Run workflow** also accepts an existing tag. Deployment can be retried
 with **Publish PixInsight repository → Run workflow** and the published release tag.
 Manual publication accepts prereleases too; choose the intended stable version.
@@ -39,12 +39,17 @@ documentation. Reports and development files are excluded. Assets are not silent
 overwritten. Pages holds the most recently deployed package; older downloads remain
 in GitHub Releases. Deploying an older tag manually rolls back the repository.
 
+The user-facing URL is `https://www.yoruhikari.gr/pixinsight/astro-process-atlas/`.
+The Vercel site proxies the manifest and packages from GitHub Pages, so script
+releases do not require a site deployment. Keep `www`: the apex hostname redirects
+with HTTP 307, which PixInsight rejects.
+
 ## Install and update in PixInsight
 
 1. In **Preferences → Security**, enable **Allow unsigned update repositories** and
    **Allow execution of unsigned scripts** if currently disabled.
 2. In **Resources → Updates → Manage Repositories**, add:
-   `https://kaminarigr.github.io/AstroProcessAtlas/`
+   `https://www.yoruhikari.gr/pixinsight/astro-process-atlas/`
 3. Use **Check for Updates**, accept the unsigned-repository confirmation, install
    the update and restart PixInsight.
 4. Confirm **Utilities → AstroProcessAtlas** and the version shown in About.
@@ -58,7 +63,7 @@ and [GitHub Pages workflows](https://docs.github.com/en/pages/getting-started-wi
 ## Optional signing later
 
 Sign the exact release script with CodeSign, build with `--signature AstroProcessAtlas.xsgn`,
-then sign the resulting `updates.xri`. Use `python tools/validate_repository.py dist/signed
+then sign the resulting `updates.xri`. Use `python tools/validate_repository.py dist/release-0.1.18/signed
 --require-signed` to check structure and checksums. PixInsight must verify cryptographic
 authenticity. Replace all matching draft assets before publishing. Never upload private `.xssk` keys.
 
@@ -68,8 +73,8 @@ authenticity. Replace all matching draft assets before publishing. Never upload 
 node test_history_report.cjs
 node test_workspace_report.cjs
 python -m unittest discover -s tools -p "test_release.py"
-python tools/build_release.py --version 0.1.7 --date 20261010
-python tools/validate_repository.py dist
+python tools/build_release.py --version 0.1.18 --date 20261011 --output dist/release-0.1.18
+python tools/validate_repository.py dist/release-0.1.18
 ```
 
 Mock and package checks do not replace a real PixInsight installation test.

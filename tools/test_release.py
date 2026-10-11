@@ -23,6 +23,14 @@ class ReleaseTests(unittest.TestCase):
                 self.assertIn('src/scripts/AstroProcessAtlas/AstroProcessAtlas.svg', archive.namelist())
                 self.assertIn('src/scripts/AstroProcessAtlas/LICENSE', archive.namelist())
 
+    def test_release_documentation_matches_script(self):
+        readme = (ROOT / 'README.md').read_text(encoding='utf-8')
+        changelog = (ROOT / 'CHANGELOG.md').read_text(encoding='utf-8')
+        releasing = (ROOT / 'docs/RELEASING.md').read_text(encoding='utf-8')
+        self.assertIn(f'Current version: **{VERSION}**', readme)
+        self.assertRegex(changelog, rf'(?m)^## {re.escape(VERSION)}(?: —|$)')
+        self.assertIn(f'`v{VERSION}`', releasing)
+
     def test_version_mismatch(self):
         with tempfile.TemporaryDirectory() as temp:
             with self.assertRaises(ValueError):

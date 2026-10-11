@@ -19,10 +19,14 @@ The embedded previews are reduced to at most 640 pixels and compressed for a sma
 ## Features
 
 - Multi-image history graph with search, tool filters and synchronized image selection.
-- Before/after previews with an image divider and shared zoom.
+- Before/after previews and arbitrary stage comparison with shared zoom, synchronized A/B selectors and tree drag/drop.
+- Search/jump to tree nodes, collapse image branches and show the upstream path to an image.
+- Grayscale/color badges and connected-first image ordering.
 - Readable HistogramTransformation and CurvesTransformation parameters and supported PixelMath equivalents.
 - Historical mask information and previews of currently available masks.
-- Recorded, parameter-based, manual and explicitly unconfirmed connections.
+- Clickable recorded, parameter-based, manual and explicitly unconfirmed connection details.
+- Browser persistence and portable JSON export/import for manual connections.
+- StarXTerminator stars-output links supported by output naming and history.
 - Processing summary, explicit original-input selection and final-image preview.
 - Copy process code with replay requirements.
 - A standalone HTML report with embedded thumbnails, or HTML plus a thumbnail folder.
@@ -38,11 +42,11 @@ The embedded previews are reduced to at most 640 pixels and compressed for a sma
 
 ## Updates
 
-Current version: **0.1.7**. The version is shown in About.
+Current version: **0.1.18**. The version is shown in About.
 
 Version tags build downloadable ZIPs and draft GitHub releases automatically. Publishing a stable release deploys an **unsigned PixInsight update repository** to GitHub Pages. No CPD identity is required; users must allow unsigned repositories and scripts in PixInsight's Security preferences.
 
-The PixInsight update URL is `https://kaminarigr.github.io/AstroProcessAtlas/`. It becomes available after the first successful Pages deployment. Add it through **Resources → Updates → Manage Repositories**, check for updates and accept the unsigned-repository confirmation. The feed targets PixInsight 1.9.3–1.9.4. See [release and repository setup](docs/RELEASING.md).
+The PixInsight update URL is `https://www.yoruhikari.gr/pixinsight/astro-process-atlas/`. Use the `www` hostname to avoid HTTP redirects rejected by the PixInsight updater. GitHub Pages remains the publishing origin; existing installations can keep its URL, but register only one URL for this script. Add it through **Resources → Updates → Manage Repositories**, check for updates and accept the unsigned-repository confirmation. The feed targets PixInsight 1.9.3–1.9.4. See [release and repository setup](docs/RELEASING.md).
 
 See [CHANGELOG.md](CHANGELOG.md) for changes.
 
@@ -50,7 +54,7 @@ See [CHANGELOG.md](CHANGELOG.md) for changes.
 
 Recovery depends on the history and pixels available through PixInsight. Closed images, historical mask pixels and unrecorded script inputs may be unavailable. Mask thumbnails show current mask contents. Before/after comparisons are omitted when historical pixels are missing or dimensions change.
 
-Column order follows selected originals and known dependencies where possible; it is not an absolute timeline. Possible connections for PerfectPalettePicker are clearly marked as unconfirmed. Its consecutive component entries can be presented as one group while preserving all underlying records.
+Connected images appear first and disconnected images last, preserving the existing originals/dependency order within each group; this is not an absolute timeline. Possible connections for PerfectPalettePicker are clearly marked as unconfirmed. Its consecutive component entries can be presented as one group while preserving all underlying records.
 
 Replay code requires the correct preceding image state, references and mask settings. It does not recover missing historical image versions.
 

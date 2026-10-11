@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.18 — 2026-10-11
 
 - Inspect connection origin, endpoints, evidence and uncertainty by clicking a line.
 - Add node search/jump, image branch collapse/expand and upstream path filtering
