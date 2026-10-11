@@ -857,3 +857,41 @@ console.log('Passed: arbitrary current/before/after selection, shared comparison
  new vm.Script(exportedBlob.replace(/^#.*$/gm,''));
  console.log('Passed: ImageIdentifier report readiness and downloadable naming metadata script.');
 }
+
+{
+ const ws=makeProcess('RGBWorkingSpace',{channels:[[1,0.648431,0.330856],[1,0.321152,0.597871],[1,0.155886,0.066044]],gamma:2.2,sRGBGamma:true,applyGlobalRGBWS:false});
+ const scc=makeProcess('Script',{filePath:'$PXI_SRCDIR/scripts/Toolbox/SelectiveColorCorrection.js'});
+ const rec=helper.collectWorkspaceRecord(image('SCC',[ws,ws,scc,ht]),110);
+ const graph=helper.workspaceGraph([rec]);
+ const group=graph.nodes.find(n=>n.tool==='SelectiveColorCorrection');
+ assert.equal(group.memberIds.length,3);
+ assert.equal(rec.displayGroups.length,2);
+ assert.equal(rec.steps[3].displayNumber,2);
+ const plan=helper.workspaceReplayData([rec])[0];
+ assert.equal(plan.steps.length,2);
+ assert.equal(plan.steps[0].tool,'Script');
+ assert.ok(plan.steps[0].reason,'The parent script remains a replay blocker');
+ assert.equal(plan.steps[1].tool,'HistogramTransformation');
+ assert.ok(!helper.replayStepHTML(rec,rec.steps[0]).includes('Copy step for replay'));
+ assert.match(helper.replayStepHTML(rec,rec.steps[0]),/Internal component/);
+ helper.workspaceGraph([rec]);
+ assert.equal(rec.displayGroups.length,2,'Repeated grouping is stable');
+ for(const processes of [
+   [ws,scc], [ws,ws,ht,scc],
+   [ws,makeProcess('RGBWorkingSpace',{channels:ws.channels,gamma:1.8,sRGBGamma:true,applyGlobalRGBWS:false}),scc],
+   [ws,ws,makeProcess('Script',{filePath:'Other.js'})]
+ ]) {
+   const separate=helper.collectWorkspaceRecord(image('Independent',processes),111);
+   assert.equal(helper.workspaceStepGroups(separate).length,processes.length);
+   assert.ok(helper.workspaceReplayData([separate])[0].steps.some(s=>s.tool==='RGBWorkingSpace'));
+ }
+ const partial=helper.collectWorkspaceRecord(image('Partial',[ws,ws,scc],[],2),112);
+ assert.equal(helper.workspaceStepGroups(partial).length,3,'Do not merge applied and redo entries');
+ const boundary=helper.collectWorkspaceRecord(image('Boundary',[ws,scc],[ws]),113);
+ assert.equal(helper.workspaceStepGroups(boundary).length,3,'Do not merge initial and recent history');
+ const html=helper.imageReportHTML(rec);
+ assert.match(html,/<h3 data-no-i18n>SelectiveColorCorrection<\/h3>/);
+ assert.ok(html.includes('Show recorded component steps (3)'));
+ assert.ok(html.includes('Substep 1.1') && html.includes('Substep 1.2') && html.includes('Substep 1.3'));
+ console.log('Passed: SelectiveColorCorrection matching helpers group once, consistent numbering, replay exclusion with parent blocker, and unrelated/changed/redo/phase rejection.');
+}

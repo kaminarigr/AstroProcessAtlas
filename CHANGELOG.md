@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Group the two matching RGBWorkingSpace entries immediately before
+  SelectiveColorCorrection as its component steps. Keep parameters/thumbnails and
+  consistent tree/detail numbering; omit these internal entries from replay while
+  retaining the parent script as an unsupported blocker. Leave other RGBWS intact.
+
 - Support StarXTerminator replay with either stars flag and original parameters.
   Allow its optional output references while retaining mask/input checks; continue
   subsequent processes on the starless copy even when the stars window is active.

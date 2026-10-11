@@ -191,3 +191,11 @@ StarXTerminator preserves its recorded parameters, including `stars`. With
 `stars=true`, the native tool also creates a stars image; this output reference
 does not block replay. Subsequent steps continue on the starless replay copy,
 even if the stars window becomes active. The separate stars history is not replayed.
+
+When two consecutive RGBWorkingSpace entries match the installed
+SelectiveColorCorrection helper parameters and immediately precede that script
+in the same history phase and applied/redo state, they appear as component steps
+of one SelectiveColorCorrection group. Their parameters and thumbnails remain
+available. These internal RGBWorkingSpace entries are omitted from workflow replay;
+the parent script remains a blocker until script replay is supported. Different
+settings, isolated entries and intervening operations remain independent steps.

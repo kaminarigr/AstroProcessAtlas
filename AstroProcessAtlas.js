@@ -701,12 +701,30 @@ function imageReferences(step, records, owner) {
    return refs;
 }
 
+function isSelectiveColorWorkingSpace(step) {
+   if (getProcessName(step.proc) !== 'RGBWorkingSpace') return false;
+   var expected = 'var P = new RGBWorkingSpace; P.channels=[[1,0.648431,0.330856],[1,0.321152,0.597871],[1,0.155886,0.066044]]; P.gamma=2.2; P.sRGBGamma=true; P.applyGlobalRGBWS=false;';
+   var key = historyParameterKey(step.source);
+   return !!key && key === historyParameterKey(expected);
+}
+
 function workspaceStepGroups(record) {
    var groups = [];
+   for (var reset = 0; reset < record.steps.length; ++reset) record.steps[reset].componentOf = '';
    var i = 0;
    while (i < record.steps.length) {
       var first = record.steps[i];
       var end = i + 1;
+      var groupTitle = first.title;
+      if (i + 2 < record.steps.length && isSelectiveColorWorkingSpace(first) &&
+          isSelectiveColorWorkingSpace(record.steps[i+1]) &&
+          getProcessTitle(record.steps[i+2].proc).toLowerCase() === 'selectivecolorcorrection' &&
+          record.steps[i+1].redo === first.redo && record.steps[i+2].redo === first.redo &&
+          record.steps[i+1].phase === first.phase && record.steps[i+2].phase === first.phase) {
+         end = i + 3;
+         groupTitle = 'SelectiveColorCorrection';
+         first.componentOf = record.steps[i+1].componentOf = groupTitle;
+      }
       if (getProcessTitle(first.proc).toLowerCase() === 'perfectpalettepicker') {
          while (end < record.steps.length && record.steps[end].redo === first.redo && getProcessTitle(record.steps[end].proc).toLowerCase() === 'perfectpalettepicker') {
             ++end;
@@ -714,10 +732,11 @@ function workspaceStepGroups(record) {
          if (end - i >= 2 && end < record.steps.length && record.steps[end].redo === first.redo && getProcessName(record.steps[end].proc) === 'PixelMath') {
             ++end;
          }
+         if (end - i > 1) groupTitle = 'PerfectPalettePicker';
       }
       var members = record.steps.slice(i, end);
       var group = {anchor:members.length > 1 ? first.anchor + '_group' : first.anchor, members:members,
-         title:members.length > 1 ? 'PerfectPalettePicker' : first.title};
+         title:groupTitle};
       for (var m = 0; m < members.length; ++m) {
          members[m].groupAnchor = group.anchor;
          members[m].displayNumber = groups.length + 1;
@@ -879,7 +898,7 @@ function workspaceGraph(records) {
          }
          graph.nodes.push({id:group.anchor, memberIds:memberIds, image:record.id, label:(i+1) + ". " + group.title,
             x:24+r*290, y:160+i*105, header:false, time:time,
-            tool:group.members.length > 1 ? 'PerfectPalettePicker' : getProcessName(step.proc), hasMask:hasMask,
+            tool:group.members.length > 1 ? group.title : getProcessName(step.proc), hasMask:hasMask,
             search:(record.id+' '+record.filePath+' '+group.title+search).toLowerCase(),
             phase:step.phase, redo:step.redo});
          graph.edges.push({from:previous, to:group.anchor, kind:"sequence", provenance:'recorded', detail:step.phase === "initial" ? "Initial state history" : "History sequence", redo:step.redo});
@@ -1151,7 +1170,7 @@ function imageReportHTML(record, emit) {
       }
       if (groupStart) {
          var finalMember = groupStart.members[groupStart.members.length-1];
-         html += '<div class="step-group" id="' + groupStart.anchor + '"><div class="step-num">Step ' + step.displayNumber + ' of ' + groups.length + '</div><h3>PerfectPalettePicker</h3><p>Grouped from consecutive history entries; original records are preserved below.</p>' +
+         html += '<div class="step-group" id="' + groupStart.anchor + '"><div class="step-num">Step ' + step.displayNumber + ' of ' + groups.length + '</div><h3 data-no-i18n>' + escapeHTML(groupStart.title) + '</h3><p>Grouped from consecutive history entries; original records are preserved below.</p>' +
             comparisonHTML({beforeThumb:step.beforeThumb, afterThumb:finalMember.afterThumb}) +
             '<details open><summary>Show recorded component steps (' + groupStart.members.length + ')</summary>';
       }
@@ -1249,8 +1268,9 @@ function workspaceReplayData(records) {
       SCNR:true, ColorSaturation:true, BlurXTerminator:true, NoiseXTerminator:true, GradientCorrection:true, StarXTerminator:true};
    for (var r = 0; r < records.length; ++r) {
       var record = records[r], image = {id:record.id, anchor:record.anchor, steps:[]};
+      workspaceStepGroups(record);
       for (var s = 0; s < record.steps.length; ++s) {
-         var step = record.steps[s]; if (step.redo || isImageOriginStep(step, s)) continue;
+         var step = record.steps[s]; if (step.redo || step.componentOf || isImageOriginStep(step, s)) continue;
          var tool = getProcessName(step.proc), reason = '', source = null, identifier = '';
          var requiredReferences = (step.references || []).filter(function(ref) {
             return !(tool === 'StarXTerminator' && step.proc.stars === true && ref.kind === 'output');
@@ -1394,6 +1414,7 @@ function workspaceReplayHTML(records) {
 }
 
 function replayStepHTML(record, step) {
+   if (step.componentOf) return '<p class="thumb-note">Internal component of SelectiveColorCorrection; excluded from workflow replay.</p>';
    if (isImageOriginStep(step, record.steps.indexOf(step)))
       return '<p class="thumb-note">Image origin metadata. Replay starts with the already integrated image; this entry is not exported as a replay process.</p>';
    var refs = step.references || [];
@@ -2149,6 +2170,7 @@ var REPORT_TRANSLATIONS = [
 ];
 
 REPORT_TRANSLATIONS = REPORT_TRANSLATIONS.concat([
+   ['Internal component of SelectiveColorCorrection; excluded from workflow replay.','Εσωτερικό υποβήμα του SelectiveColorCorrection· εξαιρείται από την επανάληψη της ακολουθίας.'],
    ['Substep','Υποβήμα'],['Original history entries:','Αρχικές εγγραφές ιστορικού:'],
    ['Grouped from consecutive history entries; original records are preserved below.','Ομαδοποίηση από διαδοχικές εγγραφές ιστορικού· οι αρχικές εγγραφές διατηρούνται παρακάτω.'],['Show recorded component steps','Προβολή επιμέρους καταγεγραμμένων βημάτων'],
    ['Possible connection','Πιθανή σύνδεση'],['Possible connection (unconfirmed)','Πιθανή σύνδεση (μη επιβεβαιωμένη)'],
