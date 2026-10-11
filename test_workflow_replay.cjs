@@ -26,7 +26,7 @@ assert.ok(api.workspaceReplayData([{id:'Later',steps:[{...origin,phase:'live',hi
 assert.equal(plan.steps.length,4,'Exclude redo without omitting blockers');
 assert.equal(plan.steps[0].reason,'');
 assert.equal(plan.steps[1].reason,'');
-assert.match(plan.steps[2].reason,/not supported/);
+assert.match(plan.steps[2].reason,/not yet supported by the replay exporter/);
 assert.equal(plan.steps[3].reason,'');
 for (const [change, pattern] of [
   [{mask:{status:'unknown'}}, /mask state is unknown/],
@@ -57,8 +57,8 @@ assert.throws(()=>api.buildWorkspaceReplayScript(plan,2,1),/valid step range/);
 assert.throws(()=>api.buildWorkspaceReplayScript(plan,0,99),/valid step range/);
 assert.throws(()=>api.buildWorkspaceReplayScript(plan,0.5,1),/valid step range/);
 
-function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImages=false}={}) {
-  const calls=[], messages=[], outputs=[];let checkbox;
+function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImages=false,gradientMissing=false,gradientFail=false}={}) {
+  const calls=[], messages=[], outputs=[], gradientParameters=[];let checkbox;
   const input={isNull:false,rgbWorkingSpace:{gamma:2.2},mainView:{id:'Ha_input',stf:[[1,2]],
     image:{numberOfChannels:1,bitsPerSample:32,isReal:true,isColor:false,pixels:[0.1,0.2]}}};
   function ImageWindow(w,h,channels,bits,real,color,id){
@@ -70,6 +70,7 @@ function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImage
   ImageWindow.windows=noImages?[]:[input];
   function Sizer(){this.add=()=>{};this.addStretch=()=>{};}
   function Process(){this.executeOn=view=>{assert.notEqual(view,input.mainView);
+    assert.equal(view,outputs[0].mainView,'Continue on the replay copy even if diagnostic output becomes active');
     calls.push(this.H?'HT':'CT');view.image.pixels[0]+=1;return !fail;};}
   const context={ImageWindow,View:{viewById:id=>({isNull:id!=='APA_replay'})},
     Dialog:function(){this.ok=()=>{};this.cancel=()=>{};this.adjustToContents=()=>{};
@@ -80,10 +81,18 @@ function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImage
     HistogramTransformation:Process,Console:{writeln(){}},processEvents(){},
     UndoFlag_NoSwapFile:0,StdIcon_Information:0,StdIcon_Error:1,StdButton_Ok:0};
   Process.prototype.AkimaSubsplines=1;
+  if(!gradientMissing)context.GradientCorrection=function(){this.executeOn=view=>{
+    assert.equal(view,outputs[0].mainView,'GradientCorrection applies to the replay copy');
+    calls.push('GC');gradientParameters.push({...this});
+    if(this.generateGradientModel||this.generateProtectionMasks||this.generateSimpleModel)
+      ImageWindow.activeWindow={mainView:{id:'Diagnostic_model'},isNull:false};
+    view.image.pixels[0]+=0.2;
+    return !gradientFail;
+  };};
   if(!missing)context.CurvesTransformation=Process;
   vm.runInNewContext(script.replace(/^#.*$/gm,''),context);
   assert.deepEqual(input.mainView.image.pixels,[0.1,0.2],'Input pixels never change');
-  return {calls,messages,outputs,input};
+  return {calls,messages,outputs,input,gradientParameters};
 }
 const complete=api.buildWorkspaceReplayScript(plan,0,1);
 const generatorSource=api.buildWorkspaceReplayScript.toString();
@@ -114,4 +123,39 @@ assert.match(missing.messages[0],/CurvesTransformation/);
 const failed=run(complete,{fail:true});
 assert.ok(!failed.calls.includes('CT'),'Failure stops subsequent processes');
 assert.match(failed.messages[0],/Process failed/);
+
+const gc=step('GradientCorrection',[
+  'P.lowThreshold=0.1;', 'P.lowTolerance=0.5;', 'P.highThreshold=0.8;', 'P.highTolerance=0.5;',
+  'P.scale=5;', 'P.smoothness=0.4;', 'P.automaticConvergence=true;',
+  'P.generateGradientModel=true;', 'P.generateProtectionMasks=true;', 'P.generateSimpleModel=true;',
+  'P.simplificationDegree=1;', 'P.protectionThreshold=0.05;', 'P.protectionAmount=0.8;'
+].join('\n'),{displayNumber:2});
+const gcPlan=api.workspaceReplayData([{id:'GC_test',steps:[gc,{...ht,displayNumber:3},{...ct,displayNumber:4}]}])[0];
+assert.ok(gcPlan.steps.every(s=>!s.reason),'GC no longer blocks supported subsequent processes');
+assert.equal(gcPlan.steps[0].source,gc.source,'Preserve the complete native parameter serialization');
+const gcScript=api.buildWorkspaceReplayScript(gcPlan,0,2);
+const gcRun=run(gcScript);
+assert.deepEqual(gcRun.calls,['begin','copy','end','show','GC','HT','CT']);
+assert.match(gcRun.messages[0],/Replay complete: APA_replay_1/);
+assert.equal(gcRun.gradientParameters[0].scale,5);
+assert.equal(gcRun.gradientParameters[0].smoothness,0.4);
+assert.equal(gcRun.gradientParameters[0].automaticConvergence,true);
+assert.equal(gcRun.gradientParameters[0].generateGradientModel,true);
+assert.equal(gcRun.gradientParameters[0].generateProtectionMasks,true);
+assert.equal(gcRun.gradientParameters[0].generateSimpleModel,true);
+const gcMissing=run(gcScript,{gradientMissing:true});
+assert.match(gcMissing.messages[0],/GradientCorrection/);
+assert.ok(!gcMissing.calls.includes('HT'));
+const gcFailed=run(gcScript,{gradientFail:true});
+assert.match(gcFailed.messages[0],/Process failed: GradientCorrection/);
+assert.ok(!gcFailed.calls.includes('HT'));
+for(const changed of [
+  {mask:{status:'recorded',name:'GC_mask'}}, {mask:{status:'unknown'}},
+  {references:[{name:'GC_reference',kind:'reference'}]},
+  {source:'var P = new GradientCorrection; P.executeGlobal();'}
+]) {
+  const unavailable=api.workspaceReplayData([{id:'GC_blocked',steps:[{...gc,...changed}]}])[0].steps[0];
+  assert.ok(unavailable.reason);assert.equal(unavailable.source,'');
+}
 console.log('Passed: replay eligibility, redo/blocker preservation, source validation, range export, copied input, confirmation/cancel, naming, RGBWS/STF, stop/failure and missing process handling.');
+console.log('Passed: GradientCorrection eligibility and parameter preservation, diagnostic outputs retain the replay target, subsequent steps, missing/failed GC and mask/reference/serialization blockers.');

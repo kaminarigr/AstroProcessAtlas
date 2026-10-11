@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Support GradientCorrection replay with the complete serialized parameters,
+  including diagnostic model/protection outputs; keep subsequent execution on the
+  replay image copy and retain mask/reference/serialization checks.
+- Clarify that unsupported processes are not yet supported by the replay exporter.
+
 - Show StarXTerminator only on the source after a selected `_stars` output passes
   the existing enabled-output/name/history checks and receives its output link.
   Omit its corroborating output-origin entry from the stars tree/details/summary
@@ -23,7 +28,7 @@
   readiness checks, original parameters and applied-only step/substep numbering.
 - Generated PixInsight scripts request and confirm the input state, create a new
   image copy with RGBWS/STF, and retain partial results when blocked or failed.
-- Start with seven independent in-place processes; block scripts, PixelMath,
+- Support eight native processes; block scripts, PixelMath,
   integrations, references, recorded/unknown masks and historical global RGBWS.
   Never silently skip unsupported steps or treat speculative links as replay evidence.
 

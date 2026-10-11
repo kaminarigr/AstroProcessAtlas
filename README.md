@@ -69,13 +69,13 @@ a new image copy, preserves its RGB working space and STF, and applies the origi
 serialized process parameters. It never changes the selected input.
 
 The first implementation supports independent, in-place HistogramTransformation,
-CurvesTransformation, RGBWorkingSpace, SCNR, ColorSaturation, BlurXTerminator and
-NoiseXTerminator instances with supported serialization and no recorded mask or
+CurvesTransformation, RGBWorkingSpace, SCNR, ColorSaturation, BlurXTerminator,
+NoiseXTerminator and GradientCorrection instances with supported serialization and no recorded mask or
 references. RGBWorkingSpace steps that use historical global settings are blocked.
 Required tools, licenses and matching models must already be available in PixInsight.
 This does not guarantee identical pixels across tool/model versions.
 
-Scripts, PixelMath, integrations, image combinations, output-generating processes,
+Scripts, PixelMath, integrations, image combinations, unsupported output-generating processes,
 masked steps and unknown historical mask states are currently blockers. The report
 shows the runnable prefix; the replay dialog states where execution will stop.
 Execution stops at that blocker or a process failure, preserves the partial result,
@@ -83,6 +83,13 @@ and does not skip ahead. A later range can be replayed only when you supply its 
 correct starting image. Grouped processes retain their step/substep numbering;
 redo entries are excluded. Manual or possible graph links do not authorize replay.
 Historical pixels, masks and missing inputs are not bundled in the exported script.
+
+GradientCorrection preserves its original serialized thresholds, scale, convergence,
+protection and model-generation settings. Diagnostic model/protection images may be
+created when those flags were enabled; subsequent steps still run on the replay image
+copy. Recorded/unknown masks, historical references, invalid serialization and process
+failures remain blockers. ImageIdentifier and StarXTerminator are not yet supported
+for replay. The report labels unsupported tools as not yet supported by the exporter.
 
 Initial ImageIntegration entries describe the provenance of an already integrated
 input. They remain available in the report but are omitted from replay, so they do

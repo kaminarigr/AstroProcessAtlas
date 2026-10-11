@@ -1246,13 +1246,13 @@ function isImageOriginStep(step, index) {
 function workspaceReplayData(records) {
    var data = [];
    var supported = {HistogramTransformation:true, CurvesTransformation:true, RGBWorkingSpace:true,
-      SCNR:true, ColorSaturation:true, BlurXTerminator:true, NoiseXTerminator:true};
+      SCNR:true, ColorSaturation:true, BlurXTerminator:true, NoiseXTerminator:true, GradientCorrection:true};
    for (var r = 0; r < records.length; ++r) {
       var record = records[r], image = {id:record.id, anchor:record.anchor, steps:[]};
       for (var s = 0; s < record.steps.length; ++s) {
          var step = record.steps[s]; if (step.redo || isImageOriginStep(step, s)) continue;
          var tool = getProcessName(step.proc), reason = '', source = null;
-         if (!supported[tool]) reason = 'This process is not supported by replay v1: ' + tool;
+         if (!supported[tool]) reason = 'This process is not yet supported by the replay exporter: ' + tool;
          else if (!step.mask || step.mask.status === 'unknown') reason = 'Historical mask state is unknown.';
          else if (step.mask.status === 'recorded') reason = 'This step needs the original historical mask: ' + step.mask.name;
          else if (step.references && step.references.length) reason = 'This step needs historical reference images or creates another image.';
@@ -1632,7 +1632,7 @@ var REPORT_TRANSLATIONS = [
    ['Historical mask state is unknown.','Η ιστορική κατάσταση μάσκας είναι άγνωστη.'],
    ['This step needs the original historical mask:','Αυτό το βήμα χρειάζεται την αρχική ιστορική μάσκα:'],
    ['This step needs historical reference images or creates another image.','Αυτό το βήμα χρειάζεται ιστορικές εικόνες αναφοράς ή δημιουργεί άλλη εικόνα.'],
-   ['This process is not supported by replay v1:','Αυτή η διεργασία δεν υποστηρίζεται από την πρώτη έκδοση επανάληψης:'],
+   ['This process is not yet supported by the replay exporter:','Αυτή η διεργασία δεν υποστηρίζεται ακόμη από την εξαγωγή επανάληψης:'],
    ['This step uses the global RGB working space, whose historical settings are unavailable.','Αυτό το βήμα χρησιμοποιεί global RGB working space, του οποίου οι ιστορικές ρυθμίσεις δεν είναι διαθέσιμες.'],
    ['Serialized process code is not a supported constructor and parameter assignment sequence.','Ο καταγεγραμμένος κώδικας δεν έχει υποστηριζόμενη μορφή δημιουργίας διεργασίας και ανάθεσης παραμέτρων.'],
    ['Select an image and a consecutive range of applied processes. Run the downloaded .js in PixInsight with an input in the state BEFORE the first selected step. Replay uses a new copy and stops at the first unsupported step. Masks and historical references are not restored in this first version.',
