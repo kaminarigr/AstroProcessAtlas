@@ -14,5 +14,6 @@ site/
 Thumbs.db
 
 *.cjs
+!test_workflow_replay.cjs
 
 WORKSPACE_HISTORY_README.md

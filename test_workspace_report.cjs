@@ -112,6 +112,9 @@ assert.ok(output.includes('data:image/png;base64,'));
 assert.ok(!/\b(?:src|data-before|data-after)="workspace_thumbs\//.test(output));
 assert.ok(output.includes('id="final_image"'));
 assert.ok(output.includes('Copy step for replay'));
+assert.ok(output.includes('id="replay_image"'));
+assert.ok(output.includes('Download PixInsight replay script'));
+assert.ok(output.includes('var workspaceReplayData='));
 assert.equal((output.match(/class="image-report"/g)||[]).length,5);
 assert.equal((output.match(/class="step-card"/g)||[]).length,7);
 assert.equal((output.match(/<script>/g)||[]).length,2);
@@ -689,4 +692,34 @@ console.log('Passed: arbitrary current/before/after selection, shared comparison
  assert.equal(elements.tree_path_only.checked,false);
  graph.nodes.pop();graphGroups.pop();
  console.log('Passed: clickable recorded/parameter/manual provenance, uncertainty, node search, branch collapse/expand, ancestors-only view and reset.');
+}
+
+// Export controls execute the same generator used by the native replay tests.
+{
+ const readyStep={title:'HistogramTransformation',number:1,substep:0,tool:'HistogramTransformation',reason:'',source:'var P = new HistogramTransformation; P.H=[[0,0.5,1,0,1]];',variable:'P'};
+ browser.workspaceReplayData=[{id:'Ha',anchor:'image_0',steps:[readyStep,{...readyStep,number:2,title:'Script',reason:'Unsupported Script',source:'',variable:''}, {...readyStep,number:3}]}, {id:'Empty',steps:[]}];
+ browser.buildWorkspaceReplayScript=helper.buildWorkspaceReplayScript;
+ elements.replay_image=element('0');elements.replay_start=element();elements.replay_end=element();
+ elements.replay_readiness=element();elements.replay_status=element();elements.replay_export=element();
+ browser.document.body=element();
+ browser.window.updateReplayRange(true);
+ assert.equal(elements.replay_start.children.length,3);
+ assert.equal(elements.replay_end.value,'2');
+ assert.match(elements.replay_status.textContent,/1 consecutive/);
+ assert.equal(elements.replay_export.disabled,false);
+ assert.match(elements.replay_readiness.children[1].textContent,/STOP/);
+ assert.match(elements.replay_readiness.children[2].textContent,/Not reached/);
+ browser.window.exportReplayScript();
+ assert.match(exportedBlob,/function runAtlasReplay/);
+ new vm.Script(exportedBlob.replace(/^#.*$/gm,''));
+ assert.equal(browser.document.body.children.length,0,'Remove the temporary download link');
+ elements.replay_start.value='2';elements.replay_end.value='0';browser.window.updateReplayRange(false);
+ assert.equal(elements.replay_end.value,'2');
+ assert.match(elements.replay_status.textContent,/1 consecutive/,'Allow a new input state after an unsupported step');
+ elements.replay_start.value='1';browser.window.updateReplayRange(false);
+ assert.equal(elements.replay_export.disabled,true,'Cannot start by silently skipping a blocker');
+ elements.replay_image.value='1';browser.window.updateReplayRange(true);
+ assert.equal(elements.replay_start.children.length,0);assert.equal(elements.replay_export.disabled,true);
+ assert.match(elements.replay_status.textContent,/No applied processes/);
+ console.log('Passed: workflow image/range controls, readiness and blockers, empty histories, generated script download and cleanup.');
 }

@@ -24,6 +24,7 @@ jobs:
           python-version: '3.12'
       - run: node test_history_report.cjs
       - run: node test_workspace_report.cjs
+      - run: node test_workflow_replay.cjs
       - run: python -m unittest discover -s tools -p "test_release.py"
       - name: Package release
         env:

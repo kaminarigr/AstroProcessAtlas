@@ -58,6 +58,36 @@ Connected images appear first and disconnected images last, preserving the exist
 
 Replay code requires the correct preceding image state, references and mask settings. It does not recover missing historical image versions.
 
+## Experimental workflow replay (development version)
+
+New reports include **Export workflow for replay (experimental)**. Select one image
+and a consecutive range of applied processes, inspect the readiness list, and
+download a `.js` file. Open it in PixInsight's Script Editor and run it with the
+required input image already open. Select an image containing the pixels **before
+the first selected process**, then confirm that starting state. The script creates
+a new image copy, preserves its RGB working space and STF, and applies the original
+serialized process parameters. It never changes the selected input.
+
+The first implementation supports independent, in-place HistogramTransformation,
+CurvesTransformation, RGBWorkingSpace, SCNR, ColorSaturation, BlurXTerminator and
+NoiseXTerminator instances with supported serialization and no recorded mask or
+references. RGBWorkingSpace steps that use historical global settings are blocked.
+Required tools, licenses and matching models must already be available in PixInsight.
+This does not guarantee identical pixels across tool/model versions.
+
+Scripts, PixelMath, integrations, image combinations, output-generating processes,
+masked steps and unknown historical mask states are currently blockers. The report
+shows the runnable prefix; the replay dialog states where execution will stop.
+Execution stops at that blocker or a process failure, preserves the partial result,
+and does not skip ahead. A later range can be replayed only when you supply its own
+correct starting image. Grouped processes retain their step/substep numbering;
+redo entries are excluded. Manual or possible graph links do not authorize replay.
+Historical pixels, masks and missing inputs are not bundled in the exported script.
+
+Run `node test_workflow_replay.cjs` for the generator and simulated native execution
+checks, alongside the existing history/report tests. Actual PixInsight execution
+still requires validation with real images and installed processes.
+
 ## Ελληνικά
 
 Το AstroProcessAtlas δημιουργεί διαδραστικό HTML με το διαθέσιμο ιστορικό επεξεργασίας των ανοιχτών εικόνων του PixInsight.

@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Add experimental per-image workflow `.js` export with consecutive process ranges,
+  readiness checks, original parameters and applied-only step/substep numbering.
+- Generated PixInsight scripts request and confirm the input state, create a new
+  image copy with RGBWS/STF, and retain partial results when blocked or failed.
+- Start with seven independent in-place processes; block scripts, PixelMath,
+  integrations, references, recorded/unknown masks and historical global RGBWS.
+  Never silently skip unsupported steps or treat speculative links as replay evidence.
+
 ## 0.1.18 — 2026-10-11
 
 - Inspect connection origin, endpoints, evidence and uncertainty by clicking a line.

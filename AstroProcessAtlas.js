@@ -1066,6 +1066,167 @@ function writeReportText(file, text) {
    }
 }
 
+// Replay v1 deliberately handles only independent, in-place native processes.
+// Serialized assignments are accepted; execution calls and arbitrary scripts are not.
+function replayProcessSource(source, tool) {
+   var code = '', i = 0;
+   while (i < source.length) {
+      var c = source.charAt(i), next = source.charAt(i + 1);
+      if (c === '"' || c === "'") {
+         var quote = c, closed = false; ++i;
+         while (i < source.length) {
+            c = source.charAt(i++);
+            if (c === '\\') ++i;
+            else if (c === quote) { closed = true; break; }
+         }
+         if (!closed) return null;
+         code += '0';
+      } else if (c === '/' && next === '/') {
+         i += 2; while (i < source.length && source.charAt(i) !== '\n') ++i;
+         code += '\n';
+      } else if (c === '/' && next === '*') {
+         var end = source.indexOf('*/', i + 2); if (end < 0) return null;
+         i = end + 2; code += ' ';
+      } else { code += c; ++i; }
+   }
+   var declaration = /^\s*var\s+([A-Za-z_]\w*)\s*=\s*new\s+([A-Za-z_]\w*)\s*(?:\(\s*\))?\s*;/.exec(code);
+   if (!declaration || declaration[2] !== tool) return null;
+   var variable = declaration[1], rest = code.slice(declaration[0].length);
+   var assignment = new RegExp('^\\s*' + variable + '\\.[A-Za-z_]\\w*\\s*=\\s*([^;]+);');
+   while (/\S/.test(rest)) {
+      var match = assignment.exec(rest); if (!match) return null;
+      // Values may contain literal tables, numbers, strings and native enum constants.
+      var value = match[1].replace(/\b[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)+\b/g, '0')
+         .replace(/\b(?:true|false|null)\b/g, '0')
+         .replace(/(?:0[xX][0-9a-fA-F]+|(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)/g, '0');
+      if (/[^\s0\[\],+.-]/.test(value)) return null;
+      rest = rest.slice(match[0].length);
+   }
+   return {source:source, variable:variable};
+}
+
+function workspaceReplayData(records) {
+   var data = [];
+   var supported = {HistogramTransformation:true, CurvesTransformation:true, RGBWorkingSpace:true,
+      SCNR:true, ColorSaturation:true, BlurXTerminator:true, NoiseXTerminator:true};
+   for (var r = 0; r < records.length; ++r) {
+      var record = records[r], image = {id:record.id, anchor:record.anchor, steps:[]};
+      for (var s = 0; s < record.steps.length; ++s) {
+         var step = record.steps[s]; if (step.redo) continue;
+         var tool = getProcessName(step.proc), reason = '', source = null;
+         if (!supported[tool]) reason = 'This process is not supported by replay v1: ' + tool;
+         else if (!step.mask || step.mask.status === 'unknown') reason = 'Historical mask state is unknown.';
+         else if (step.mask.status === 'recorded') reason = 'This step needs the original historical mask: ' + step.mask.name;
+         else if (step.references && step.references.length) reason = 'This step needs historical reference images or creates another image.';
+         else if (tool === 'RGBWorkingSpace' && step.proc.applyGlobalRGBWS === true)
+            reason = 'This step uses the global RGB working space, whose historical settings are unavailable.';
+         else {
+            source = replayProcessSource(step.source, tool);
+            if (!source) reason = 'Serialized process code is not a supported constructor and parameter assignment sequence.';
+         }
+         image.steps.push({title:step.title, number:step.displayNumber || s + 1,
+            substep:step.substepNumber || 0, tool:tool, reason:reason,
+            source:source ? source.source : '', variable:source ? source.variable : ''});
+      }
+      data.push(image);
+   }
+   return data;
+}
+
+// Shared by PJSR and the report browser. Generates plain PJSR without eval.
+function buildWorkspaceReplayScript(image, start, end) {
+   if (!image || start < 0 || end < start || end >= image.steps.length ||
+       start !== Math.floor(start) || end !== Math.floor(end)) throw Error('Select a valid step range.');
+   var selected = image.steps.slice(start, end + 1), factories = [], manifest = [];
+   for (var i = 0; i < selected.length; ++i) {
+      var step = selected[i];
+      manifest.push({title:step.title, number:step.number, substep:step.substep, reason:step.reason});
+      factories.push(step.reason ? 'null' : 'function(){\n' + step.source + '\nreturn ' + step.variable + ';\n}');
+   }
+   var lines = [
+      '// AstroProcessAtlas workflow replay — experimental v1',
+      '// Copyright (c) 2026 YoruHikari Astrophotography — https://www.yoruhikari.gr/',
+      '// SPDX-License-Identifier: MIT',
+      '// Permission is hereby granted, free of charge, to any person obtaining a copy',
+      '// of this software and associated documentation files (the "Software"), to deal',
+      '// in the Software without restriction, including without limitation the rights',
+      '// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell',
+      '// copies of the Software, and to permit persons to whom the Software is',
+      '// furnished to do so, subject to the following conditions:',
+      '// The above copyright notice and this permission notice shall be included in all',
+      '// copies or substantial portions of the Software.',
+      '// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR',
+      '// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,',
+      '// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE',
+      '// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER',
+      '// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,',
+      '// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.',
+      '// Input must contain the pixels BEFORE the first selected step.',
+      '// Never select the finished image unless it is the intended starting state.',
+      '#include <pjsr/Sizer.jsh>', '#include <pjsr/UndoFlag.jsh>',
+      '#include <pjsr/StdIcon.jsh>', '#include <pjsr/StdButton.jsh>',
+      'var replayImage = ' + JSON.stringify(image.id) + ';',
+      'var replaySteps = ' + JSON.stringify(manifest) + ';',
+      'var replayFactories = [' + factories.join(',\n') + '];',
+      'function runAtlasReplay() {',
+      '   var candidates = [];',
+      '   for(var i=0;i<ImageWindow.windows.length;++i) if(!ImageWindow.windows[i].isNull)candidates.push(ImageWindow.windows[i]);',
+      '   if(!candidates.length)throw Error("Open an image in the state BEFORE the first selected step.");',
+      '   var count=0;while(count<replaySteps.length&&!replaySteps[count].reason)++count;',
+      '   if(!count)throw Error("Replay cannot start: "+replaySteps[0].reason);',
+      '   var dialog=new Dialog;dialog.windowTitle="AstroProcessAtlas — Replay";',
+      '   var label=new Label(dialog);label.text="Input for "+replayImage+" — before step "+replaySteps[0].number;',
+      '   var combo=new ComboBox(dialog);for(var j=0;j<candidates.length;++j)combo.addItem(candidates[j].mainView.id);',
+      '   combo.currentItem=0;',
+      '   var info=new Label(dialog);info.text="Will apply "+count+" of "+replaySteps.length+" selected processes to a new copy.";',
+      '   var stop=new Label(dialog);stop.text=count<replaySteps.length?"Stops before step "+replaySteps[count].number+": "+replaySteps[count].reason:"All selected processes are supported.";',
+      '   stop.wordWrapping=true;stop.setMinWidth(480);',
+      '   var confirm=new CheckBox(dialog);confirm.text="I confirm the input is in the state BEFORE the first selected step.";',
+      '   var run=new PushButton(dialog);run.text="Run on copy";run.enabled=false;run.onClick=function(){dialog.ok();};',
+      '   confirm.onCheck=function(checked){run.enabled=checked;};',
+      '   var cancel=new PushButton(dialog);cancel.text="Cancel";cancel.onClick=function(){dialog.cancel();};',
+      '   var buttons=new HorizontalSizer;buttons.addStretch();buttons.add(run);buttons.add(cancel);',
+      '   dialog.sizer=new VerticalSizer;dialog.sizer.margin=12;dialog.sizer.spacing=8;',
+      '   dialog.sizer.add(label);dialog.sizer.add(combo);dialog.sizer.add(info);dialog.sizer.add(stop);dialog.sizer.add(confirm);dialog.sizer.add(buttons);dialog.adjustToContents();',
+      '   if(!dialog.execute()||!confirm.checked)return;',
+      '   var input=candidates[combo.currentItem];if(!input||input.isNull)throw Error("Selected input is unavailable.");',
+      '   var id="APA_replay",suffix=1;while(!View.viewById(id).isNull)id="APA_replay_"+(suffix++);',
+      '   var img=input.mainView.image;',
+      '   var output=new ImageWindow(1,1,img.numberOfChannels,img.bitsPerSample,img.isReal,img.isColor,id);',
+      '   output.mainView.beginProcess(UndoFlag_NoSwapFile);',
+      '   try{output.mainView.image.assign(img);}finally{output.mainView.endProcess();}',
+      '   output.rgbWorkingSpace=input.rgbWorkingSpace;',
+      '   output.mainView.stf=input.mainView.stf;',
+      '   output.show();',
+      '   try {',
+      '      for(var k=0;k<replaySteps.length;++k){',
+      '         if(replaySteps[k].reason)throw Error("Stopped before step "+replaySteps[k].number+": "+replaySteps[k].reason);',
+      '         Console.writeln("Replay "+(k+1)+"/"+replaySteps.length+": "+replaySteps[k].title);',
+      '         var process=replayFactories[k]();',
+      '         if(!process||typeof process.executeOn!=="function")throw Error("Required process is unavailable: "+replaySteps[k].title);',
+      '         if(process.executeOn(output.mainView)===false)throw Error("Process failed: "+replaySteps[k].title);',
+      '         processEvents();',
+      '      }',
+      '      new MessageBox("Replay complete: "+output.mainView.id,"AstroProcessAtlas",StdIcon_Information,StdButton_Ok).execute();',
+      '   }catch(error){throw Error(error.message+"\\nPartial result retained as "+output.mainView.id);}',
+      '}',
+      'try{runAtlasReplay();}catch(error){new MessageBox(error.message,"AstroProcessAtlas — Replay stopped",StdIcon_Error,StdButton_Ok).execute();}'
+   ];
+   return lines.join('\n') + '\n';
+}
+
+function workspaceReplayHTML(records) {
+   var html = '<details class="replay-workflow"><summary>Export workflow for replay (experimental)</summary>' +
+      '<p>Select an image and a consecutive range of applied processes. Run the downloaded .js in PixInsight with an input in the state BEFORE the first selected step. Replay uses a new copy and stops at the first unsupported step. Masks and historical references are not restored in this first version.</p>' +
+      '<label>Replay image <select id="replay_image" onchange="updateReplayRange(true)">';
+   for (var i = 0; i < records.length; ++i)
+      html += '<option value="' + i + '" data-no-i18n>' + escapeHTML(records[i].id) + '</option>';
+   return html + '</select></label> <label>First process <select id="replay_start" onchange="updateReplayRange(false)"></select></label> ' +
+      '<label>Last process <select id="replay_end" onchange="updateReplayRange(false)"></select></label>' +
+      '<p id="replay_status" data-no-i18n aria-live="polite"></p><ol id="replay_readiness" data-no-i18n></ol>' +
+      '<button id="replay_export" type="button" onclick="exportReplayScript()">Download PixInsight replay script</button></details>';
+}
+
 function replayStepHTML(record, step) {
    var refs = step.references || [];
    var prefix = String.fromCharCode(47, 47) + ' ';
@@ -1258,6 +1419,7 @@ function generateHistoryReport() {
    html += '<h1>AstroProcessAtlas</h1><div class="meta-info"><b>Images:</b> ' + records.length + ' · <b>Total Process Steps:</b> ' + total + ' · ' + escapeHTML((new Date()).toLocaleString()) +
       '<p>Includes the selected open images and their available initial/recent history. Closed images, older mask versions and unrecorded connections cannot be recovered automatically. Image references are detected in PixelMath, ChannelCombination, LRGBCombination, ChannelExtraction, specific image ID parameters and masks. The same initial processing may appear in multiple images.</p></div>';
    html += processingSummaryHTML(records);
+   html += workspaceReplayHTML(records);
    var tools = [], seenTools = {};
    for (var n = 0; n < graph.nodes.length; ++n) if (!graph.nodes[n].header && !seenTools['$'+graph.nodes[n].tool]) {
       seenTools['$'+graph.nodes[n].tool] = true; tools.push(graph.nodes[n].tool);
@@ -1295,7 +1457,9 @@ function generateHistoryReport() {
    // Escape HTML delimiters in inline JSON: names/code must never close a script tag.
    html += '<style>.report-filters{padding:12px;border:1px solid #45475a;display:flex;gap:12px;align-items:center;flex-wrap:wrap}.report-filters input[type=checkbox]{width:auto}.is-filtered,[hidden]{display:none!important}.compare-stage{position:relative;line-height:0}.compare-stage img{display:block;width:100%;max-width:none!important;max-height:none!important}.compare-before{position:absolute;inset:0;clip-path:inset(0 50% 0 0)}.compare-label{position:absolute;top:10px;background:#111b;padding:5px;line-height:1.3;pointer-events:none}.before-label{left:8px}.after-label{right:8px}.comparison input[type=range]{width:100%;padding:0}.comparison-unavailable{font-size:12px;color:#f9e2af}#comparison_dialog{width:min(1100px,94vw);max-height:94vh;background:#181825;color:#cdd6f4;border:1px solid #89b4fa}#comparison_dialog::backdrop{background:#000b}#comparison_viewport{overflow:auto;max-height:70vh}#comparison_content{width:100%}#comparison_dialog .comparison{width:100%}#comparison_dialog .comparison>button{display:none}.edge:focus{stroke-width:4;outline:none}.provenance-legend{font-size:13px;color:#bac2de}</style>';
    html += '<style>.zoom-control{display:inline-flex;align-items:center;gap:10px;margin:8px 0}.zoom-control span{white-space:nowrap}.zoom-control input[type=range]{width:220px;max-width:55vw;margin:0;vertical-align:middle}.graph-node.is-tool-match rect,.graph-node.is-tool-match:hover rect{stroke:#fab387!important;stroke-width:3px!important}.compare-divider{position:absolute;left:50%;top:0;bottom:0;width:2px;background:#fff;box-shadow:0 0 3px #000;pointer-events:none;z-index:2}.compare-divider span{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);border-radius:50%;padding:10px;background:#181825;border:2px solid #fff;line-height:1;color:#fff}.comparison .compare-stage .compare-slider{position:absolute;inset:0;width:100%;height:100%;margin:0;padding:0;opacity:0;cursor:ew-resize;z-index:3}.compare-stage:focus-within{outline:2px solid #fab387}.compare-label{z-index:4}#comparison_dialog{position:fixed;inset:0;z-index:10000;width:auto;max-height:none;background:#000b;border:0;padding:20px;display:flex;align-items:center;justify-content:center}.comparison-panel{background:#181825;border:1px solid #89b4fa;padding:16px;width:1100px;max-width:94vw;max-height:90vh;overflow:auto}#comparison_viewport{max-height:65vh}</style>';
-   html += '<script>var workspaceGraphData=' + JSON.stringify(graph).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026') + ';' + reportBrowserScript() + '</script></body></html>';
+   html += '<script>var workspaceGraphData=' + JSON.stringify(graph).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026') +
+      ';var workspaceReplayData=' + JSON.stringify(workspaceReplayData(records)).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026') +
+      ';' + buildWorkspaceReplayScript.toString() + ';' + reportBrowserScript() + '</script></body></html>';
    writeReportText(file, html);
    } finally { file.close(); }
    progress.update(100, 'Report complete');
@@ -1304,6 +1468,21 @@ function generateHistoryReport() {
 }
 
 var REPORT_TRANSLATIONS = [
+   ['Export workflow for replay (experimental)','Εξαγωγή ροής για επανάληψη (πειραματικό)'],
+   ['Replay image','Εικόνα επανάληψης'],['First process','Πρώτη διεργασία'],['Last process','Τελευταία διεργασία'],
+   ['Download PixInsight replay script','Λήψη script επανάληψης για το PixInsight'],
+   ['Ready for replay','Έτοιμο για επανάληψη'],
+   ['Not reached until earlier blocker is resolved.','Δεν εκτελείται μέχρι να επιλυθεί το προηγούμενο εμπόδιο.'],
+   ['No applied processes to replay.','Δεν υπάρχουν εφαρμοσμένες διεργασίες για επανάληψη.'],
+   ['consecutive processes can run from the selected input state.','συνεχόμενες διεργασίες μπορούν να εκτελεστούν από την επιλεγμένη κατάσταση εισόδου.'],
+   ['Historical mask state is unknown.','Η ιστορική κατάσταση μάσκας είναι άγνωστη.'],
+   ['This step needs the original historical mask:','Αυτό το βήμα χρειάζεται την αρχική ιστορική μάσκα:'],
+   ['This step needs historical reference images or creates another image.','Αυτό το βήμα χρειάζεται ιστορικές εικόνες αναφοράς ή δημιουργεί άλλη εικόνα.'],
+   ['This process is not supported by replay v1:','Αυτή η διεργασία δεν υποστηρίζεται από την πρώτη έκδοση επανάληψης:'],
+   ['This step uses the global RGB working space, whose historical settings are unavailable.','Αυτό το βήμα χρησιμοποιεί global RGB working space, του οποίου οι ιστορικές ρυθμίσεις δεν είναι διαθέσιμες.'],
+   ['Serialized process code is not a supported constructor and parameter assignment sequence.','Ο καταγεγραμμένος κώδικας δεν έχει υποστηριζόμενη μορφή δημιουργίας διεργασίας και ανάθεσης παραμέτρων.'],
+   ['Select an image and a consecutive range of applied processes. Run the downloaded .js in PixInsight with an input in the state BEFORE the first selected step. Replay uses a new copy and stops at the first unsupported step. Masks and historical references are not restored in this first version.',
+    'Επίλεξε εικόνα και συνεχόμενο εύρος εφαρμοσμένων διεργασιών. Εκτέλεσε το .js στο PixInsight με εικόνα στην κατάσταση ΠΡΙΝ από το πρώτο επιλεγμένο βήμα. Η επανάληψη γίνεται σε νέο αντίγραφο και σταματά στην πρώτη μη υποστηριζόμενη διεργασία. Οι μάσκες και οι ιστορικές εικόνες αναφοράς δεν αποκαθίστανται σε αυτή την πρώτη έκδοση.'],
    [
       "View.processing is unavailable in this version of PixInsight.",
       "Το View.processing δεν είναι διαθέσιμο σε αυτή την έκδοση του PixInsight."
@@ -1847,6 +2026,34 @@ function reportBrowserScript() {
 // Browser code is embedded as text: PJSR must not parse or reserialize browser-only JavaScript.
 var WORKSPACE_BROWSER_SOURCE = [
    "function workspaceBrowserMain() {",
+   "   window.updateReplayRange=function(reset){",
+   "      var choice=document.getElementById('replay_image'),first=document.getElementById('replay_start'),last=document.getElementById('replay_end');",
+   "      if(!choice||!first||!last||typeof workspaceReplayData==='undefined')return;",
+   "      var image=workspaceReplayData[Number(choice.value)];if(!image)return;",
+   "      if(reset){",
+   "         while(first.firstChild)first.removeChild(first.firstChild);while(last.firstChild)last.removeChild(last.firstChild);",
+   "         for(var i=0;i<image.steps.length;++i){",
+   "            var step=image.steps[i],label=step.number+(step.substep?'.'+step.substep:'')+' — '+step.title;",
+   "            var a=document.createElement('option');a.value=String(i);a.textContent=label;a.setAttribute('data-no-i18n','');first.appendChild(a);",
+   "            var b=document.createElement('option');b.value=String(i);b.textContent=label;b.setAttribute('data-no-i18n','');last.appendChild(b);",
+   "         }first.value='0';last.value=String(Math.max(0,image.steps.length-1));",
+   "      }",
+   "      if(Number(last.value)<Number(first.value))last.value=first.value;",
+   "      var start=Number(first.value),end=Number(last.value),ready=0,blocked=false,list=document.getElementById('replay_readiness');",
+   "      if(list)while(list.firstChild)list.removeChild(list.firstChild);",
+   "      for(var j=start;j<=end&&j<image.steps.length;++j){",
+   "         var step=image.steps[j];if(step.reason)blocked=true;if(!blocked)++ready;",
+   "         if(list){var item=document.createElement('li');item.textContent=step.number+(step.substep?'.'+step.substep:'')+' — '+step.title+': '+translated(step.reason?'STOP — '+step.reason:blocked?'Not reached until earlier blocker is resolved.':'Ready for replay');list.appendChild(item);}",
+   "      }",
+   "      var status=document.getElementById('replay_status');if(status)status.textContent=translated(image.steps.length?ready+' consecutive processes can run from the selected input state.':'No applied processes to replay.');",
+   "      var button=document.getElementById('replay_export');if(button)button.disabled=!ready;",
+   "   };",
+   "   window.exportReplayScript=function(){",
+   "      var image=workspaceReplayData[Number(document.getElementById('replay_image').value)],start=Number(document.getElementById('replay_start').value),end=Number(document.getElementById('replay_end').value);",
+   "      if(!image||!image.steps[start]||image.steps[start].reason)return;",
+   "      var code=buildWorkspaceReplayScript(image,start,end),blob=new Blob([code],{type:'text/javascript;charset=utf-8'}),url=URL.createObjectURL(blob);",
+   "      var link=document.createElement('a');link.href=url;link.download='AstroProcessAtlas_replay_'+image.id.replace(/[^A-Za-z0-9_-]/g,'_')+'.js';document.body.appendChild(link);link.click();document.body.removeChild(link);setTimeout(function(){URL.revokeObjectURL(url);},1000);",
+   "   };",
    "   if(typeof reportEmbeddedAssets!=='undefined'){",
    "      var assets=document.querySelectorAll('[src],[href],[data-before],[data-after]');",
    "      for(var ai=0;ai<assets.length;++ai)for(var aj=0;aj<4;++aj){",
@@ -1889,6 +2096,7 @@ var WORKSPACE_BROWSER_SOURCE = [
    "         }",
    "      }",
    "      var selector=document.getElementById('report_language');if(selector)selector.value=reportLanguage;",
+   "      window.updateReplayRange(false);",
    "   };",
    "   var selectedNode = null;",
    "   window.selectFinalImage=function(id){",
@@ -2317,6 +2525,7 @@ var WORKSPACE_BROWSER_SOURCE = [
    "      reader.onerror=function(){status('Could not read the file.');};reader.readAsText(input.files[0]);",
    "   };",
    "   collectStagePreviews();",
+   "   window.updateReplayRange(true);",
    "   try{var savedAnnotations=window.localStorage.getItem(annotationKey);if(savedAnnotations){manual=validatedAnnotations(JSON.parse(savedAnnotations));draw();}}catch(e){status('Saved connections could not be restored. Import your JSON backup.');}",
    "   var topButton=document.getElementById('back_to_top');",
    "   function updateTopButton(){if(topButton)topButton.hidden=(window.scrollY||window.pageYOffset||0)<500;}",
