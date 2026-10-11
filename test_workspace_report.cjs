@@ -486,3 +486,12 @@ assert.ok(firstMaskMarkup.includes('class="step-card"'),'Continue emitting detai
 console.log('Passed: shared current/historical masks across images embed once without opening asset references as files, and report details remain available.');
 
 }
+
+assert.equal(graph.nodes.find(n=>n.id==='image_0').isColor,false);
+assert.equal(graph.nodes.find(n=>n.id==='image_4').isColor,true);
+assert.equal((overview.match(/class="image-color-badge"/g)||[]).length,5);
+assert.ok(overview.includes('aria-label="Color image (current state)"'));
+assert.ok(overview.includes('aria-label="Grayscale image (current state)"'));
+assert.equal(helper.imageColorBadge({header:false,isColor:true}), '');
+assert.equal(helper.imageColorBadge({header:true}), '', 'Do not guess an unknown color mode');
+console.log('Passed: grayscale/color SVG badges on image headers only, current-state labels and unknown-mode handling.');

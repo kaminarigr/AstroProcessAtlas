@@ -713,12 +713,28 @@ function workspaceStepGroups(record) {
    return groups;
 }
 
+function imageColorBadge(node) {
+   if (!node.header || typeof node.isColor !== 'boolean') return '';
+   var x = node.x + 20, y = node.y + 21, radius = 8;
+   var html = '<g class="image-color-badge" role="img" aria-label="' + (node.isColor ? 'Color image (current state)' : 'Grayscale image (current state)') + '"><title>' + (node.isColor ? 'Color image (current state)' : 'Grayscale image (current state)') + '</title>';
+   if (node.isColor) {
+      var colors = ['#ff453a', '#ff9f0a', '#ffd60a', '#30d158', '#0a84ff', '#bf5af2'];
+      for (var i = 0; i < colors.length; ++i) {
+         var a = i * Math.PI / 3 - Math.PI / 2, b = a + Math.PI / 3;
+         html += '<path fill="' + colors[i] + '" d="M' + x + ',' + y + ' L' + (x+radius*Math.cos(a)) + ',' + (y+radius*Math.sin(a)) + ' A8,8 0 0,1 ' + (x+radius*Math.cos(b)) + ',' + (y+radius*Math.sin(b)) + ' Z"/>';
+      }
+   } else {
+      html += '<circle cx="' + x + '" cy="' + y + '" r="8" fill="#fff"/><path fill="#000" d="M' + x + ',' + (y-8) + ' A8,8 0 0,0 ' + x + ',' + (y+8) + ' Z"/>';
+   }
+   return html + '<circle cx="' + x + '" cy="' + y + '" r="8" fill="none" stroke="#bac2de" stroke-width="1"/></g>';
+}
+
 function workspaceGraph(records) {
    var graph = {nodes:[], edges:[], unresolved:[]}, headerById = {};
    for (var r = 0; r < records.length; ++r) {
       var record = records[r];
       headerById["$" + record.id] = record.anchor;
-      graph.nodes.push({id:record.anchor, image:record.id, label:record.id, x:24+r*290, y:30, header:true});
+      graph.nodes.push({id:record.anchor, image:record.id, label:record.id, x:24+r*290, y:30, header:true, isColor:record.isColor});
       var previous = record.anchor;
       var groups = workspaceStepGroups(record);
       for (var i = 0; i < groups.length; ++i) {
@@ -900,7 +916,7 @@ function workspaceOverviewHTML(records, graph) {
       html += '<a href="#' + node.id + '" onclick="selectGraphNode(\'' + node.id + '\',event)" onfocus="focusGraphImage(\'' + node.id + '\')" onblur="clearGraphFocus()"><g data-node="' + node.id + '" onmouseenter="focusGraphImage(\'' + node.id + '\')" onmouseleave="clearGraphFocus()" class="graph-node' + (node.redo ? ' redo-node' : '') + '">' +
          '<rect x="' + node.x + '" y="' + node.y + '" width="250" height="72" rx="8"/>' +
          '<title data-no-i18n>' + escapeHTML(node.label + (node.time ? ' — ' + node.time : '')) + '</title>' +
-         '<text data-no-i18n x="' + (node.x+10) + '" y="' + (node.y+26) + '">' + escapeHTML(node.label.length > 31 ? node.label.slice(0,28)+'…' : node.label) + '</text>' +
+         imageColorBadge(node) + '<text data-no-i18n x="' + (node.x+(node.header ? 36 : 10)) + '" y="' + (node.y+26) + '">' + escapeHTML(node.label.length > (node.header ? 27 : 31) ? node.label.slice(0,node.header ? 24 : 28)+'…' : node.label) + '</text>' +
          '<text class="graph-small" x="' + (node.x+10) + '" y="' + (node.y+50) + '">' + escapeHTML(subtitle) + '</text></g></a>';
    }
    html += '</svg></div>';
@@ -1748,6 +1764,7 @@ REPORT_TRANSLATIONS = REPORT_TRANSLATIONS.concat([
    ['Final image selection is saved in this browser. It does not rewrite the HTML file.','Η επιλογή τελικής εικόνας αποθηκεύεται σε αυτόν τον browser. Δεν αλλάζει το αρχείο HTML.'],
    ['Copy step for replay','Αντιγραφή βήματος για επανάληψη'],['Process code with requirements','Κώδικας process με προϋποθέσεις'],
    ['Replay requirements: use the image state before this step, matching reference images and the recorded mask state. Historical source and mask pixels may be unavailable. Review execution targets and output settings.','Προϋποθέσεις επανάληψης: χρησιμοποίησε την κατάσταση της εικόνας πριν από το βήμα, τις αντίστοιχες εικόνες αναφοράς και την καταγεγραμμένη κατάσταση μάσκας. Τα ιστορικά pixels εισόδου και μάσκας μπορεί να μην είναι διαθέσιμα. Έλεγξε τους στόχους εκτέλεσης και τις ρυθμίσεις εξόδου.'],
+   ['Color image (current state)','Έγχρωμη εικόνα (τρέχουσα κατάσταση)'],['Grayscale image (current state)','Ασπρόμαυρη εικόνα (τρέχουσα κατάσταση)'],
    ['Before / after','Πριν / μετά'],['Before','Πριν'],['After','Μετά'],['Enlarge comparison','Μεγέθυνση σύγκρισης'],
    ['Before/after comparison unavailable: historical pixels are missing.','Η σύγκριση πριν/μετά δεν είναι διαθέσιμη: λείπουν ιστορικά pixels.'],
    ['Before/after comparison unavailable: image dimensions changed.','Η σύγκριση πριν/μετά δεν είναι διαθέσιμη: άλλαξαν οι διαστάσεις της εικόνας.'],

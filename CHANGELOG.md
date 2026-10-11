@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Show grayscale and color circle badges beside image names in the graph,
+  based on the current image color mode.
+
 - Fix single-file export when the same mask thumbnail is shared by multiple
   history steps or images. Embedded asset references are no longer opened as files.
 
