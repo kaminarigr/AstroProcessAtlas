@@ -62,7 +62,7 @@ assert.throws(()=>api.buildWorkspaceReplayScript(plan,0,99),/valid step range/);
 assert.throws(()=>api.buildWorkspaceReplayScript(plan,0.5,1),/valid step range/);
 
 function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImages=false,gradientMissing=false,gradientFail=false,
-  starMissing=false,starFail=false,paletteMissing=false,paletteFail=false,nbMissing=false,nbFail=false,sccMissing=false,sccFail=false,rgbMissing=false,rgbFail=false,sourceChanged=false,scriptRecords=[],initialScripts=false,channels=[],choices=[],states=[],prepFail=false,
+  starMissing=false,starFail=false,paletteMissing=false,paletteFail=false,nbMissing=false,nbFail=false,sccMissing=false,sccFail=false,sourceChanged=false,scriptRecords=[],initialScripts=false,channels=[],choices=[],states=[],prepFail=false,
   dseCancel=false,dseOtherTarget=false,dseFail=false,mltMissing=false,maskCancel=false,maskBlend=false,unsharpMissing=false,maskChoices=[],maskInvertChoices=[],orientations=[1],inputId='Ha_input',existingIds=['Ha_input_APA_replay']}={}) {
   const calls=[], messages=[], outputs=[], gradientParameters=[], starParameters=[],paletteParameters=[],nbParameters=[],sccParameters=[],combos=[],maskApplications=[],unsharpParameters=[];let checkbox,maskPrompts=0;
   const input={isNull:false,rgbWorkingSpace:{gamma:2.2},mainView:{id:inputId,stf:[[1,2]],
@@ -106,12 +106,6 @@ function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImage
   if(!unsharpMissing)context.UnsharpMask=function(){this.executeOn=view=>{calls.push('USM');unsharpParameters.push({...this});const output=outputs[outputs.length-1];maskApplications.push({name:output.mask&&output.mask.mainView.id,inverted:output.maskInverted,enabled:output.maskEnabled});view.image.pixels[0]+=0.1;return !fail;};};
   context.Script=function(){throw Error('Native Script properties are read-only; construction is not a replay mechanism.');};
   context.Parameters={isViewTarget:false,targetView:input.mainView};
-  if(!rgbMissing)context.RGBWorkingSpace=function(){this.executeOn=view=>{
-    assert.equal(view,outputs[outputs.length-1].mainView);
-    assert.equal(JSON.stringify(this.channels),JSON.stringify([[1,0.648431,0.330856],[1,0.321152,0.597871],[1,0.155886,0.066044]]));
-    assert.equal(this.gamma,2.2);assert.equal(this.sRGBGamma,true);assert.equal(this.applyGlobalRGBWS,false);
-    calls.push('RGBWS');return !rgbFail;
-  };};
   context.File={readFile(){if(sccMissing)throw Error('SelectiveColorCorrection installed source is missing.');return Buffer.from(selectiveFixture+(sourceChanged?'changed':''));}};
   context.CryptographicHash_SHA256=api.CryptographicHash_SHA256;
   context.CryptographicHash=api.CryptographicHash;
@@ -533,19 +527,10 @@ console.log('Passed: StarXTerminator both stars flags, optional output reference
    assert.ok(!plan.steps.some(s=>s.tool==='RGBWorkingSpace'));
    const code=api.buildWorkspaceReplayScript(plan,0,plan.steps.length-1),result=run(code,{scriptRecords:[proc]});
    assert.equal(result.calls.filter(c=>c==='SCC').length,1);
-   assert.equal((entry.preparations||[]).length,steps.includes(ws)?2:0);
-   assert.deepEqual(result.calls.filter(c=>c==='RGBWS'||c==='SCC'),steps.includes(ws)?['RGBWS','RGBWS','SCC']:['SCC']);
    assert.ok(result.calls.includes(steps[steps.length-1]===ct?'CT':'HT'));
    assert.equal(result.sccParameters[0].md5sum,checksum);
    assert.equal(JSON.stringify(result.sccParameters[0].parameters),JSON.stringify(parameters));
    assert.match(result.messages[0],/Replay complete/);
-   if(steps.includes(ws))for(const options of [{rgbMissing:true},{rgbFail:true}]) {
-     const stopped=run(code,options);
-     assert.match(stopped.messages[0],/RGBWorkingSpace/);
-     assert.match(stopped.messages[0],/Partial result retained/);
-     assert.ok(!stopped.calls.includes('SCC'));
-     assert.ok(!stopped.calls.includes(steps[steps.length-1]===ct?'CT':'HT'));
-   }
    for(const options of [{sccMissing:true},{sccFail:true}]) {
      const stopped=run(code,{scriptRecords:[proc],...options});assert.match(stopped.messages[0],/Script|SelectiveColorCorrection/);
      assert.match(stopped.messages[0],/Partial result retained/);

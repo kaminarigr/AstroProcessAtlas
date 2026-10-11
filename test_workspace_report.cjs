@@ -989,7 +989,7 @@ console.log('Passed: arbitrary current/before/after selection, shared comparison
  assert.ok(!exportedBlob.includes('new Script'),'Never write read-only native Script properties');
  assert.match(exportedBlob,/function runSelectiveReplay/);
  assert.match(exportedBlob,/#include "\/fixture\/src\/scripts\/Toolbox\/SelectiveColorCorrection.js"/);
- assert.equal((exportedBlob.match(/new RGBWorkingSpace/g)||[]).length,2,'Both recorded components execute within the parent');
+ assert.ok(!exportedBlob.includes('new RGBWorkingSpace'),'Internal settings are delegated to the installed script');
  const imported=helper.collectWorkspaceRecord(image('ImportedSelective',[ws,ws,makeProcess('Script',{filePath:scc.filePath,md5sum:scc.md5sum,parameters:Object.entries({...values,filterMethod:'Imported Mask'})})]),118);
  const plan=helper.workspaceReplayData([imported])[0];
  assert.match(plan.steps[0].reason,/imported mask/);

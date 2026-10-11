@@ -245,16 +245,14 @@ When two consecutive RGBWorkingSpace entries match the installed
 SelectiveColorCorrection helper parameters and immediately precede that script
 in the same history phase and applied/redo state, they appear as component steps
 of one SelectiveColorCorrection group. Their parameters and thumbnails remain
-available. Workflow replay executes both recorded RGBWorkingSpace components in
-history order before the installed script, within the same parent step, when
-complete settings and checksum are available. Different
+available. These internal RGBWorkingSpace entries are omitted from workflow replay;
+the parent executes through the installed script when complete settings and checksum are available. Different
 settings, isolated entries and intervening operations remain independent steps.
 
 All grouped operations, including PerfectPalettePicker, appear once in the replay
 list. Component steps (including internal PixelMath or RGBWorkingSpace) remain
 visible in the report but have no independent replay-copy control and are not
-exported as separate steps. Supported parents can execute their recorded components
-internally. Unsupported parent tools remain blockers; execution cannot bypass them.
+exported. Unsupported parent tools remain blockers; execution cannot bypass them.
 
 PerfectPalettePicker replay supports its recorded final multi-channel arithmetic
 PixelMath combination as one parent operation. Start the export range at that
@@ -291,11 +289,8 @@ SelectiveColorCorrection replay includes the installed Toolbox source inside an
 isolated function and supplies the complete saved parameter table through a local
 view-target Parameters adapter. This avoids both read-only Script properties and
 PixInsight's prohibition on recursive Script execution. It runs once per parent
-operation on the current result. Grouped operations first apply both recorded
-RGBWorkingSpace components in order, then run the installed script and its mask
-generation. A failed component stops replay before the script and later steps.
-Standalone Script entries do not invent missing components. No original
-image/history needs to remain open for this operation.
+operation on the current result, regenerating internal RGBWorkingSpace settings
+and masks. No original image/history needs to remain open for this operation.
 
 The replay file references the installed source by an absolute include path. The
 source and its companion library must remain installed at that path; export a new
