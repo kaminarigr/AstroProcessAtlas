@@ -58,27 +58,28 @@ assert.throws(()=>api.buildWorkspaceReplayScript(plan,0,99),/valid step range/);
 assert.throws(()=>api.buildWorkspaceReplayScript(plan,0.5,1),/valid step range/);
 
 function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImages=false,gradientMissing=false,gradientFail=false,
-  starMissing=false,starFail=false,paletteMissing=false,paletteFail=false,nbMissing=false,nbFail=false,channels=[],choices=[],
+  starMissing=false,starFail=false,paletteMissing=false,paletteFail=false,nbMissing=false,nbFail=false,channels=[],choices=[],states=[],prepFail=false,
   inputId='Ha_input',existingIds=['Ha_input_APA_replay']}={}) {
   const calls=[], messages=[], outputs=[], gradientParameters=[], starParameters=[],paletteParameters=[],nbParameters=[],combos=[];let checkbox;
   const input={isNull:false,rgbWorkingSpace:{gamma:2.2},mainView:{id:inputId,stf:[[1,2]],
     image:{width:2,height:1,numberOfChannels:1,bitsPerSample:32,isReal:true,isColor:false,pixels:[0.1,0.2]}}};
   function ImageWindow(w,h,channelCount,bits,real,color,id){
     this.isNull=false;this.mainView={id,beginProcess(){calls.push('begin');},endProcess(){calls.push('end');},
-      image:{assign(image){this.pixels=image.pixels.slice();calls.push('copy');},fill(value){this.pixels=[value,value];calls.push('fill');}}};
+      image:{width:w,height:h,isColor:color,assign(image){this.pixels=image.pixels.slice();calls.push('copy');},fill(value){this.pixels=[value,value];calls.push('fill');}}};
     this.show=()=>calls.push('show');outputs.push(this);
-    assert.equal(w,channels.length?2:1);assert.equal(h,1);assert.equal(bits,32);assert.equal(real,true);
-    if(channels.length){assert.equal(channelCount,3);assert.equal(color,true);}
+    this.forceClose=()=>{this.isNull=true;};
+    assert.equal(w,channels.length?2:1);assert.equal(h,1);assert.ok(bits===32||bits===64);assert.equal(real,true);
+    if(channels.length&&color)assert.equal(channelCount,3);
   }
   ImageWindow.windows=noImages?[]:[input,...channels];
   function Sizer(){this.add=()=>{};this.addStretch=()=>{};}
   function Process(){this.executeOn=view=>{assert.notEqual(view,input.mainView);
-    assert.equal(view,outputs[0].mainView,'Continue on the replay copy even if diagnostic output becomes active');
+    assert.equal(view,outputs[outputs.length-1].mainView,'Continue on the replay copy even if diagnostic output becomes active');
     calls.push(this.H?'HT':'CT');view.image.pixels[0]+=1;return !fail;};}
   const context={ImageWindow,View:{viewById:id=>({isNull:!existingIds.includes(id)})},
     Dialog:function(){this.ok=()=>{};this.cancel=()=>{};this.adjustToContents=()=>{};
-      this.execute=()=>{checkbox.checked=confirm;for(let i=0;i<choices.length;i++)combos[i+1].currentItem=choices[i];return !cancel;};},
-    CheckBox:function(){checkbox=this;}, ComboBox:function(){this.addItem=()=>{};combos.push(this);},
+      this.execute=()=>{checkbox.checked=confirm;const inputs=combos.filter(c=>c.items[0]!=='Choose input state');const stateBoxes=combos.filter(c=>c.items[0]==='Choose input state');for(let i=0;i<choices.length;i++)inputs[i+1].currentItem=choices[i];stateBoxes.forEach((c,i)=>c.currentItem=states[i]===undefined?1:states[i]);return !cancel;};},
+    CheckBox:function(){checkbox=this;}, ComboBox:function(){this.items=[];this.addItem=v=>this.items.push(v);combos.push(this);},
     Label:function(){this.setMinWidth=()=>{};},PushButton:function(){},HorizontalSizer:Sizer,VerticalSizer:Sizer,
     MessageBox:function(message){this.execute=()=>messages.push(message);},
     HistogramTransformation:Process,Console:{writeln(){}},processEvents(){},
@@ -103,7 +104,20 @@ function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImage
     context.NarrowbandNormalization.prototype.Lightness_Preserve=1;
   }
   if(!paletteMissing)context.PixelMath=function(){this.executeOn=view=>{
-    assert.equal(view,outputs[0].mainView);calls.push('PM');paletteParameters.push({...this});
+    if(this.useSingleExpression){
+      assert.notEqual(view,input.mainView);calls.push('stretch');paletteParameters.push({...this});
+      const values=view.image.pixels,median=values.reduce((a,b)=>a+b,0)/values.length;
+      if(this.expression.includes('sdev')) {
+        const sigma=Math.sqrt(values.reduce((a,b)=>a+(b-median)**2,0)/values.length);
+        const black=Math.max(Math.min(...values),median-2.7*sigma);
+        view.image.pixels=values.map(v=>Math.max(0,Math.min(1,(v-black)/(1-black))));
+      }else {
+        const mtf=(m,x)=>x===0?0:x===1?1:(m-1)*x/((2*m-1)*x-m);
+        const m=mtf(0.25,median);view.image.pixels=values.map(v=>mtf(m,v));
+      }
+      return !prepFail;
+    }
+    assert.equal(view,outputs[outputs.length-1].mainView);calls.push('PM');paletteParameters.push({...this});
     view.image.pixels[0]=0.5;return !paletteFail;
   };};
   if(!starMissing)context.StarXTerminator=function(){this.executeOn=view=>{
@@ -334,4 +348,40 @@ console.log('Passed: StarXTerminator both stars flags, optional output reference
  assert.deepEqual(combined.calls,['begin','fill','end','show','PM','NBN','HT']);
  assert.equal(combined.outputs.length,1,'NBN continues on the RGB palette output');
  console.log('Passed: NarrowbandNormalization first/middle replay, native parameters/enums, same output target, missing module/failure/cancel and historical blockers.');
+}
+
+{
+ const paletteStep={title:'PerfectPalettePicker',number:1,substep:0,tool:'PerfectPalettePicker',reason:'',
+   action:'palette',inputs:['Ha_old','O_old'],variable:'P',source:'var P=new PixelMath; P.useSingleExpression=false; P.expression="Ha_old"; P.expression1="O_old"; P.expression2="Ha_old+O_old";'};
+ const workflow={id:'StretchedPalette',steps:[paletteStep]};
+ const code=api.buildWorkspaceReplayScript(workflow,0,0);
+ const channel={isNull:false,mainView:{id:'O_ready',image:{width:2,height:1,numberOfChannels:1,bitsPerSample:32,isReal:true,isColor:false,pixels:[0.3,0.4]}}};
+ const result=run(code,{channels:[channel],choices:[0,1],states:[2,1]});
+ assert.equal(result.calls.filter(c=>c==='stretch').length,2,'Stretch selected linear input in two passes');
+ assert.equal(result.outputs.length,2,'One temporary copy and one RGB result');
+ assert.equal(result.outputs[0].isNull,true,'Close only the temporary copy');
+ assert.equal(result.outputs[1].isNull,false,'Keep RGB result');
+ assert.equal(result.paletteParameters[2].expression,'Ha_input_APA_ppp_input');
+ assert.equal(result.paletteParameters[2].expression1,'O_ready','Prepared channel remains unstretched');
+ assert.deepEqual(channel.mainView.image.pixels,[0.3,0.4]);
+ const pixels=result.outputs[0].mainView.image.pixels;
+ // Verify the independently generated transfer against the original rational
+ // transfer on the two samples after blackpoint normalization.
+ const normalized=[0,(0.2-0.1)/(1-0.1)],median=(normalized[0]+normalized[1])/2;
+ const expected=normalized.map(x=>((median-1)*0.25*x)/(median*(0.25+x-1)-0.25*x));
+ pixels.forEach((x,i)=>assert.ok(Math.abs(x-expected[i])<1e-12));
+ assert.match(result.messages[0],/Replay complete/);
+ const unset=run(code,{channels:[channel],choices:[0,1],states:[0,1]});
+ assert.equal(unset.outputs.length,0);assert.match(unset.messages[0],/Choose the preparation state/);
+ const failed=run(code,{channels:[channel],choices:[0,1],states:[2,1],prepFail:true});
+ assert.match(failed.messages[0],/PPP input stretch failed/);
+ assert.equal(failed.outputs.length,1);assert.equal(failed.outputs[0].isNull,true);
+ const reused=run(code,{channels:[channel],choices:[0,0],states:[2,2]});
+ assert.equal(reused.calls.filter(c=>c==='stretch').length,2,'Shared linear source is prepared once');
+ assert.equal(reused.outputs.length,2);
+ const pmFailure=run(code,{channels:[channel],choices:[0,1],states:[2,1],paletteFail:true});
+ assert.equal(pmFailure.outputs[0].isNull,true);
+ assert.equal(pmFailure.outputs[1].isNull,false);
+ assert.match(pmFailure.messages[0],/Partial result retained/);
+ console.log('Passed: explicit PPP input state, real blackpoint/median stretch equivalence, prepared bypass, untouched inputs, shared-copy reuse and cleanup on success/failure.');
 }

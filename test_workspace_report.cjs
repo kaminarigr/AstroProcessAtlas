@@ -913,7 +913,7 @@ console.log('Passed: arbitrary current/before/after selection, shared comparison
    assert.ok(!helper.replayStepHTML(rec,component).includes('Copy step for replay'));
  }
  const exported=helper.buildWorkspaceReplayScript(plan,0,2);
- assert.ok(!exported.includes('new PixelMath'));
+ assert.ok(!exported.includes('P.expression="Ha"'),'Do not export the blocked recorded component');
  const stop=JSON.parse(exported.match(/var replaySteps = (.*);/)[1]);
  assert.equal(stop.length,3);
  assert.ok(stop[1].reason);
@@ -934,7 +934,7 @@ console.log('Passed: arbitrary current/before/after selection, shared comparison
  assert.match(elements.replay_readiness.children[0].textContent,/Choose prepared inputs/);
  assert.match(elements.replay_status.textContent,/2 consecutive/);
  browser.window.exportReplayScript();
- assert.match(exportedBlob,/select the prepared channel inputs/);
+ assert.match(exportedBlob,/select each input and its preparation state/);
  new vm.Script(exportedBlob.replace(/^#.*$/gm,''));
  browser.workspaceReplayData=[{id:'LaterPalette',steps:[browser.workspaceReplayData[0].steps[1],browser.workspaceReplayData[0].steps[0]]}];
  browser.window.updateReplayRange(true);

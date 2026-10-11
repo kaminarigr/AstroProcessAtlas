@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Fix linear PerfectPalettePicker replay by requiring an explicit state for each
+  selected input. Optionally apply blackpoint normalization and a median-0.25
+  transfer to private channel copies before combination; bypass preparation for
+  already prepared inputs, reuse shared copies and close temporary images on success
+  or failure. Retain original inputs and any partial RGB result.
+
 - Support NarrowbandNormalization with complete recorded parameters. Use the selected
   starting image when first, or the existing replay result (including a palette RGB
   result) when intermediate; preserve historical mask/reference and failure checks.

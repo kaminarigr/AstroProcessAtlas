@@ -207,15 +207,15 @@ exported. Unsupported parent tools remain blockers; execution cannot bypass them
 
 PerfectPalettePicker replay supports its recorded final multi-channel arithmetic
 PixelMath combination as one parent operation. Start the export range at that
-step. In PixInsight select a prepared grayscale image for each historical image
+step. In PixInsight select a grayscale image and its preparation state for each historical image
 identifier displayed in the dialog; names may differ from the recorded names.
 Dimensions must match. Replay creates a new RGB image named after the report image
 (or selected ImageIdentifier) plus `_APA_replay`, then runs subsequent supported
 steps on that result. Input images remain unchanged.
 
 This repeats the captured final combination, not the original interactive script
-or its earlier channel extraction, stretching and preparation. Supply images at
-that prepared state. Missing final PixelMath, masks, single-expression mode,
+or its earlier channel extraction and OSC preparation. Supply images at
+that prepared state, or select the linear-input stretch. Missing final PixelMath, masks, single-expression mode,
 custom symbols, alpha expressions or formulas beyond the supported arithmetic
 remain blockers. Other grouped scripts and standalone PixelMath remain unsupported.
 
@@ -225,3 +225,13 @@ replay runs on a new copy. As an intermediate step it uses the existing replay
 result, including a preceding PerfectPalettePicker RGB result, without a second
 input selection. The installed module is required; historical masks/references
 and invalid serialization remain blockers.
+
+For PerfectPalettePicker, each input now requires an explicit preparation state:
+**Already prepared** or **Linear - apply PPP stretch (median 0.25) on a copy**.
+The linear option normalizes the blackpoint using the larger of the minimum and
+median minus 2.7 standard deviations, then applies a midtones transfer targeting
+median 0.25 before combination. It modifies temporary copies, not the selected
+images, and closes those copies after execution or failure. Choose already
+prepared for channels at the original combination state to avoid stretching twice.
+This recovers the installed PPP linear-input preparation; other unrecorded steps
+(including OSC extraction/averaging or an unidentified Script) are not inferred.
