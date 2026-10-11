@@ -743,6 +743,10 @@ console.log('Passed: arbitrary current/before/after selection, shared comparison
  assert.equal(elements.replay_export.disabled,false,'Unknown inversion is resolved in PixInsight');
  assert.match(elements.replay_readiness.children[0].textContent,/inversion not recorded; choose Color invert/);
  assert.ok(!elements.replay_readiness.children[0].textContent.includes('STOP'));
+ browser.workspaceReplayData=[{id:'DSE',steps:[{...readyStep,title:'DarkStructureEnhance',action:'dark',warning:'DarkStructureEnhance settings were not recorded. Choose them manually in PixInsight.'}]}];
+ browser.window.updateReplayRange(true);assert.equal(elements.replay_export.disabled,false);
+ assert.equal(elements.replay_readiness.children[0].className,'replay-warning');assert.match(elements.replay_readiness.children[0].textContent,/WARNING/);
+ browser.window.setReportLanguage('el');assert.match(elements.replay_readiness.children[0].textContent,/χειροκίνητα/);browser.window.setReportLanguage('en');
 }
 
 // A clone branches at its common prefix; retained live indices still address real pixels.

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Support serialized MultiscaleLinearTransform replay. Support DarkStructureEnhance
+  as an interactive step using its installed algorithm, preserving attribution and
+  GPL v3 in combined exports. Prompt for original settings because history records
+  none, enforce the replay-copy target, fingerprint source and stop on cancellation,
+  source changes or failure. Mark manual settings with orange WARNING. Native
+  PixInsight validation remains required.
+
 - Reopen the mask picker at every masked replay step, allowing different image
   versions and Color invert overrides. Preselect previous choices for that mask
   name and show the step number/title and available timestamp. Timestamps provide

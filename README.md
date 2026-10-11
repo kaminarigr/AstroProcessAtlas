@@ -74,7 +74,7 @@ processing suffixes. Suggestions remain editable.
 
 The first implementation supports independent, in-place HistogramTransformation,
 CurvesTransformation, RGBWorkingSpace, SCNR, ColorSaturation, BlurXTerminator,
-NoiseXTerminator, GradientCorrection, StarXTerminator, NarrowbandNormalization and UnsharpMask instances with supported serialization and no
+NoiseXTerminator, GradientCorrection, StarXTerminator, NarrowbandNormalization, UnsharpMask and MultiscaleLinearTransform instances with supported serialization and no
 historical input references. StarXTerminator output references are allowed.
 RGBWorkingSpace steps that use historical global settings are blocked.
 Required tools, licenses and matching models must already be available in PixInsight.
@@ -113,6 +113,18 @@ Timestamps can help compare a target step with a mask's Invert/Blur history, but
 are not proof of its pixel version: times can be missing or inherited, and the
 history does not link the target operation to an exact mask-history position.
 Historical pixels, masks and missing inputs are not bundled in the exported script.
+
+DarkStructureEnhance is supported as an interactive replay step using the installed
+`scripts/misc/DarkStructureEnhance.js` algorithm. Its Script history has no saved
+settings, so the report shows an orange WARNING and the original settings dialog
+opens during replay. Re-enter the original settings; defaults are not recovered
+historical settings. The selected target must remain the replay copy. Cancellation,
+source changes or failure stop the workflow and retain the partial result. External
+masking and unknown serialized parameter variants remain blocked. The adapted
+installed source is embedded in this export, with its original attribution and
+full GPL v3 license. Replay exports containing it are GPL-3.0-only; AstroProcessAtlas
+itself remains MIT. No recursive native Script execution is used. Native PixInsight
+testing of this new support is still required.
 
 GradientCorrection preserves its original serialized thresholds, scale, convergence,
 protection and model-generation settings. Diagnostic model/protection images may be

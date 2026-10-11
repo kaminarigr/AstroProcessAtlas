@@ -5,7 +5,8 @@ const source = fs.readFileSync(__dirname + '/AstroProcessAtlas.js', 'utf8')
   .replace(/^#.*$/gm, '').replace(/generateHistoryReport\(\);\s*$/, '');
 const crypto = require('node:crypto');
 const selectiveFixture='function main(){if(!Parameters.isViewTarget)throw Error("Unexpected interactive entry");runSCCFixture(Parameters,template);} main();';
-const api = {Console:{writeln(){}},coreSrcDirPath:'/fixture/src',File:{readFile:()=>Buffer.from(selectiveFixture)},
+const darkFixture='/* GNU General Public License */\nvar window = ImageWindow.activeWindow;\nfunction DarkMaskLayersData(){this.targetView = window.currentView;}\nvar data=new DarkMaskLayersData;\nfunction DarkMaskLayersDialog(){this.execute=function(){return runDSESettingsFixture(data,target);};}\nfunction doDark(data){runDSEFixture(data,target);}\nfunction main(){}\nmain();';
+const api = {Console:{writeln(){}},coreSrcDirPath:'/fixture/src',File:{readFile:()=>Buffer.from(selectiveFixture),readTextFile:()=>darkFixture},
   CryptographicHash_SHA256:256,CryptographicHash:function(){this.hash=bytes=>({toHex:()=>crypto.createHash('sha256').update(bytes).digest('hex')});}};
 vm.runInNewContext(source, api);
 function step(tool, parameters='', extra={}) {
@@ -62,7 +63,7 @@ assert.throws(()=>api.buildWorkspaceReplayScript(plan,0.5,1),/valid step range/)
 
 function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImages=false,gradientMissing=false,gradientFail=false,
   starMissing=false,starFail=false,paletteMissing=false,paletteFail=false,nbMissing=false,nbFail=false,sccMissing=false,sccFail=false,sourceChanged=false,scriptRecords=[],initialScripts=false,channels=[],choices=[],states=[],prepFail=false,
-  maskCancel=false,maskBlend=false,unsharpMissing=false,maskChoices=[],maskInvertChoices=[],orientations=[1],inputId='Ha_input',existingIds=['Ha_input_APA_replay']}={}) {
+  dseCancel=false,dseOtherTarget=false,dseFail=false,mltMissing=false,maskCancel=false,maskBlend=false,unsharpMissing=false,maskChoices=[],maskInvertChoices=[],orientations=[1],inputId='Ha_input',existingIds=['Ha_input_APA_replay']}={}) {
   const calls=[], messages=[], outputs=[], gradientParameters=[], starParameters=[],paletteParameters=[],nbParameters=[],sccParameters=[],combos=[],maskApplications=[],unsharpParameters=[];let checkbox,maskPrompts=0;
   const input={isNull:false,rgbWorkingSpace:{gamma:2.2},mainView:{id:inputId,stf:[[1,2]],
     image:{width:2,height:1,numberOfChannels:1,bitsPerSample:32,isReal:true,isColor:false,pixels:[0.1,0.2]}}};
@@ -70,6 +71,7 @@ function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImage
     this.isNull=false;this.mainView={id,beginProcess(){calls.push('begin');},endProcess(){calls.push('end');},
       image:{width:w,height:h,isColor:color,assign(image){this.width=image.width;this.height=image.height;this.pixels=image.pixels.slice();calls.push('copy');},fill(value){this.pixels=[value,value];calls.push('fill');}}};
     this.show=()=>calls.push('show');outputs.push(this);
+    this.mainView.window=this;
     this.removeMask=()=>{this.mask=null;this.maskEnabled=false;};this.setMask=window=>{this.mask=window;};
     this.forceClose=()=>{this.isNull=true;};
     assert.ok(w===1||w===2);assert.equal(h,1);assert.ok(bits===32||bits===64);assert.equal(real,true);
@@ -98,6 +100,9 @@ function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImage
     return !gradientFail;
   };};
   if(!missing)context.CurvesTransformation=Process;
+  if(!mltMissing)context.MultiscaleLinearTransform=function(){this.executeOn=view=>{assert.equal(view,outputs[outputs.length-1].mainView);calls.push('MLT');assert.equal(this.layers[0][4],0.75);view.image.pixels[0]+=0.2;return !fail;};};
+  context.runDSESettingsFixture=(data,target)=>{calls.push('DSE settings');assert.equal(data.targetView,target);if(dseOtherTarget)data.targetView=input.mainView;return !dseCancel;};
+  context.runDSEFixture=(data,target)=>{assert.equal(data.targetView,target);calls.push('DSE');if(dseFail)throw Error('DSE failed');target.image.pixels[0]+=0.1;};
   if(!unsharpMissing)context.UnsharpMask=function(){this.executeOn=view=>{calls.push('USM');unsharpParameters.push({...this});const output=outputs[outputs.length-1];maskApplications.push({name:output.mask&&output.mask.mainView.id,inverted:output.maskInverted,enabled:output.maskEnabled});view.image.pixels[0]+=0.1;return !fail;};};
   context.Script=function(){throw Error('Native Script properties are read-only; construction is not a replay mechanism.');};
   context.Parameters={isViewTarget:false,targetView:input.mainView};
@@ -165,6 +170,28 @@ function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImage
   return {calls,messages,outputs,input,gradientParameters,starParameters,paletteParameters,nbParameters,sccParameters,windows:ImageWindow.windows,maskPrompts,maskApplications,unsharpParameters};
 }
 const complete=api.buildWorkspaceReplayScript(plan,0,1);
+{
+ const mlt=step('MultiscaleLinearTransform','P.layers=[[true,true,0.1,false,0.75,3,1]]; P.linear=true; P.toLuminance=true;');
+ const native=api.workspaceReplayData([{id:'MLT',steps:[mlt,ht]}])[0];
+ assert.equal(native.steps[0].reason,'');
+ let result=run(api.buildWorkspaceReplayScript(native,0,1));assert.deepEqual(result.calls.filter(c=>c==='MLT'||c==='HT'),['MLT','HT']);
+ assert.match(run(api.buildWorkspaceReplayScript(native,0,1),{mltMissing:true}).messages[0],/MultiscaleLinearTransform/);
+ assert.ok(!run(api.buildWorkspaceReplayScript(native,0,1),{fail:true}).calls.includes('HT'));
+ const ds=step('Script','P.filePath="$PXI_SRCDIR/scripts/misc/DarkStructureEnhance.js"; P.parameters=[];',
+   {proc:{processId:()=> 'Script',filePath:'$PXI_SRCDIR/scripts/misc/DarkStructureEnhance.js',parameters:[]},title:'DarkStructureEnhance'});
+ const data=api.workspaceReplayData([{id:'DSE',steps:[ht,ds,mlt]}])[0];
+ assert.equal(data.steps[1].action,'dark');assert.equal(data.steps[1].reason,'');assert.match(data.steps[1].warning,/not recorded/);
+ const code=api.buildWorkspaceReplayScript(data,0,2);
+ assert.match(code,/GPL-3.0-only/);assert.match(code,/END OF TERMS AND CONDITIONS/);
+ assert.ok(!code.includes('new Script'));new vm.Script(code.replace(/^#.*$/gm,''));
+ result=run(code);assert.deepEqual(result.calls.filter(c=>['HT','DSE settings','DSE','MLT'].includes(c)),['HT','DSE settings','DSE','MLT']);
+ for(const options of [{dseCancel:true},{dseOtherTarget:true},{dseFail:true},{sourceChanged:true}]){
+   result=run(code,options);assert.ok(!result.calls.includes('MLT'));assert.match(result.messages[0],/Partial result retained/);
+ }
+ assert.ok(api.workspaceReplayData([{id:'MaskedDSE',steps:[{...ds,mask:{status:'recorded',name:'Mask',inverted:false}}]}])[0].steps[0].reason);
+ assert.ok(api.workspaceReplayData([{id:'DifferentDSE',steps:[{...ds,proc:{...ds.proc,parameters:[['unknown','1']]}}]}])[0].steps[0].reason);
+ console.log('Passed: MultiscaleLinearTransform native replay and DarkStructureEnhance manual settings, target enforcement, GPL notice, source verification and stop/failure handling.');
+}
 {
  const data=api.workspaceReplayData([{id:'Final',steps:[ht]},{id:'Sii',isOriginalInput:true,steps:[]}])[0];
  assert.deepEqual(Array.from(data.originalInputs),['Sii']);
