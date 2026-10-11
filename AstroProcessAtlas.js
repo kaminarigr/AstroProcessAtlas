@@ -1335,7 +1335,7 @@ function workspaceReplayData(records) {
    var data = [];
    var supported = {HistogramTransformation:true, CurvesTransformation:true, RGBWorkingSpace:true,
       SCNR:true, ColorSaturation:true, BlurXTerminator:true, NoiseXTerminator:true, GradientCorrection:true,
-      StarXTerminator:true, NarrowbandNormalization:true};
+      StarXTerminator:true, NarrowbandNormalization:true, UnsharpMask:true};
    for (var r = 0; r < records.length; ++r) {
       var record = records[r], image = {id:record.id, anchor:record.anchor, steps:[]};
       var groups = workspaceStepGroups(record);
@@ -1360,6 +1360,7 @@ function workspaceReplayData(records) {
          if (isImageOriginStep(step, record.steps.indexOf(step))) continue;
          var tool = getProcessName(step.proc), reason = '', source = null, identifier = '', selective = selectiveColorReplaySource(step);
          var requiredReferences = (step.references || []).filter(function(ref) {
+            if (ref.kind === 'mask' && step.mask && step.mask.status === 'recorded' && ref.name === step.mask.name) return false;
             return !(tool === 'StarXTerminator' && step.proc.stars === true && ref.kind === 'output');
          });
          if (tool === 'ImageIdentifier') {
@@ -1377,7 +1378,8 @@ function workspaceReplayData(records) {
          }
          else if (!supported[tool] && !selective) reason = getProcessTitle(step.proc).toLowerCase() === 'selectivecolorcorrection' ? selectiveColorReplayBlockReason(step) : 'This process is not yet supported by the replay exporter: ' + tool;
          else if (!step.mask || step.mask.status === 'unknown') reason = 'Historical mask state is unknown.';
-         else if (step.mask.status === 'recorded') reason = 'This step needs the original historical mask: ' + step.mask.name;
+         else if (step.mask.status === 'recorded' && (!step.mask.name || typeof step.mask.inverted !== 'boolean')) reason = 'This step needs the original historical mask: ' + step.mask.name;
+         else if (step.mask.status === 'recorded' && selective) reason = 'SelectiveColorCorrection needs an unavailable historical mask or reference image.';
          else if (requiredReferences.length) reason = 'This step needs historical reference images or creates another image.';
          else if (tool === 'RGBWorkingSpace' && step.proc.applyGlobalRGBWS === true)
             reason = 'This step uses the global RGB working space, whose historical settings are unavailable.';
@@ -1389,6 +1391,7 @@ function workspaceReplayData(records) {
             substep:step.substepNumber || 0, tool:selective ? 'SelectiveColorCorrection' : tool, reason:reason,
             action:tool === 'ImageIdentifier' ? 'identifier' : selective ? 'selective' : 'process', identifier:identifier,
             starRequired:!!(selective && selective.starRequired),
+            mask:step.mask && step.mask.status === 'recorded' ? {name:step.mask.name, inverted:step.mask.inverted} : null,
             source:source && tool !== 'ImageIdentifier' ? source.source : '', variable:source && tool !== 'ImageIdentifier' ? source.variable : ''});
       }
       data.push(image);
@@ -1405,7 +1408,7 @@ function buildWorkspaceReplayScript(image, start, end) {
       var step = selected[i];
       manifest.push({title:step.title, number:step.number, substep:step.substep,
          reason:step.reason || (step.action === 'palette' && i > 0 ? 'Start the selected range at PerfectPalettePicker and choose its prepared inputs.' : ''),
-         action:step.action, inputs:step.inputs || [], starRequired:!!step.starRequired});
+         action:step.action, inputs:step.inputs || [], starRequired:!!step.starRequired, mask:step.mask || null});
       if (!step.reason && step.action === 'identifier') identifier = step.identifier;
       factories.push(step.reason || step.action === 'identifier' ? 'null' : 'function(){\n' + step.source + '\nreturn ' + step.variable + ';\n}');
    }
@@ -1438,6 +1441,26 @@ function buildWorkspaceReplayScript(image, start, end) {
       'var replayIdentifier = ' + JSON.stringify(identifier) + ';',
       'var replaySteps = ' + JSON.stringify(manifest) + ';',
       'var replayFactories = [' + factories.join(',\n') + '];',
+      'function applyReplayMask(output,request,cache) {',
+      '   output.removeMask();if(!request)return;',
+      '   var key="$"+request.name,entry=cache[key];',
+      '   if(!entry){',
+      '      var candidates=[];for(var i=0;i<ImageWindow.windows.length;++i){var w=ImageWindow.windows[i];if(!w.isNull&&w!==output&&w.mainView.image.width===output.mainView.image.width&&w.mainView.image.height===output.mainView.image.height)candidates.push(w);}',
+      '      if(!candidates.length)throw Error("Open a mask with matching dimensions for "+request.name);',
+      '      var dialog=new Dialog;dialog.windowTitle="AstroProcessAtlas - Select mask";',
+      '      var label=new Label(dialog);label.text="Required mask: "+request.name+(request.inverted?" (INVERTED pixels)":" (normal pixels)");label.wordWrapping=true;label.setMinWidth(480);',
+      '      var note=new Label(dialog);note.text="Select the historical mask image in this orientation. This choice will be reused; later inversion changes are automatic.";note.wordWrapping=true;note.setMinWidth(480);',
+      '      var combo=new ComboBox(dialog);for(var i=0;i<candidates.length;++i)combo.addItem(candidates[i].mainView.id);combo.currentItem=0;for(var i=0;i<candidates.length;++i)if(candidates[i].mainView.id===request.name)combo.currentItem=i;',
+      '      var confirm=new CheckBox(dialog);confirm.text="The selected mask pixels match the requested orientation.";',
+      '      var ok=new PushButton(dialog);ok.text="Continue";ok.enabled=false;ok.onClick=function(){dialog.ok();};confirm.onCheck=function(value){ok.enabled=value;};',
+      '      var cancel=new PushButton(dialog);cancel.text="Stop replay";cancel.onClick=function(){dialog.cancel();};',
+      '      var buttons=new HorizontalSizer;buttons.addStretch();buttons.add(ok);buttons.add(cancel);dialog.sizer=new VerticalSizer;dialog.sizer.margin=12;dialog.sizer.spacing=8;dialog.sizer.add(label);dialog.sizer.add(note);dialog.sizer.add(combo);dialog.sizer.add(confirm);dialog.sizer.add(buttons);dialog.adjustToContents();',
+      '      if(!dialog.execute()||!confirm.checked)throw Error("Mask selection cancelled: "+request.name);',
+      '      entry={window:candidates[combo.currentItem],inverted:request.inverted};if(!entry.window||entry.window.isNull)throw Error("Selected mask is unavailable: "+request.name);cache[key]=entry;',
+      '   }',
+      '   if(entry.window.isNull)throw Error("Previously selected mask is unavailable: "+request.name);',
+      '   output.setMask(entry.window);output.maskEnabled=true;output.maskInverted=entry.inverted!==request.inverted;output.maskVisible=false;',
+      '}',
       'function runAtlasReplay() {',
       '   var candidates = [];',
       '   for(var i=0;i<ImageWindow.windows.length;++i) if(!ImageWindow.windows[i].isNull)candidates.push(ImageWindow.windows[i]);',
@@ -1468,7 +1491,7 @@ function buildWorkspaceReplayScript(image, start, end) {
       '   if(palette){combo.visible=false;naming.text="Output name: "+(replayIdentifier||replayImage)+"_APA_replay";confirm.text="I confirm the selected input states match the original palette preparation.";dialog.adjustToContents();}',
       '   if(!dialog.execute()||!confirm.checked)return;',
       '   var input=candidates[combo.currentItem];if(!input||input.isNull)throw Error("Selected input is unavailable.");',
-      '   var mapped={},temporary=[],prepared={},output=null;',
+      '   var mapped={},temporary=[],prepared={},maskCache={},output=null;',
       '   try {',
       '   if(palette){for(var b=0;b<bindings.length;++b){var channel=candidates[bindings[b].combo.currentItem];if(!channel||channel.isNull||channel.mainView.image.isColor)throw Error("Select an available grayscale channel for "+bindings[b].name);if(bindings[b].state.currentItem!==1&&bindings[b].state.currentItem!==2)throw Error("Choose the preparation state for "+bindings[b].name);if(b===0)input=channel;else if(channel.mainView.image.width!==input.mainView.image.width||channel.mainView.image.height!==input.mainView.image.height)throw Error("Palette inputs must have matching dimensions.");}}',
       '   if(palette){for(var b=0;b<bindings.length;++b){var channel=candidates[bindings[b].combo.currentItem],view=channel.mainView;if(bindings[b].state.currentItem===2){var key="$"+view.id;if(prepared[key])view=prepared[key];else{var tid=view.id+"_APA_ppp_input",ti=1;while(!View.viewById(tid).isNull)tid=view.id+"_APA_ppp_input_"+(ti++);var ci=view.image,copy=new ImageWindow(ci.width,ci.height,ci.numberOfChannels,ci.bitsPerSample,ci.isReal,false,tid);temporary.push(copy);copy.mainView.beginProcess(UndoFlag_NoSwapFile);try{copy.mainView.image.assign(ci);}finally{copy.mainView.endProcess();}view=copy.mainView;var expressions=["($T-max(min($T),med($T)-2.7*sdev($T)))/(1-max(min($T),med($T)-2.7*sdev($T)))","mtf(mtf(0.25,med($T)),$T)"];for(var p=0;p<expressions.length;++p){var stretch=new PixelMath;stretch.expression=expressions[p];stretch.useSingleExpression=true;stretch.symbols="";stretch.generateOutput=true;stretch.clearImageCacheAndExit=false;stretch.cacheGeneratedImages=false;stretch.use64BitWorkingImage=true;stretch.rescale=false;stretch.truncate=true;stretch.truncateLower=0;stretch.truncateUpper=1;stretch.createNewImage=false;stretch.showNewImage=false;if(stretch.executeOn(view)===false)throw Error("PPP input stretch failed: "+channel.mainView.id);processEvents();}prepared[key]=view;}}mapped["$"+bindings[b].name]=view.id;}}',
@@ -1487,10 +1510,11 @@ function buildWorkspaceReplayScript(image, start, end) {
       '         Console.writeln("Replay "+(k+1)+"/"+replaySteps.length+": "+replaySteps[k].title);',
       '         if(replaySteps[k].starRequired&&typeof StarXTerminator!=="function")throw Error("SelectiveColorCorrection requires StarXTerminator for its star mask.");',
       '         var process=replayFactories[k]();',
+      '         applyReplayMask(output,replaySteps[k].mask,maskCache);',
       '         if(replaySteps[k].action==="selective"){runSelectiveReplay(process,output.mainView);processEvents();continue;}',
       '         if(replaySteps[k].action==="palette"){var keys=["expression","expression1","expression2"];for(var e=0;e<keys.length;++e)process[keys[e]]=process[keys[e]].replace(/(?:[0-9]+(?:[.][0-9]*)?|[.][0-9]+)(?:[eE][+-]?[0-9]+)?|[A-Za-z_][A-Za-z0-9_]*/g,function(token){return Object.prototype.hasOwnProperty.call(mapped,"$"+token)?mapped["$"+token]:token;});}',
       '         if(!process||typeof process.executeOn!=="function")throw Error("Required process is unavailable: "+replaySteps[k].title);',
-      '         if(process.executeOn(output.mainView)===false)throw Error("Process failed: "+replaySteps[k].title);',
+      '         try{if(process.executeOn(output.mainView)===false)throw Error("Process failed: "+replaySteps[k].title);}finally{output.removeMask();}',
       '         processEvents();',
       '      }',
       '      new MessageBox("Replay complete: "+output.mainView.id,"AstroProcessAtlas",StdIcon_Information,StdButton_Ok).execute();',
@@ -1525,7 +1549,7 @@ function buildWorkspaceReplayScript(image, start, end) {
 
 function workspaceReplayHTML(records) {
    var html = '<style>#replay_readiness li{padding:8px 12px;margin:6px 0;border-left:4px solid;border-radius:4px;overflow-wrap:anywhere}#replay_readiness .replay-supported{color:#a6e3a1;background:#a6e3a112;border-color:#a6e3a1}#replay_readiness .replay-unsupported{color:#f38ba8;background:#f38ba812;border-color:#f38ba8}#replay_export:disabled{opacity:.45;cursor:not-allowed}</style><details class="replay-workflow"><summary>Export workflow for replay (experimental)</summary>' +
-      '<p>Select an image and a consecutive range of applied processes. Run the downloaded .js in PixInsight with an input in the state BEFORE the first selected step. Replay uses a new copy and stops at the first unsupported step. Masks and historical references are not restored in this first version.</p>' +
+      '<p>Select an image and a consecutive range of applied processes. Run the downloaded .js in PixInsight with an input in the state BEFORE the first selected step. Replay uses a new copy and stops at the first unsupported step. Recorded masks are requested when needed; historical reference images are not restored.</p>' +
       '<p>Copy naming: the last ImageIdentifier in the selected range, or the selected input name, followed by _APA_replay. Existing names receive a numeric suffix.</p>' +
       '<p>SelectiveColorCorrection includes the installed Toolbox source in the replay file and supplies the recorded parameters directly. Keep that installed source available at the exported include path.</p>' +
       '<p>PerfectPalettePicker: start the range at this step, select grayscale inputs and explicitly choose their state: already prepared, or linear with input stretch to median 0.25. Replays the recorded combination into a new RGB image. Other unrecorded channel preparation is not reconstructed.</p>' +
@@ -1810,8 +1834,9 @@ var REPORT_TRANSLATIONS = [
    ['This process is not yet supported by the replay exporter:','Αυτή η διεργασία δεν υποστηρίζεται ακόμη από την εξαγωγή επανάληψης:'],
    ['This step uses the global RGB working space, whose historical settings are unavailable.','Αυτό το βήμα χρησιμοποιεί global RGB working space, του οποίου οι ιστορικές ρυθμίσεις δεν είναι διαθέσιμες.'],
    ['Serialized process code is not a supported constructor and parameter assignment sequence.','Ο καταγεγραμμένος κώδικας δεν έχει υποστηριζόμενη μορφή δημιουργίας διεργασίας και ανάθεσης παραμέτρων.'],
-   ['Select an image and a consecutive range of applied processes. Run the downloaded .js in PixInsight with an input in the state BEFORE the first selected step. Replay uses a new copy and stops at the first unsupported step. Masks and historical references are not restored in this first version.',
-    'Επίλεξε εικόνα και συνεχόμενο εύρος εφαρμοσμένων διεργασιών. Εκτέλεσε το .js στο PixInsight με εικόνα στην κατάσταση ΠΡΙΝ από το πρώτο επιλεγμένο βήμα. Η επανάληψη γίνεται σε νέο αντίγραφο και σταματά στην πρώτη μη υποστηριζόμενη διεργασία. Οι μάσκες και οι ιστορικές εικόνες αναφοράς δεν αποκαθίστανται σε αυτή την πρώτη έκδοση.'],
+   ['Select an image and a consecutive range of applied processes. Run the downloaded .js in PixInsight with an input in the state BEFORE the first selected step. Replay uses a new copy and stops at the first unsupported step. Recorded masks are requested when needed; historical reference images are not restored.',
+    'Επίλεξε εικόνα και συνεχόμενο εύρος εφαρμοσμένων διεργασιών. Εκτέλεσε το .js στο PixInsight με εικόνα στην κατάσταση ΠΡΙΝ από το πρώτο επιλεγμένο βήμα. Η επανάληψη γίνεται σε νέο αντίγραφο και σταματά στην πρώτη μη υποστηριζόμενη διεργασία. Οι καταγεγραμμένες μάσκες ζητούνται όταν χρειάζονται· οι ιστορικές εικόνες αναφοράς δεν αποκαθίστανται.'],
+   ['Mask requested in PixInsight:','Επιλογή μάσκας στο PixInsight:'],['inverted pixels','ανεστραμμένα pixels'],['normal pixels','κανονικά pixels'],
    [
       "View.processing is unavailable in this version of PixInsight.",
       "Το View.processing δεν είναι διαθέσιμο σε αυτή την έκδοση του PixInsight."
@@ -2385,6 +2410,7 @@ var WORKSPACE_BROWSER_SOURCE = [
    "      for(var j=start;j<=end&&j<image.steps.length;++j){",
    "         var step=image.steps[j],reason=step.reason||(step.action==='palette'&&j>start?'Start the selected range at PerfectPalettePicker and choose its prepared inputs.':'');if(reason)blocked=true;if(!blocked)++ready;",
    "         if(list){var item=document.createElement('li');item.className=reason?'replay-unsupported':'replay-supported';item.textContent=step.number+(step.substep?'.'+step.substep:'')+' — '+step.title+': '+translated(reason?'STOP — '+reason:blocked?'Not reached until earlier blocker is resolved.':step.action==='palette'?'Choose prepared inputs in PixInsight for the recorded palette combination.':step.action==='identifier'?'Naming handled at creation: '+namingId+'_APA_replay':'Ready for replay');list.appendChild(item);}",
+   "         if(list&&step.mask&&!reason)item.textContent+=' — '+translated('Mask requested in PixInsight:')+' '+step.mask.name+' ('+translated(step.mask.inverted?'inverted pixels':'normal pixels')+')';",
    "      }",
    "      var status=document.getElementById('replay_status');if(status)status.textContent=translated(image.steps.length?ready+' consecutive processes can run from the selected input state.':'No applied processes to replay.');",
    "      var button=document.getElementById('replay_export');if(button)button.disabled=!ready||blocked;",

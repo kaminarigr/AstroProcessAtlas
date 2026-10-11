@@ -730,6 +730,13 @@ console.log('Passed: arbitrary current/before/after selection, shared comparison
  assert.equal(elements.replay_start.children.length,0);assert.equal(elements.replay_export.disabled,true);
  assert.match(elements.replay_status.textContent,/No applied processes/);
  console.log('Passed: workflow image/range controls, readiness and blockers, empty histories, generated script download and cleanup.');
+ browser.workspaceReplayData=[{id:'MaskedNative',steps:[{...readyStep,mask:{name:'Mask_history',inverted:true}}]}];
+ elements.replay_image.value='0';browser.window.setReportLanguage('en');browser.window.updateReplayRange(true);
+ assert.equal(elements.replay_export.disabled,false,'A supplied native mask does not block download');
+ assert.match(elements.replay_readiness.children[0].textContent,/Mask requested in PixInsight: Mask_history \(inverted pixels\)/);
+ browser.window.setReportLanguage('el');
+ assert.match(elements.replay_readiness.children[0].textContent,/Επιλογή μάσκας στο PixInsight/);
+ browser.window.setReportLanguage('en');
 }
 
 // A clone branches at its common prefix; retained live indices still address real pixels.

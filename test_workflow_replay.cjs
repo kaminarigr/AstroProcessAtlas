@@ -62,16 +62,17 @@ assert.throws(()=>api.buildWorkspaceReplayScript(plan,0.5,1),/valid step range/)
 
 function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImages=false,gradientMissing=false,gradientFail=false,
   starMissing=false,starFail=false,paletteMissing=false,paletteFail=false,nbMissing=false,nbFail=false,sccMissing=false,sccFail=false,sourceChanged=false,scriptRecords=[],initialScripts=false,channels=[],choices=[],states=[],prepFail=false,
-  inputId='Ha_input',existingIds=['Ha_input_APA_replay']}={}) {
-  const calls=[], messages=[], outputs=[], gradientParameters=[], starParameters=[],paletteParameters=[],nbParameters=[],sccParameters=[],combos=[];let checkbox;
+  maskCancel=false,unsharpMissing=false,maskChoices=[],inputId='Ha_input',existingIds=['Ha_input_APA_replay']}={}) {
+  const calls=[], messages=[], outputs=[], gradientParameters=[], starParameters=[],paletteParameters=[],nbParameters=[],sccParameters=[],combos=[],maskApplications=[],unsharpParameters=[];let checkbox,maskPrompts=0;
   const input={isNull:false,rgbWorkingSpace:{gamma:2.2},mainView:{id:inputId,stf:[[1,2]],
     image:{width:2,height:1,numberOfChannels:1,bitsPerSample:32,isReal:true,isColor:false,pixels:[0.1,0.2]}}};
   function ImageWindow(w,h,channelCount,bits,real,color,id){
     this.isNull=false;this.mainView={id,beginProcess(){calls.push('begin');},endProcess(){calls.push('end');},
-      image:{width:w,height:h,isColor:color,assign(image){this.pixels=image.pixels.slice();calls.push('copy');},fill(value){this.pixels=[value,value];calls.push('fill');}}};
+      image:{width:w,height:h,isColor:color,assign(image){this.width=image.width;this.height=image.height;this.pixels=image.pixels.slice();calls.push('copy');},fill(value){this.pixels=[value,value];calls.push('fill');}}};
     this.show=()=>calls.push('show');outputs.push(this);
+    this.removeMask=()=>{this.mask=null;this.maskEnabled=false;};this.setMask=window=>{this.mask=window;};
     this.forceClose=()=>{this.isNull=true;};
-    assert.equal(w,channels.length?2:1);assert.equal(h,1);assert.ok(bits===32||bits===64);assert.equal(real,true);
+    assert.ok(w===1||w===2);assert.equal(h,1);assert.ok(bits===32||bits===64);assert.equal(real,true);
     if(channels.length&&color)assert.equal(channelCount,3);
   }
   ImageWindow.windows=noImages?[]:[input,...channels];
@@ -81,7 +82,7 @@ function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImage
     calls.push(this.H?'HT':'CT');view.image.pixels[0]+=1;return !fail;};}
   const context={ImageWindow,View:{viewById:id=>({isNull:!existingIds.includes(id)})},
     Dialog:function(){this.ok=()=>{};this.cancel=()=>{};this.adjustToContents=()=>{};
-      this.execute=()=>{checkbox.checked=confirm;const inputs=combos.filter(c=>c.items[0]!=='Choose input state');const stateBoxes=combos.filter(c=>c.items[0]==='Choose input state');for(let i=0;i<choices.length;i++)inputs[i+1].currentItem=choices[i];stateBoxes.forEach((c,i)=>c.currentItem=states[i]===undefined?1:states[i]);return !cancel;};},
+      this.execute=()=>{checkbox.checked=confirm;if(this.windowTitle==='AstroProcessAtlas - Select mask'){const choice=maskChoices[maskPrompts++];if(choice!==undefined)combos[combos.length-1].currentItem=choice;return !maskCancel;}const inputs=combos.filter(c=>c.items[0]!=='Choose input state');const stateBoxes=combos.filter(c=>c.items[0]==='Choose input state');for(let i=0;i<choices.length;i++)inputs[i+1].currentItem=choices[i];stateBoxes.forEach((c,i)=>c.currentItem=states[i]===undefined?1:states[i]);return !cancel;};},
     CheckBox:function(){checkbox=this;}, ComboBox:function(){this.items=[];this.addItem=v=>this.items.push(v);combos.push(this);},
     Label:function(){this.setMinWidth=()=>{};},PushButton:function(){},HorizontalSizer:Sizer,VerticalSizer:Sizer,
     MessageBox:function(message){this.execute=()=>messages.push(message);},
@@ -97,6 +98,7 @@ function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImage
     return !gradientFail;
   };};
   if(!missing)context.CurvesTransformation=Process;
+  if(!unsharpMissing)context.UnsharpMask=function(){this.executeOn=view=>{calls.push('USM');unsharpParameters.push({...this});const output=outputs[outputs.length-1];maskApplications.push({name:output.mask&&output.mask.mainView.id,inverted:output.maskInverted,enabled:output.maskEnabled});view.image.pixels[0]+=0.1;return !fail;};};
   context.Script=function(){throw Error('Native Script properties are read-only; construction is not a replay mechanism.');};
   context.Parameters={isViewTarget:false,targetView:input.mainView};
   context.File={readFile(){if(sccMissing)throw Error('SelectiveColorCorrection installed source is missing.');return Buffer.from(selectiveFixture+(sourceChanged?'changed':''));}};
@@ -160,9 +162,32 @@ function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImage
   vm.runInNewContext(expanded.replace(/^#.*$/gm,''),context);
   assert.deepEqual(input.mainView.image.pixels,[0.1,0.2],'Input pixels never change');
   assert.equal(input.mainView.id,inputId,'Input ID never changes');
-  return {calls,messages,outputs,input,gradientParameters,starParameters,paletteParameters,nbParameters,sccParameters,windows:ImageWindow.windows};
+  return {calls,messages,outputs,input,gradientParameters,starParameters,paletteParameters,nbParameters,sccParameters,windows:ImageWindow.windows,maskPrompts,maskApplications,unsharpParameters};
 }
 const complete=api.buildWorkspaceReplayScript(plan,0,1);
+{
+ const usm=step('UnsharpMask','P.sigma=2.5; P.amount=0.65; P.useLuminance=true;');
+ const masked=inverted=>({...usm,mask:{status:'recorded',name:'Mask_history',inverted},references:[{kind:'mask',name:'Mask_history'}]});
+ const maskWindow={isNull:false,mainView:{id:'Mask_history',image:{width:2,height:1,isColor:false,pixels:[0.2,0.8]}}};
+ const image=api.workspaceReplayData([{id:'Masked',steps:[masked(false),masked(true),usm,masked(false)]}])[0];
+ assert.ok(image.steps.every(s=>!s.reason),'Known native masks are supplied interactively');
+ const code=api.buildWorkspaceReplayScript(image,0,3);
+ let result=run(code,{channels:[maskWindow]});
+ assert.equal(result.maskPrompts,1);
+ assert.deepEqual(result.maskApplications.map(m=>[m.name,m.inverted,m.enabled]),[['Mask_history',false,true],['Mask_history',true,true],[null,true,false],['Mask_history',false,true]]);
+ assert.equal(result.outputs[0].mask,null,'Mask removed after the last process');
+ assert.equal(result.unsharpParameters[0].sigma,2.5);assert.equal(result.unsharpParameters[0].amount,0.65);
+ assert.deepEqual(maskWindow.mainView.image.pixels,[0.2,0.8],'Never invert mask pixels');
+ const reversed=api.workspaceReplayData([{id:'InvertFirst',steps:[masked(true),masked(false)]}])[0];
+ result=run(api.buildWorkspaceReplayScript(reversed,0,1),{channels:[maskWindow]});
+ assert.equal(result.maskPrompts,1);assert.deepEqual(result.maskApplications.map(m=>m.inverted),[false,true],'First inverted pixels establish the cached orientation');
+ result=run(code,{channels:[maskWindow],maskCancel:true});assert.equal(result.calls.filter(c=>c==='USM').length,0);assert.match(result.messages[0],/Mask selection cancelled.*Partial result/s);
+ result=run(code,{channels:[maskWindow],fail:true});assert.equal(result.outputs[0].mask,null);assert.equal(result.calls.filter(c=>c==='USM').length,1);
+ result=run(api.buildWorkspaceReplayScript(api.workspaceReplayData([{id:'USM',steps:[usm]}])[0],0,0),{unsharpMissing:true});assert.match(result.messages[0],/UnsharpMask/);
+ const two=api.workspaceReplayData([{id:'Two',steps:[masked(false),{...masked(false),references:[{kind:'mask',name:'OtherMask'}],mask:{status:'recorded',name:'OtherMask',inverted:false}}]}])[0];
+ assert.equal(run(api.buildWorkspaceReplayScript(two,0,1),{channels:[maskWindow]}).maskPrompts,2);
+ console.log('Passed: UnsharpMask settings, prompted masks, cached orientation and automatic inversion, unmasked steps, cancellation/failure cleanup and missing module.');
+}
 const generatorSource=api.buildWorkspaceReplayScript.toString();
 for(const line of generatorSource.split('\n')) {
   if (/^\s*\/\//.test(line)) continue;

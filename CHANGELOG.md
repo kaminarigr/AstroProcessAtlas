@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Support UnsharpMask replay with its recorded native parameters. For supported
+  native processes, request recorded masks at first use, cache choices by historical
+  name, and apply relative inversion automatically without changing mask pixels.
+  Require explicit confirmation of the first requested orientation, clear masks
+  between steps and stop with a retained partial result on cancellation/failure.
+  Unknown mask orientation and externally masked grouped scripts remain blockers.
+
 - Disable replay download when any selected step is blocked, including palette
   operations selected after the start of a range. Prevent direct export from
   bypassing this check. Color supported steps green and unsupported steps pink/red.

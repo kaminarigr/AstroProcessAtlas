@@ -70,25 +70,36 @@ serialized process parameters. It never changes the selected input.
 
 The first implementation supports independent, in-place HistogramTransformation,
 CurvesTransformation, RGBWorkingSpace, SCNR, ColorSaturation, BlurXTerminator,
-NoiseXTerminator, GradientCorrection, StarXTerminator and NarrowbandNormalization instances with supported serialization and no recorded mask or
+NoiseXTerminator, GradientCorrection, StarXTerminator, NarrowbandNormalization and UnsharpMask instances with supported serialization and no
 historical input references. StarXTerminator output references are allowed.
 RGBWorkingSpace steps that use historical global settings are blocked.
 Required tools, licenses and matching models must already be available in PixInsight.
 This does not guarantee identical pixels across tool/model versions.
 
 Other scripts, standalone PixelMath, integrations, image combinations, unsupported output-generating processes,
-masked steps and unknown historical mask states are currently blockers. The report
+unknown historical mask states and externally masked grouped scripts are currently blockers. The report
 shows the runnable prefix; the replay dialog states where execution will stop.
 Execution stops at that blocker or a process failure, preserves the partial result,
 and does not skip ahead. A later range can be replayed only when you supply its own
 correct starting image. Grouped processes export one parent entry with the report step number;
 redo entries are excluded. Manual or possible graph links do not authorize replay.
+
+For supported native processes with a recorded mask name and inversion state,
+replay pauses before the first use and asks you to select an open mask image with
+matching dimensions. Supply the historical pixels in the requested orientation:
+normal, or already inverted if the first use is inverted. Confirm that orientation.
+The selection is cached by historical mask name for this replay run; later uses
+need no new prompt, and opposite orientations use PixInsight's mask inversion flag.
+Mask pixels are never changed. Masks are removed between operations. Cancellation
+stops replay and retains the partial result. The report cannot reconstruct a mask's
+historical pixels. Download is enabled only when the entire selected range is supported;
+supported entries are green and blockers pink/red.
 Historical pixels, masks and missing inputs are not bundled in the exported script.
 
 GradientCorrection preserves its original serialized thresholds, scale, convergence,
 protection and model-generation settings. Diagnostic model/protection images may be
 created when those flags were enabled; subsequent steps still run on the replay image
-copy. Recorded/unknown masks, historical references, invalid serialization and process
+copy. Unknown mask states, historical references, invalid serialization and process
 failures remain blockers. The report
 labels unsupported tools as not yet supported by the exporter.
 
@@ -223,7 +234,7 @@ NarrowbandNormalization replay preserves the recorded native parameters. If it i
 the first selected step, choose its starting image in the PixInsight replay dialog;
 replay runs on a new copy. As an intermediate step it uses the existing replay
 result, including a preceding PerfectPalettePicker RGB result, without a second
-input selection. The installed module is required; historical masks/references
+input selection. The installed module is required; unknown mask states/historical references
 and invalid serialization remain blockers.
 
 For PerfectPalettePicker, each input now requires an explicit preparation state:
