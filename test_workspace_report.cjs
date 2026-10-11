@@ -495,3 +495,25 @@ assert.ok(overview.includes('aria-label="Grayscale image (current state)"'));
 assert.equal(helper.imageColorBadge({header:false,isColor:true}), '');
 assert.equal(helper.imageColorBadge({header:true}), '', 'Do not guess an unknown color mode');
 console.log('Passed: grayscale/color SVG badges on image headers only, current-state labels and unknown-mode handling.');
+
+{
+ const sxt=makeProcess('StarXTerminator',{stars:true});
+ const sourceRecord=helper.collectWorkspaceRecord(image('Ha',[sxt]),0);
+ const starsRecord=helper.collectWorkspaceRecord(image('Ha_stars',[sxt]),1);
+ const starGraph=helper.workspaceGraph([starsRecord,sourceRecord]);
+ const output=starGraph.edges.find(e=>e.kind==='output');
+ assert.ok(output);
+ assert.equal(output.from,sourceRecord.steps[0].groupAnchor);
+ assert.equal(output.to,starsRecord.anchor);
+ assert.equal(output.provenance,'parameter');assert.equal(output.uncertain,true);
+ assert.equal(sourceRecord.steps[0].references[0].name,'Ha_stars');
+ const noStars=helper.collectWorkspaceRecord(image('Ha',[makeProcess('StarXTerminator',{stars:false})]),0);
+ assert.ok(!helper.workspaceGraph([noStars,starsRecord]).edges.some(e=>e.kind==='output'));
+ const unrelated=helper.collectWorkspaceRecord(image('Ha_stars',[ht]),1);
+ assert.ok(!helper.workspaceGraph([sourceRecord,unrelated]).edges.some(e=>e.kind==='output'));
+ const redoSource=helper.collectWorkspaceRecord(image('Ha',[sxt],[],0),0);
+ assert.ok(!helper.workspaceGraph([redoSource,starsRecord]).edges.some(e=>e.kind==='output'));
+ assert.ok(!helper.workspaceGraph([sourceRecord]).edges.some(e=>e.kind==='output'));
+ assert.ok(!helper.workspaceGraph([starsRecord]).edges.some(e=>e.kind==='output'));
+ console.log('Passed: StarXTerminator stars output links with exact name and output history, disabled stars, unrelated history, redo and missing output rejection.');
+}

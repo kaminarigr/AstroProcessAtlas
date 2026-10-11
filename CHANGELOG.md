@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Link StarXTerminator stars output to its source step when stars=true, an exact
+  `<source>_stars` image exists, and its applied history contains StarXTerminator.
+
 - Show grayscale and color circle badges beside image names in the graph,
   based on the current image color mode.
 

@@ -644,7 +644,7 @@ function addReference(refs, name, kind, detail) {
    refs.push({name:name, kind:kind, detail:detail});
 }
 
-function imageReferences(step, records) {
+function imageReferences(step, records, owner) {
    var proc = step.proc, name = getProcessName(proc), refs = [];
    if (step.mask.status === "recorded") addReference(refs, step.mask.name, "mask", "Historical mask");
    try {
@@ -676,6 +676,21 @@ function imageReferences(step, records) {
       if (name === "ChannelExtraction")
          for (var i = 0; i < proc.channels.length; ++i)
             if (proc.channels[i][0]) addReference(refs, proc.channels[i][1], "output", "ChannelExtraction");
+      // StarXTerminator does not serialize an explicit output image ID.
+      // Require the enabled output option, exact naming and corroborating output history.
+      if (name === 'StarXTerminator' && proc.stars === true && owner && !step.redo) {
+         var outputId = owner.id + '_stars';
+         for (var r = 0; r < records.length; ++r) {
+            if (records[r].id !== outputId) continue;
+            for (var j = 0; j < records[r].steps.length; ++j) {
+               var outputStep = records[r].steps[j];
+               if (!outputStep.redo && getProcessName(outputStep.proc) === 'StarXTerminator') {
+                  addReference(refs, outputId, 'output', 'StarXTerminator stars=true — inferred from output name and StarXTerminator history');
+                  break;
+               }
+            }
+         }
+      }
       // Explicit ID parameters, rather than matching arbitrary text or filename similarity.
       var keys = ["referenceViewId", "referenceImageId", "sourceViewId", "sourceImageId", "maskViewId", "maskImageId"];
       for (var i = 0; i < keys.length; ++i)
@@ -758,7 +773,7 @@ function workspaceGraph(records) {
    }
    for (var r = 0; r < records.length; ++r)
       for (var i = 0; i < records[r].steps.length; ++i) {
-         var step = records[r].steps[i], refs = imageReferences(step, records);
+         var step = records[r].steps[i], refs = imageReferences(step, records, records[r]);
          step.references = refs;
          step.possibleInputs = [];
          for (var j = 0; j < refs.length; ++j) {
@@ -773,7 +788,7 @@ function workspaceGraph(records) {
          var knownInput = false;
          for (var g = 0; g < records[r].steps.length; ++g) {
             if (records[r].steps[g].groupAnchor !== step.groupAnchor) continue;
-            var groupRefs = imageReferences(records[r].steps[g], records);
+            var groupRefs = imageReferences(records[r].steps[g], records, records[r]);
             for (var j = 0; j < groupRefs.length; ++j) {
                if ((groupRefs[j].kind === 'input' || groupRefs[j].kind === 'reference') && headerById['$' + groupRefs[j].name]) knownInput = true;
             }
