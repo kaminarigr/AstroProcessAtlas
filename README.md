@@ -246,3 +246,12 @@ useStarMask is enabled StarXTerminator is required. Imported Mask is blocked bec
 its input view is not saved by the script, as are missing settings, checksums,
 historical masks/references and invalid serialized process code. Other scripts
 remain unsupported. Generate a new report and export to use this support.
+
+SelectiveColorCorrection requires an original image with the recorded Script
+instance to remain open. Native Script properties are read-only, so replay searches
+open-image initial/recent processing histories for the saved call with matching
+parameters and checksum, and executes that existing instance on the replay result.
+It never assigns Script.filePath, md5sum, parameters or information. If no match is
+available it stops and preserves any partial replay result. Keep the original
+workspace/history open; exporting parameter text alone cannot recreate this native
+Script instance. The original image and saved process settings remain unchanged.

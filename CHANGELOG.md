@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Fix read-only Script property warnings during SelectiveColorCorrection replay.
+  Resolve an existing immutable Script instance from open-image initial/recent
+  history by exact saved parameters and checksum instead of constructing/writing
+  a new Script. Stop explicitly when the original history is unavailable or differs.
+
 - Replay SelectiveColorCorrection through its installed native Script instance,
   preserving complete saved settings and checksum. Run one parent operation on the
   replay result, regenerating internal masks/RGBWS. Block imported/historical masks,

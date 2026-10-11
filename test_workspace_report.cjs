@@ -959,7 +959,8 @@ console.log('Passed: arbitrary current/before/after selection, shared comparison
  assert.match(elements.replay_readiness.children[0].textContent,/SelectiveColorCorrection: Ready/);
  assert.match(elements.replay_status.textContent,/2 consecutive/);
  browser.window.exportReplayScript();new vm.Script(exportedBlob.replace(/^#.*$/gm,''));
- assert.match(exportedBlob,/new Script/);
+ assert.ok(!exportedBlob.includes('new Script'),'Never write read-only native Script properties');
+ assert.match(exportedBlob,/findSelectiveReplayInstance/);
  assert.ok(!exportedBlob.includes('new RGBWorkingSpace'),'Internal settings are delegated to the installed script');
  const imported=helper.collectWorkspaceRecord(image('ImportedSelective',[ws,ws,makeProcess('Script',{filePath:scc.filePath,md5sum:scc.md5sum,parameters:Object.entries({...values,filterMethod:'Imported Mask'})})]),118);
  const plan=helper.workspaceReplayData([imported])[0];
