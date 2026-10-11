@@ -70,7 +70,7 @@ serialized process parameters. It never changes the selected input.
 
 The first implementation supports independent, in-place HistogramTransformation,
 CurvesTransformation, RGBWorkingSpace, SCNR, ColorSaturation, BlurXTerminator,
-NoiseXTerminator, GradientCorrection and StarXTerminator instances with supported serialization and no recorded mask or
+NoiseXTerminator, GradientCorrection, StarXTerminator and NarrowbandNormalization instances with supported serialization and no recorded mask or
 historical input references. StarXTerminator output references are allowed.
 RGBWorkingSpace steps that use historical global settings are blocked.
 Required tools, licenses and matching models must already be available in PixInsight.
@@ -218,3 +218,10 @@ or its earlier channel extraction, stretching and preparation. Supply images at
 that prepared state. Missing final PixelMath, masks, single-expression mode,
 custom symbols, alpha expressions or formulas beyond the supported arithmetic
 remain blockers. Other grouped scripts and standalone PixelMath remain unsupported.
+
+NarrowbandNormalization replay preserves the recorded native parameters. If it is
+the first selected step, choose its starting image in the PixInsight replay dialog;
+replay runs on a new copy. As an intermediate step it uses the existing replay
+result, including a preceding PerfectPalettePicker RGB result, without a second
+input selection. The installed module is required; historical masks/references
+and invalid serialization remain blockers.

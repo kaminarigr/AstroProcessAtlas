@@ -58,9 +58,9 @@ assert.throws(()=>api.buildWorkspaceReplayScript(plan,0,99),/valid step range/);
 assert.throws(()=>api.buildWorkspaceReplayScript(plan,0.5,1),/valid step range/);
 
 function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImages=false,gradientMissing=false,gradientFail=false,
-  starMissing=false,starFail=false,paletteMissing=false,paletteFail=false,channels=[],choices=[],
+  starMissing=false,starFail=false,paletteMissing=false,paletteFail=false,nbMissing=false,nbFail=false,channels=[],choices=[],
   inputId='Ha_input',existingIds=['Ha_input_APA_replay']}={}) {
-  const calls=[], messages=[], outputs=[], gradientParameters=[], starParameters=[],paletteParameters=[],combos=[];let checkbox;
+  const calls=[], messages=[], outputs=[], gradientParameters=[], starParameters=[],paletteParameters=[],nbParameters=[],combos=[];let checkbox;
   const input={isNull:false,rgbWorkingSpace:{gamma:2.2},mainView:{id:inputId,stf:[[1,2]],
     image:{width:2,height:1,numberOfChannels:1,bitsPerSample:32,isReal:true,isColor:false,pixels:[0.1,0.2]}}};
   function ImageWindow(w,h,channelCount,bits,real,color,id){
@@ -93,6 +93,15 @@ function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImage
     return !gradientFail;
   };};
   if(!missing)context.CurvesTransformation=Process;
+  if(!nbMissing) {
+    context.NarrowbandNormalization=function(){this.executeOn=view=>{
+      assert.equal(view,outputs[0].mainView,'NBN always targets the current replay result');
+      assert.notEqual(view,input.mainView);calls.push('NBN');nbParameters.push({...this});
+      view.image.pixels[0]+=0.1;return !nbFail;
+    };};
+    context.NarrowbandNormalization.prototype.Palette_SHO=5;
+    context.NarrowbandNormalization.prototype.Lightness_Preserve=1;
+  }
   if(!paletteMissing)context.PixelMath=function(){this.executeOn=view=>{
     assert.equal(view,outputs[0].mainView);calls.push('PM');paletteParameters.push({...this});
     view.image.pixels[0]=0.5;return !paletteFail;
@@ -109,7 +118,7 @@ function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImage
   vm.runInNewContext(script.replace(/^#.*$/gm,''),context);
   assert.deepEqual(input.mainView.image.pixels,[0.1,0.2],'Input pixels never change');
   assert.equal(input.mainView.id,inputId,'Input ID never changes');
-  return {calls,messages,outputs,input,gradientParameters,starParameters,paletteParameters,windows:ImageWindow.windows};
+  return {calls,messages,outputs,input,gradientParameters,starParameters,paletteParameters,nbParameters,windows:ImageWindow.windows};
 }
 const complete=api.buildWorkspaceReplayScript(plan,0,1);
 const generatorSource=api.buildWorkspaceReplayScript.toString();
@@ -283,4 +292,46 @@ console.log('Passed: StarXTerminator both stars flags, optional output reference
  const masked={...pm,mask:{status:'recorded',name:'HistoricalMask'}};
  assert.ok(api.workspaceReplayData([{id:'MaskedPalette',steps:[...scripts,masked]}])[0].steps[0].reason);
  console.log('Passed: recorded PPP combination, explicit prepared-input mapping, RGB target, following stages, input preservation, dimensions/color/cancel/failure, range-start and unsupported formula checks.');
+}
+
+{
+ const nb=step('NarrowbandNormalization',
+   'P.palette=NarrowbandNormalization.prototype.Palette_SHO; P.lightness=P.Lightness_Preserve; P.blendMode=1; P.SCNR=0.8; P.shadowpoint=0.5; P.highlightReduction=1.2;');
+ for(const steps of [[nb,ht],[ht,nb,ct]]) {
+   const plan=api.workspaceReplayData([{id:'NBN_test',steps}])[0];
+   assert.ok(plan.steps.every(s=>!s.reason));
+   assert.equal(plan.steps.find(s=>s.tool==='NarrowbandNormalization').source,nb.source);
+   const code=api.buildWorkspaceReplayScript(plan,0,plan.steps.length-1),result=run(code);
+   assert.deepEqual(result.calls.slice(4),steps.map(s=>s===nb?'NBN':s===ht?'HT':'CT'));
+   assert.equal(result.outputs.length,1,'Continue on the same copy');
+   assert.equal(result.nbParameters[0].palette,5);
+   assert.equal(result.nbParameters[0].lightness,1);
+   assert.equal(result.nbParameters[0].SCNR,0.8);
+   assert.equal(result.nbParameters[0].shadowpoint,0.5);
+   assert.equal(result.nbParameters[0].highlightReduction,1.2);
+   assert.match(result.messages[0],/Replay complete/);
+   for(const options of [{nbMissing:true},{nbFail:true}]) {
+     const stopped=run(code,options);
+     assert.match(stopped.messages[0],/NarrowbandNormalization/);
+     assert.equal(stopped.outputs.length,1);
+     assert.ok(!stopped.calls.includes('CT'));
+     if(steps[0]===nb)assert.ok(!stopped.calls.includes('HT'));
+   }
+   assert.equal(run(code,{cancel:true}).outputs.length,0);
+ }
+ for(const extra of [{mask:{status:'unknown'}},{mask:{status:'recorded',name:'NBN_mask'}},
+   {references:[{kind:'reference',name:'Old_input'}]},
+   {source:'var P=new NarrowbandNormalization; P.executeGlobal();'}]) {
+   const blocked=api.workspaceReplayData([{id:'NBN_blocked',steps:[{...nb,...extra}]}])[0].steps[0];
+   assert.ok(blocked.reason);assert.equal(blocked.source,'');
+ }
+ const paletteStep={title:'PerfectPalettePicker',number:1,substep:0,tool:'PerfectPalettePicker',reason:'',
+   action:'palette',inputs:['Ha_input'],variable:'P',source:'var P=new PixelMath; P.expression="Ha_input"; P.expression1="Ha_input"; P.expression2="Ha_input";'};
+ const continuation=api.workspaceReplayData([{id:'PaletteNBN',steps:[nb,ht]}])[0];
+ continuation.steps.unshift(paletteStep);
+ const extraChannel={isNull:false,mainView:{id:'Spare',image:{width:2,height:1,isColor:false}}};
+ const combined=run(api.buildWorkspaceReplayScript(continuation,0,2),{channels:[extraChannel],choices:[0]});
+ assert.deepEqual(combined.calls,['begin','fill','end','show','PM','NBN','HT']);
+ assert.equal(combined.outputs.length,1,'NBN continues on the RGB palette output');
+ console.log('Passed: NarrowbandNormalization first/middle replay, native parameters/enums, same output target, missing module/failure/cancel and historical blockers.');
 }

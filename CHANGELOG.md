@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Support NarrowbandNormalization with complete recorded parameters. Use the selected
+  starting image when first, or the existing replay result (including a palette RGB
+  result) when intermediate; preserve historical mask/reference and failure checks.
+
 - Replay the recorded final PerfectPalettePicker arithmetic PixelMath combination
   as one parent step, with explicit prepared grayscale input selection in PixInsight,
   matching-dimension checks, new RGB output and subsequent supported steps. Require

@@ -89,7 +89,7 @@ node test_workspace_report.cjs
 την εικόνα εισόδου. Η εικόνα εισόδου δεν μεταβάλλεται.
 
 Αρχικά υποστηρίζονται HistogramTransformation, CurvesTransformation,
-RGBWorkingSpace, SCNR, ColorSaturation, BlurXTerminator, NoiseXTerminator και GradientCorrection, όταν
+RGBWorkingSpace, SCNR, ColorSaturation, BlurXTerminator, NoiseXTerminator, GradientCorrection, StarXTerminator και NarrowbandNormalization, όταν
 υπάρχει κατάλληλος κώδικας παραμέτρων χωρίς μάσκα ή αναφορές. Χρειάζονται τα εργαλεία,
 οι άδειες και τα αντίστοιχα μοντέλα. Δεν εγγυόμαστε ίδιο αποτέλεσμα μεταξύ εκδόσεων.
 
@@ -182,3 +182,10 @@ PixInsight, ενώ οι επόμενες διεργασίες συνεχίζου
 ο τελικός PixelMath, υπάρχουν μάσκες, custom symbols, alpha expressions ή μη
 υποστηριζόμενες εκφράσεις, το βήμα παραμένει εμπόδιο. Ο ανεξάρτητος PixelMath και
 τα άλλα ομαδοποιημένα scripts δεν αποκτούν αυτόματα υποστήριξη επανάληψης.
+
+Το NarrowbandNormalization υποστηρίζει τις καταγεγραμμένες παραμέτρους του.
+Αν είναι πρώτο στο επιλεγμένο εύρος, διάλεξε την εικόνα εισόδου στον διάλογο
+PixInsight και εφαρμόζεται σε νέο αντίγραφο. Αν είναι ενδιάμεσο, χρησιμοποιεί
+το ήδη υπάρχον αποτέλεσμα επανάληψης, ακόμη και μετά από PerfectPalettePicker,
+χωρίς δεύτερη επιλογή εικόνας. Απαιτεί το εγκατεστημένο module. Οι έλεγχοι
+για ιστορική μάσκα, αναφορές και έγκυρο κώδικα παραμένουν.
