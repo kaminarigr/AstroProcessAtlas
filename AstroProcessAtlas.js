@@ -1558,7 +1558,7 @@ function buildWorkspaceReplayScript(image, start, end) {
       '         if(replaySteps[k].starRequired&&typeof StarXTerminator!=="function")throw Error("SelectiveColorCorrection requires StarXTerminator for its star mask.");',
       '         var process=replayFactories[k]();',
       '         applyReplayMask(output,replaySteps[k].mask,maskCache,replaySteps[k]);',
-      '         if(replaySteps[k].action==="selective"){runSelectiveReplay(process,output.mainView);processEvents();continue;}',
+      '         if(replaySteps[k].action==="selective"){Parameters.set("apaSelectiveStep",k);try{runSelectiveReplay(process,output.mainView);}finally{Parameters.set("apaSelectiveStep",-1);}processEvents();continue;}',
       '         if(replaySteps[k].action==="dark"){runDarkStructureReplay(process,output.mainView);processEvents();continue;}',
       '         if(replaySteps[k].action==="palette"){var keys=["expression","expression1","expression2"];for(var e=0;e<keys.length;++e)process[keys[e]]=process[keys[e]].replace(/(?:[0-9]+(?:[.][0-9]*)?|[.][0-9]+)(?:[eE][+-]?[0-9]+)?|[A-Za-z_][A-Za-z0-9_]*/g,function(token){return Object.prototype.hasOwnProperty.call(mapped,"$"+token)?mapped["$"+token]:token;});}',
       '         if(!process||typeof process.executeOn!=="function")throw Error("Required process is unavailable: "+replaySteps[k].title);',
@@ -1569,7 +1569,15 @@ function buildWorkspaceReplayScript(image, start, end) {
       '   }catch(error){throw Error(error.message+(output&&!output.isNull?"\\nPartial result retained as "+output.mainView.id:""));}',
       '   finally{for(var t=0;t<temporary.length;++t)if(!temporary[t].isNull)temporary[t].forceClose();}',
       '}',
-      'try{runAtlasReplay();}catch(error){new MessageBox(error.message,"AstroProcessAtlas - Replay stopped",StdIcon_Error,StdButton_Ok).execute();}'
+      'function runAtlasHistoryStep() {',
+      '   if(!Parameters.has("apaSelectiveStep"))throw Error("This older replay history entry has no recorded step identifier. Generate a new report and replay; the full workflow will not run on this view.");',
+      '   var index=Parameters.getInteger("apaSelectiveStep"),target=Parameters.targetView;',
+      '   if(index<0||index>=replaySteps.length||index!==Math.floor(index)||replaySteps[index].action!=="selective"||replaySteps[index].reason)throw Error("This history entry does not identify a supported SelectiveColorCorrection step.");',
+      '   if(!target||target.isNull)throw Error("Select a valid target view for this history step.");',
+      '   if(replaySteps[index].starRequired&&typeof StarXTerminator!=="function")throw Error("SelectiveColorCorrection requires StarXTerminator for its star mask.");',
+      '   runSelectiveReplay(replayFactories[index](),target);',
+      '}',
+      'try{if(Parameters.isViewTarget)runAtlasHistoryStep();else runAtlasReplay();}catch(error){new MessageBox(error.message,"AstroProcessAtlas - Replay stopped",StdIcon_Error,StdButton_Ok).execute();}'
    ];
    var darkLibrary = '';
    for (var di = 0; di < selected.length; ++di) if (selected[di].action === 'dark' && !selected[di].reason) {

@@ -63,7 +63,7 @@ assert.throws(()=>api.buildWorkspaceReplayScript(plan,0.5,1),/valid step range/)
 
 function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImages=false,gradientMissing=false,gradientFail=false,
   starMissing=false,starFail=false,paletteMissing=false,paletteFail=false,nbMissing=false,nbFail=false,sccMissing=false,sccFail=false,sourceChanged=false,scriptRecords=[],initialScripts=false,channels=[],choices=[],states=[],prepFail=false,
-  dseCancel=false,dseOtherTarget=false,dseFail=false,mltMissing=false,maskCancel=false,maskBlend=false,unsharpMissing=false,maskChoices=[],maskInvertChoices=[],orientations=[1],inputId='Ha_input',existingIds=['Ha_input_APA_replay']}={}) {
+  dseCancel=false,dseOtherTarget=false,dseFail=false,mltMissing=false,historyTarget=false,historyStep,maskCancel=false,maskBlend=false,unsharpMissing=false,maskChoices=[],maskInvertChoices=[],orientations=[1],inputId='Ha_input',existingIds=['Ha_input_APA_replay']}={}) {
   const calls=[], messages=[], outputs=[], gradientParameters=[], starParameters=[],paletteParameters=[],nbParameters=[],sccParameters=[],combos=[],maskApplications=[],unsharpParameters=[];let checkbox,maskPrompts=0;
   const input={isNull:false,rgbWorkingSpace:{gamma:2.2},mainView:{id:inputId,stf:[[1,2]],
     image:{width:2,height:1,numberOfChannels:1,bitsPerSample:32,isReal:true,isColor:false,pixels:[0.1,0.2]}}};
@@ -105,16 +105,19 @@ function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImage
   context.runDSEFixture=(data,target)=>{assert.equal(data.targetView,target);calls.push('DSE');if(dseFail)throw Error('DSE failed');target.image.pixels[0]+=0.1;};
   if(!unsharpMissing)context.UnsharpMask=function(){this.executeOn=view=>{calls.push('USM');unsharpParameters.push({...this});const output=outputs[outputs.length-1];maskApplications.push({name:output.mask&&output.mask.mainView.id,inverted:output.maskInverted,enabled:output.maskEnabled});view.image.pixels[0]+=0.1;return !fail;};};
   context.Script=function(){throw Error('Native Script properties are read-only; construction is not a replay mechanism.');};
-  context.Parameters={isViewTarget:false,targetView:input.mainView};
+  const recordedParameters=historyStep===undefined?{}:{apaSelectiveStep:historyStep};
+  context.Parameters={isViewTarget:historyTarget,targetView:input.mainView,
+    has:key=>Object.prototype.hasOwnProperty.call(recordedParameters,key),getInteger:key=>recordedParameters[key],set:(key,value)=>{recordedParameters[key]=value;}};
   context.File={readFile(){if(sccMissing)throw Error('SelectiveColorCorrection installed source is missing.');return Buffer.from(selectiveFixture+(sourceChanged?'changed':''));}};
   context.CryptographicHash_SHA256=api.CryptographicHash_SHA256;
   context.CryptographicHash=api.CryptographicHash;
   context.runSCCFixture=function(parameters,template){
-    assert.equal(parameters.isViewTarget,true);assert.equal(parameters.targetView,outputs[outputs.length-1].mainView);
-    assert.equal(context.Parameters.isViewTarget,false,'Global parameters remain untouched');
+    assert.equal(parameters.isViewTarget,true);assert.equal(parameters.targetView,historyTarget?input.mainView:outputs[outputs.length-1].mainView);
+    assert.equal(context.Parameters.isViewTarget,historyTarget,'Global context flags remain untouched');
     assert.equal(context.Parameters.targetView,input.mainView);
     assert.equal(parameters.getReal('yellow'),20);assert.equal(parameters.getString('filterMethod'),'Green');
     assert.equal(parameters.getBoolean('useStarMask'),template.parameters.some(([k,v])=>k==='useStarMask'&&v==='true'));
+    assert.ok(Number.isInteger(recordedParameters.apaSelectiveStep)&&recordedParameters.apaSelectiveStep>=0,'Step identifier is set before the script modifies the view');
     calls.push('SCC');sccParameters.push(template);parameters.targetView.image.pixels[0]+=0.2;
     ImageWindow.activeWindow={mainView:{id:'SCC_generated_mask'},isNull:false};
     if(sccFail)throw Error('Process failed: SelectiveColorCorrection');
@@ -165,9 +168,9 @@ function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImage
   };};
   const expanded=script.replace(/^#include "\/fixture\/src\/scripts\/Toolbox\/SelectiveColorCorrection.js"$/gm,selectiveFixture);
   vm.runInNewContext(expanded.replace(/^#.*$/gm,''),context);
-  assert.deepEqual(input.mainView.image.pixels,[0.1,0.2],'Input pixels never change');
+  if(!historyTarget)assert.deepEqual(input.mainView.image.pixels,[0.1,0.2],'Input pixels never change');
   assert.equal(input.mainView.id,inputId,'Input ID never changes');
-  return {calls,messages,outputs,input,gradientParameters,starParameters,paletteParameters,nbParameters,sccParameters,windows:ImageWindow.windows,maskPrompts,maskApplications,unsharpParameters};
+  return {calls,messages,outputs,input,gradientParameters,starParameters,paletteParameters,nbParameters,sccParameters,recordedParameters,windows:ImageWindow.windows,maskPrompts,maskApplications,unsharpParameters};
 }
 const complete=api.buildWorkspaceReplayScript(plan,0,1);
 {
@@ -527,10 +530,22 @@ console.log('Passed: StarXTerminator both stars flags, optional output reference
    assert.ok(!plan.steps.some(s=>s.tool==='RGBWorkingSpace'));
    const code=api.buildWorkspaceReplayScript(plan,0,plan.steps.length-1),result=run(code,{scriptRecords:[proc]});
    assert.equal(result.calls.filter(c=>c==='SCC').length,1);
+   assert.equal(result.recordedParameters.apaSelectiveStep,-1,'History marker does not leak into later steps');
    assert.ok(result.calls.includes(steps[steps.length-1]===ct?'CT':'HT'));
    assert.equal(result.sccParameters[0].md5sum,checksum);
    assert.equal(JSON.stringify(result.sccParameters[0].parameters),JSON.stringify(parameters));
    assert.match(result.messages[0],/Replay complete/);
+   const historyIndex=plan.steps.indexOf(entry);
+   const historyResult=run(code,{historyTarget:true,historyStep:historyIndex});
+   assert.deepEqual(historyResult.calls.filter(c=>['SCC','HT','CT'].includes(c)),['SCC']);
+   assert.equal(historyResult.outputs.length,0,'History applies only this step to the selected view');
+   assert.equal(historyResult.messages.length,0,'No workflow dialog or completion message in view context');
+   assert.equal(historyResult.input.mainView.image.pixels[0],0.1+0.2);
+   for(const historyStep of [undefined,-1,99,0.5]) {
+     const rejected=run(code,{historyTarget:true,historyStep});
+     assert.equal(rejected.outputs.length,0);assert.ok(!rejected.calls.includes('SCC'));
+     assert.match(rejected.messages[0],/history|identifier/);
+   }
    for(const options of [{sccMissing:true},{sccFail:true}]) {
      const stopped=run(code,{scriptRecords:[proc],...options});assert.match(stopped.messages[0],/Script|SelectiveColorCorrection/);
      assert.match(stopped.messages[0],/Partial result retained/);

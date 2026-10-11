@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add SelectiveColorCorrection step identifiers and view-target dispatch to replay
+  exports, so identified History Explorer calls apply only that operation instead
+  of reopening the full workflow. Reject missing/invalid identifiers. Native
+  history parameter capture remains to be validated in PixInsight.
+
 - Execute only the installed Script for grouped SelectiveColorCorrection replay.
   Keep its two RGBWorkingSpace entries visible as report components without
   executing them separately; the script handles its working-space settings.

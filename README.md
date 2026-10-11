@@ -292,6 +292,16 @@ PixInsight's prohibition on recursive Script execution. It runs once per parent
 operation on the current result, regenerating internal RGBWorkingSpace settings
 and masks. No original image/history needs to remain open for this operation.
 
+Replay exports set an `apaSelectiveStep` instance parameter before each
+SelectiveColorCorrection operation. When launched on a view from History Explorer,
+the replay file uses that identifier to apply only the recorded operation directly
+to the target view, without opening the workflow dialog or making another copy.
+The history file path still points to the exported replay file, which must remain
+available. Entries from older exports with empty parameters cannot identify their
+operation; new exports reject these view-target calls. Generate a new report and
+replay to obtain the identifier. Native PixInsight history capture still needs
+validation; automated checks cover parameter setup and view-target dispatch.
+
 The replay file references the installed source by an absolute include path. The
 source and its companion library must remain installed at that path; export a new
 report on another installation. A SHA-256 fingerprint captured when generating
