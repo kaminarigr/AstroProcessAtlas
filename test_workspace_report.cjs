@@ -733,10 +733,16 @@ console.log('Passed: arbitrary current/before/after selection, shared comparison
  browser.workspaceReplayData=[{id:'MaskedNative',steps:[{...readyStep,mask:{name:'Mask_history',inverted:true}}]}];
  elements.replay_image.value='0';browser.window.setReportLanguage('en');browser.window.updateReplayRange(true);
  assert.equal(elements.replay_export.disabled,false,'A supplied native mask does not block download');
+ assert.equal(elements.replay_readiness.children[0].className,'replay-warning');
+ assert.match(elements.replay_readiness.children[0].textContent,/WARNING/);
  assert.match(elements.replay_readiness.children[0].textContent,/Mask requested in PixInsight: Mask_history \(inverted pixels\)/);
  browser.window.setReportLanguage('el');
  assert.match(elements.replay_readiness.children[0].textContent,/Επιλογή μάσκας στο PixInsight/);
  browser.window.setReportLanguage('en');
+ browser.workspaceReplayData[0].steps[0].mask.inverted=null;browser.window.updateReplayRange(false);
+ assert.equal(elements.replay_export.disabled,false,'Unknown inversion is resolved in PixInsight');
+ assert.match(elements.replay_readiness.children[0].textContent,/inversion to confirm/);
+ assert.ok(!elements.replay_readiness.children[0].textContent.includes('STOP'));
 }
 
 // A clone branches at its common prefix; retained live indices still address real pixels.

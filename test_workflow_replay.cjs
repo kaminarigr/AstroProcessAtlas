@@ -33,7 +33,7 @@ assert.match(plan.steps[2].reason,/not yet supported by the replay exporter/);
 assert.equal(plan.steps[3].reason,'');
 for (const [change, pattern] of [
   [{mask:{status:'unknown'}}, /mask state is unknown/],
-  [{mask:{status:'recorded',name:'Mask_old'}}, /Mask_old/],
+  [{mask:{status:'recorded',name:''}}, /mask state is unknown/],
   [{references:[{name:'Other',kind:'input'}]}, /reference images/],
   [{source:'var P = new HistogramTransformation; P.executeOn(View.viewById("Ha"));'}, /Serialized/],
   [{source:'var P = new Script;'}, /Serialized/],
@@ -62,7 +62,7 @@ assert.throws(()=>api.buildWorkspaceReplayScript(plan,0.5,1),/valid step range/)
 
 function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImages=false,gradientMissing=false,gradientFail=false,
   starMissing=false,starFail=false,paletteMissing=false,paletteFail=false,nbMissing=false,nbFail=false,sccMissing=false,sccFail=false,sourceChanged=false,scriptRecords=[],initialScripts=false,channels=[],choices=[],states=[],prepFail=false,
-  maskCancel=false,unsharpMissing=false,maskChoices=[],inputId='Ha_input',existingIds=['Ha_input_APA_replay']}={}) {
+  maskCancel=false,unsharpMissing=false,maskChoices=[],orientations=[1],inputId='Ha_input',existingIds=['Ha_input_APA_replay']}={}) {
   const calls=[], messages=[], outputs=[], gradientParameters=[], starParameters=[],paletteParameters=[],nbParameters=[],sccParameters=[],combos=[],maskApplications=[],unsharpParameters=[];let checkbox,maskPrompts=0;
   const input={isNull:false,rgbWorkingSpace:{gamma:2.2},mainView:{id:inputId,stf:[[1,2]],
     image:{width:2,height:1,numberOfChannels:1,bitsPerSample:32,isReal:true,isColor:false,pixels:[0.1,0.2]}}};
@@ -82,7 +82,7 @@ function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImage
     calls.push(this.H?'HT':'CT');view.image.pixels[0]+=1;return !fail;};}
   const context={ImageWindow,View:{viewById:id=>({isNull:!existingIds.includes(id)})},
     Dialog:function(){this.ok=()=>{};this.cancel=()=>{};this.adjustToContents=()=>{};
-      this.execute=()=>{checkbox.checked=confirm;if(this.windowTitle==='AstroProcessAtlas - Select mask'){const choice=maskChoices[maskPrompts++];if(choice!==undefined)combos[combos.length-1].currentItem=choice;return !maskCancel;}const inputs=combos.filter(c=>c.items[0]!=='Choose input state');const stateBoxes=combos.filter(c=>c.items[0]==='Choose input state');for(let i=0;i<choices.length;i++)inputs[i+1].currentItem=choices[i];stateBoxes.forEach((c,i)=>c.currentItem=states[i]===undefined?1:states[i]);return !cancel;};},
+      this.execute=()=>{checkbox.checked=confirm;if(this.windowTitle==='AstroProcessAtlas - Mask orientation'){combos[combos.length-1].currentItem=orientations.shift()||0;return !maskCancel;}if(this.windowTitle==='AstroProcessAtlas - Select mask'){const choice=maskChoices[maskPrompts++];if(choice!==undefined)combos[combos.length-1].currentItem=choice;return !maskCancel;}const inputs=combos.filter(c=>c.items[0]!=='Choose input state');const stateBoxes=combos.filter(c=>c.items[0]==='Choose input state');for(let i=0;i<choices.length;i++)inputs[i+1].currentItem=choices[i];stateBoxes.forEach((c,i)=>c.currentItem=states[i]===undefined?1:states[i]);return !cancel;};},
     CheckBox:function(){checkbox=this;}, ComboBox:function(){this.items=[];this.addItem=v=>this.items.push(v);combos.push(this);},
     Label:function(){this.setMinWidth=()=>{};},PushButton:function(){},HorizontalSizer:Sizer,VerticalSizer:Sizer,
     MessageBox:function(message){this.execute=()=>messages.push(message);},
@@ -181,6 +181,12 @@ const complete=api.buildWorkspaceReplayScript(plan,0,1);
  const reversed=api.workspaceReplayData([{id:'InvertFirst',steps:[masked(true),masked(false)]}])[0];
  result=run(api.buildWorkspaceReplayScript(reversed,0,1),{channels:[maskWindow]});
  assert.equal(result.maskPrompts,1);assert.deepEqual(result.maskApplications.map(m=>m.inverted),[false,true],'First inverted pixels establish the cached orientation');
+ const unknown=api.workspaceReplayData([{id:'UnknownInversion',steps:[masked(null),masked(null)]}])[0];
+ assert.ok(unknown.steps.every(s=>!s.reason),'A known mask name with unknown inversion is a prompt, not a blocker');
+ const unknownCode=api.buildWorkspaceReplayScript(unknown,0,1);
+ result=run(unknownCode,{channels:[maskWindow],orientations:[2,1]});
+ assert.equal(result.maskPrompts,1);assert.deepEqual(result.maskApplications.map(m=>m.inverted),[false,true]);
+ result=run(unknownCode,{channels:[maskWindow],orientations:[0]});assert.match(result.messages[0],/Mask orientation not confirmed/);assert.equal(result.maskPrompts,0);
  result=run(code,{channels:[maskWindow],maskCancel:true});assert.equal(result.calls.filter(c=>c==='USM').length,0);assert.match(result.messages[0],/Mask selection cancelled.*Partial result/s);
  result=run(code,{channels:[maskWindow],fail:true});assert.equal(result.outputs[0].mask,null);assert.equal(result.calls.filter(c=>c==='USM').length,1);
  result=run(api.buildWorkspaceReplayScript(api.workspaceReplayData([{id:'USM',steps:[usm]}])[0],0,0),{unsharpMissing:true});assert.match(result.messages[0],/UnsharpMask/);
@@ -243,7 +249,7 @@ const gcFailed=run(gcScript,{gradientFail:true});
 assert.match(gcFailed.messages[0],/Process failed: GradientCorrection/);
 assert.ok(!gcFailed.calls.includes('HT'));
 for(const changed of [
-  {mask:{status:'recorded',name:'GC_mask'}}, {mask:{status:'unknown'}},
+  {mask:{status:'unknown'}},
   {references:[{name:'GC_reference',kind:'reference'}]},
   {source:'var P = new GradientCorrection; P.executeGlobal();'}
 ]) {
@@ -309,7 +315,7 @@ for (const stars of [false,true]) {
     assert.equal(stopped.outputs.length,1);
   }
   for(const extra of [
-    {mask:{status:'unknown'}}, {mask:{status:'recorded',name:'Old_mask'}},
+    {mask:{status:'unknown'}},
     {references:[{kind:'input',name:'Other'}]},
     {source:'var P = new StarXTerminator; P.executeGlobal();'},
     ...(!stars?[{references:[{kind:'output',name:'Unexpected'}]}]:[])
@@ -386,7 +392,7 @@ console.log('Passed: StarXTerminator both stars flags, optional output reference
    }
    assert.equal(run(code,{cancel:true}).outputs.length,0);
  }
- for(const extra of [{mask:{status:'unknown'}},{mask:{status:'recorded',name:'NBN_mask'}},
+ for(const extra of [{mask:{status:'unknown'}},
    {references:[{kind:'reference',name:'Old_input'}]},
    {source:'var P=new NarrowbandNormalization; P.executeGlobal();'}]) {
    const blocked=api.workspaceReplayData([{id:'NBN_blocked',steps:[{...nb,...extra}]}])[0].steps[0];

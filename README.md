@@ -93,7 +93,11 @@ need no new prompt, and opposite orientations use PixInsight's mask inversion fl
 Mask pixels are never changed. Masks are removed between operations. Cancellation
 stops replay and retains the partial result. The report cannot reconstruct a mask's
 historical pixels. Download is enabled only when the entire selected range is supported;
-supported entries are green and blockers pink/red.
+supported entries are green, mask prompts orange with WARNING, and blockers pink/red.
+If the mask name is recorded but its inversion is unspecified, download remains
+available and replay asks you to choose the historical orientation at each affected
+step. The mask image selection is still reused. An entirely unknown mask state
+remains a blocker.
 Historical pixels, masks and missing inputs are not bundled in the exported script.
 
 GradientCorrection preserves its original serialized thresholds, scale, convergence,

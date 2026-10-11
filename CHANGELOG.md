@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Treat a recorded native mask with unspecified inversion as an interactive
+  warning instead of blocking export. Ask for its historical orientation at the
+  affected step without requesting the cached mask image again. Show masked
+  replay entries in orange with WARNING; actual unsupported steps remain red.
+
 - Support UnsharpMask replay with its recorded native parameters. For supported
   native processes, request recorded masks at first use, cache choices by historical
   name, and apply relative inversion automatically without changing mask pixels.
