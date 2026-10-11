@@ -1143,26 +1143,29 @@ function buildWorkspaceReplayScript(image, start, end) {
       manifest.push({title:step.title, number:step.number, substep:step.substep, reason:step.reason});
       factories.push(step.reason ? 'null' : 'function(){\n' + step.source + '\nreturn ' + step.variable + ';\n}');
    }
+   // Build comment delimiters at runtime, as in replayStepHTML. PJSR's
+   // preprocessing can truncate nested comment/URL text inside source strings.
+   var comment = String.fromCharCode(47, 47) + ' ';
    var lines = [
-      '// AstroProcessAtlas workflow replay — experimental v1',
-      '// Copyright (c) 2026 YoruHikari Astrophotography — https://www.yoruhikari.gr/',
-      '// SPDX-License-Identifier: MIT',
-      '// Permission is hereby granted, free of charge, to any person obtaining a copy',
-      '// of this software and associated documentation files (the "Software"), to deal',
-      '// in the Software without restriction, including without limitation the rights',
-      '// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell',
-      '// copies of the Software, and to permit persons to whom the Software is',
-      '// furnished to do so, subject to the following conditions:',
-      '// The above copyright notice and this permission notice shall be included in all',
-      '// copies or substantial portions of the Software.',
-      '// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR',
-      '// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,',
-      '// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE',
-      '// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER',
-      '// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,',
-      '// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.',
-      '// Input must contain the pixels BEFORE the first selected step.',
-      '// Never select the finished image unless it is the intended starting state.',
+      comment + 'AstroProcessAtlas workflow replay - experimental v1',
+      comment + 'Copyright (c) 2026 YoruHikari Astrophotography - https:' + String.fromCharCode(47, 47) + 'www.yoruhikari.gr/',
+      comment + 'SPDX-License-Identifier: MIT',
+      comment + 'Permission is hereby granted, free of charge, to any person obtaining a copy',
+      comment + 'of this software and associated documentation files (the "Software"), to deal',
+      comment + 'in the Software without restriction, including without limitation the rights',
+      comment + 'to use, copy, modify, merge, publish, distribute, sublicense, and/or sell',
+      comment + 'copies of the Software, and to permit persons to whom the Software is',
+      comment + 'furnished to do so, subject to the following conditions:',
+      comment + 'The above copyright notice and this permission notice shall be included in all',
+      comment + 'copies or substantial portions of the Software.',
+      comment + 'THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR',
+      comment + 'IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,',
+      comment + 'FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE',
+      comment + 'AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER',
+      comment + 'LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,',
+      comment + 'OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.',
+      comment + 'Input must contain the pixels BEFORE the first selected step.',
+      comment + 'Never select the finished image unless it is the intended starting state.',
       '#include <pjsr/Sizer.jsh>', '#include <pjsr/UndoFlag.jsh>',
       '#include <pjsr/StdIcon.jsh>', '#include <pjsr/StdButton.jsh>',
       'var replayImage = ' + JSON.stringify(image.id) + ';',
@@ -1174,8 +1177,8 @@ function buildWorkspaceReplayScript(image, start, end) {
       '   if(!candidates.length)throw Error("Open an image in the state BEFORE the first selected step.");',
       '   var count=0;while(count<replaySteps.length&&!replaySteps[count].reason)++count;',
       '   if(!count)throw Error("Replay cannot start: "+replaySteps[0].reason);',
-      '   var dialog=new Dialog;dialog.windowTitle="AstroProcessAtlas — Replay";',
-      '   var label=new Label(dialog);label.text="Input for "+replayImage+" — before step "+replaySteps[0].number;',
+      '   var dialog=new Dialog;dialog.windowTitle="AstroProcessAtlas - Replay";',
+      '   var label=new Label(dialog);label.text="Input for "+replayImage+" - before step "+replaySteps[0].number;',
       '   var combo=new ComboBox(dialog);for(var j=0;j<candidates.length;++j)combo.addItem(candidates[j].mainView.id);',
       '   combo.currentItem=0;',
       '   var info=new Label(dialog);info.text="Will apply "+count+" of "+replaySteps.length+" selected processes to a new copy.";',
@@ -1210,7 +1213,7 @@ function buildWorkspaceReplayScript(image, start, end) {
       '      new MessageBox("Replay complete: "+output.mainView.id,"AstroProcessAtlas",StdIcon_Information,StdButton_Ok).execute();',
       '   }catch(error){throw Error(error.message+"\\nPartial result retained as "+output.mainView.id);}',
       '}',
-      'try{runAtlasReplay();}catch(error){new MessageBox(error.message,"AstroProcessAtlas — Replay stopped",StdIcon_Error,StdButton_Ok).execute();}'
+      'try{runAtlasReplay();}catch(error){new MessageBox(error.message,"AstroProcessAtlas - Replay stopped",StdIcon_Error,StdButton_Ok).execute();}'
    ];
    return lines.join('\n') + '\n';
 }

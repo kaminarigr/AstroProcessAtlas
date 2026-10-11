@@ -77,6 +77,13 @@ function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImage
   return {calls,messages,outputs,input};
 }
 const complete=api.buildWorkspaceReplayScript(plan,0,1);
+const generatorSource=api.buildWorkspaceReplayScript.toString();
+for(const line of generatorSource.split('\n')) {
+  if (/^\s*\/\//.test(line)) continue;
+  assert.ok(!line.includes('//'),'Construct comment/URL delimiters at runtime for PJSR preprocessing: '+line);
+}
+assert.match(complete,/\/\/ Copyright.*https:\/\/www\.yoruhikari\.gr\//);
+assert.match(complete,/\/\/ SPDX-License-Identifier: MIT/);
 new vm.Script(complete.replace(/^#.*$/gm,''));
 const success=run(complete);
 assert.deepEqual(success.calls,['begin','copy','end','show','HT','CT']);

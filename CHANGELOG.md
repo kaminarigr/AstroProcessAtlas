@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Construct replay comment and URL delimiters at runtime to avoid PixInsight
+  preprocessing errors in the workflow generator's source strings.
+
 - Add experimental per-image workflow `.js` export with consecutive process ranges,
   readiness checks, original parameters and applied-only step/substep numbering.
 - Generated PixInsight scripts request and confirm the input state, create a new
