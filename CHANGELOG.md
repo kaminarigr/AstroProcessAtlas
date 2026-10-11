@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Disable replay download when any selected step is blocked, including palette
+  operations selected after the start of a range. Prevent direct export from
+  bypassing this check. Color supported steps green and unsupported steps pink/red.
+
 - Avoid recursive native Script execution for SelectiveColorCorrection. Include
   the installed Toolbox source inside an isolated function and supply a local
   view-target Parameters adapter. Fingerprint the source with SHA-256 at report

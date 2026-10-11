@@ -706,9 +706,17 @@ console.log('Passed: arbitrary current/before/after selection, shared comparison
  assert.equal(elements.replay_start.children.length,3);
  assert.equal(elements.replay_end.value,'2');
  assert.match(elements.replay_status.textContent,/1 consecutive/);
- assert.equal(elements.replay_export.disabled,false);
+ assert.equal(elements.replay_export.disabled,true,'Any blocker in the selected range disables export');
  assert.match(elements.replay_readiness.children[1].textContent,/STOP/);
  assert.match(elements.replay_readiness.children[2].textContent,/Not reached/);
+ assert.equal(elements.replay_readiness.children[0].className,'replay-supported');
+ assert.equal(elements.replay_readiness.children[1].className,'replay-unsupported');
+ assert.equal(elements.replay_readiness.children[2].className,'replay-supported','A supported step remains supported after an earlier blocker');
+ const previousBlob=exportedBlob;
+ browser.window.exportReplayScript();
+ assert.equal(exportedBlob,previousBlob,'Direct export calls cannot bypass a blocked range');
+ elements.replay_end.value='0';browser.window.updateReplayRange(false);
+ assert.equal(elements.replay_export.disabled,false,'A fully supported range enables export');
  browser.window.exportReplayScript();
  assert.match(exportedBlob,/function runAtlasReplay/);
  new vm.Script(exportedBlob.replace(/^#.*$/gm,''));
@@ -940,7 +948,9 @@ console.log('Passed: arbitrary current/before/after selection, shared comparison
  browser.window.updateReplayRange(true);
  assert.match(elements.replay_readiness.children[1].textContent,/Start the selected range/);
  assert.match(elements.replay_status.textContent,/1 consecutive/);
+ assert.equal(elements.replay_export.disabled,true,'Palette must be first in the range');
  elements.replay_start.value='1';browser.window.updateReplayRange(false);
+ assert.equal(elements.replay_export.disabled,false);
  assert.match(elements.replay_readiness.children[0].textContent,/Choose prepared inputs/);
  browser.window.exportReplayScript();
  assert.match(exportedBlob,/"action":"palette"/);

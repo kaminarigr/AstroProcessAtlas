@@ -1524,7 +1524,7 @@ function buildWorkspaceReplayScript(image, start, end) {
 }
 
 function workspaceReplayHTML(records) {
-   var html = '<details class="replay-workflow"><summary>Export workflow for replay (experimental)</summary>' +
+   var html = '<style>#replay_readiness li{padding:8px 12px;margin:6px 0;border-left:4px solid;border-radius:4px;overflow-wrap:anywhere}#replay_readiness .replay-supported{color:#a6e3a1;background:#a6e3a112;border-color:#a6e3a1}#replay_readiness .replay-unsupported{color:#f38ba8;background:#f38ba812;border-color:#f38ba8}#replay_export:disabled{opacity:.45;cursor:not-allowed}</style><details class="replay-workflow"><summary>Export workflow for replay (experimental)</summary>' +
       '<p>Select an image and a consecutive range of applied processes. Run the downloaded .js in PixInsight with an input in the state BEFORE the first selected step. Replay uses a new copy and stops at the first unsupported step. Masks and historical references are not restored in this first version.</p>' +
       '<p>Copy naming: the last ImageIdentifier in the selected range, or the selected input name, followed by _APA_replay. Existing names receive a numeric suffix.</p>' +
       '<p>SelectiveColorCorrection includes the installed Toolbox source in the replay file and supplies the recorded parameters directly. Keep that installed source available at the exported include path.</p>' +
@@ -1535,7 +1535,7 @@ function workspaceReplayHTML(records) {
    return html + '</select></label> <label>First process <select id="replay_start" onchange="updateReplayRange(false)"></select></label> ' +
       '<label>Last process <select id="replay_end" onchange="updateReplayRange(false)"></select></label>' +
       '<p id="replay_status" data-no-i18n aria-live="polite"></p><ol id="replay_readiness" data-no-i18n></ol>' +
-      '<button id="replay_export" type="button" onclick="exportReplayScript()">Download PixInsight replay script</button></details>';
+      '<button id="replay_export" type="button" disabled onclick="exportReplayScript()">Download PixInsight replay script</button></details>';
 }
 
 function replayStepHTML(record, step) {
@@ -2384,14 +2384,15 @@ var WORKSPACE_BROWSER_SOURCE = [
    "      if(list)while(list.firstChild)list.removeChild(list.firstChild);",
    "      for(var j=start;j<=end&&j<image.steps.length;++j){",
    "         var step=image.steps[j],reason=step.reason||(step.action==='palette'&&j>start?'Start the selected range at PerfectPalettePicker and choose its prepared inputs.':'');if(reason)blocked=true;if(!blocked)++ready;",
-   "         if(list){var item=document.createElement('li');item.textContent=step.number+(step.substep?'.'+step.substep:'')+' — '+step.title+': '+translated(reason?'STOP — '+reason:blocked?'Not reached until earlier blocker is resolved.':step.action==='palette'?'Choose prepared inputs in PixInsight for the recorded palette combination.':step.action==='identifier'?'Naming handled at creation: '+namingId+'_APA_replay':'Ready for replay');list.appendChild(item);}",
+   "         if(list){var item=document.createElement('li');item.className=reason?'replay-unsupported':'replay-supported';item.textContent=step.number+(step.substep?'.'+step.substep:'')+' — '+step.title+': '+translated(reason?'STOP — '+reason:blocked?'Not reached until earlier blocker is resolved.':step.action==='palette'?'Choose prepared inputs in PixInsight for the recorded palette combination.':step.action==='identifier'?'Naming handled at creation: '+namingId+'_APA_replay':'Ready for replay');list.appendChild(item);}",
    "      }",
    "      var status=document.getElementById('replay_status');if(status)status.textContent=translated(image.steps.length?ready+' consecutive processes can run from the selected input state.':'No applied processes to replay.');",
-   "      var button=document.getElementById('replay_export');if(button)button.disabled=!ready;",
+   "      var button=document.getElementById('replay_export');if(button)button.disabled=!ready||blocked;",
    "   };",
    "   window.exportReplayScript=function(){",
    "      var image=workspaceReplayData[Number(document.getElementById('replay_image').value)],start=Number(document.getElementById('replay_start').value),end=Number(document.getElementById('replay_end').value);",
-   "      if(!image||!image.steps[start]||image.steps[start].reason)return;",
+   "      if(!image||!image.steps[start]||!image.steps[end]||end<start)return;",
+   "      for(var i=start;i<=end;++i)if(image.steps[i].reason||(image.steps[i].action==='palette'&&i>start))return;",
    "      var code=buildWorkspaceReplayScript(image,start,end),blob=new Blob([code],{type:'text/javascript;charset=utf-8'}),url=URL.createObjectURL(blob);",
    "      var link=document.createElement('a');link.href=url;link.download='AstroProcessAtlas_replay_'+image.id.replace(/[^A-Za-z0-9_-]/g,'_')+'.js';document.body.appendChild(link);link.click();document.body.removeChild(link);setTimeout(function(){URL.revokeObjectURL(url);},1000);",
    "   };",
