@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Avoid recursive native Script execution for SelectiveColorCorrection. Include
+  the installed Toolbox source inside an isolated function and supply a local
+  view-target Parameters adapter. Fingerprint the source with SHA-256 at report
+  generation and verify it before execution; original workspace history is no
+  longer required. Native Script construction/execution is never used.
+
 - Fix read-only Script property warnings during SelectiveColorCorrection replay.
   Resolve an existing immutable Script instance from open-image initial/recent
   history by exact saved parameters and checksum instead of constructing/writing

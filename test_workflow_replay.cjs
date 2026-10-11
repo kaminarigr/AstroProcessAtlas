@@ -3,7 +3,10 @@ const vm = require('node:vm');
 const assert = require('node:assert/strict');
 const source = fs.readFileSync(__dirname + '/AstroProcessAtlas.js', 'utf8')
   .replace(/^#.*$/gm, '').replace(/generateHistoryReport\(\);\s*$/, '');
-const api = {Console:{writeln(){}}};
+const crypto = require('node:crypto');
+const selectiveFixture='function main(){if(!Parameters.isViewTarget)throw Error("Unexpected interactive entry");runSCCFixture(Parameters,template);} main();';
+const api = {Console:{writeln(){}},coreSrcDirPath:'/fixture/src',File:{readFile:()=>Buffer.from(selectiveFixture)},
+  CryptographicHash_SHA256:256,CryptographicHash:function(){this.hash=bytes=>({toHex:()=>crypto.createHash('sha256').update(bytes).digest('hex')});}};
 vm.runInNewContext(source, api);
 function step(tool, parameters='', extra={}) {
   return {proc:{processId:()=>tool}, title:tool, source:'var P = new '+tool+';\n'+parameters,
@@ -58,7 +61,7 @@ assert.throws(()=>api.buildWorkspaceReplayScript(plan,0,99),/valid step range/);
 assert.throws(()=>api.buildWorkspaceReplayScript(plan,0.5,1),/valid step range/);
 
 function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImages=false,gradientMissing=false,gradientFail=false,
-  starMissing=false,starFail=false,paletteMissing=false,paletteFail=false,nbMissing=false,nbFail=false,sccMissing=false,sccFail=false,scriptRecords=[],initialScripts=false,channels=[],choices=[],states=[],prepFail=false,
+  starMissing=false,starFail=false,paletteMissing=false,paletteFail=false,nbMissing=false,nbFail=false,sccMissing=false,sccFail=false,sourceChanged=false,scriptRecords=[],initialScripts=false,channels=[],choices=[],states=[],prepFail=false,
   inputId='Ha_input',existingIds=['Ha_input_APA_replay']}={}) {
   const calls=[], messages=[], outputs=[], gradientParameters=[], starParameters=[],paletteParameters=[],nbParameters=[],sccParameters=[],combos=[];let checkbox;
   const input={isNull:false,rgbWorkingSpace:{gamma:2.2},mainView:{id:inputId,stf:[[1,2]],
@@ -95,13 +98,23 @@ function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImage
   };};
   if(!missing)context.CurvesTransformation=Process;
   context.Script=function(){throw Error('Native Script properties are read-only; construction is not a replay mechanism.');};
+  context.Parameters={isViewTarget:false,targetView:input.mainView};
+  context.File={readFile(){if(sccMissing)throw Error('SelectiveColorCorrection installed source is missing.');return Buffer.from(selectiveFixture+(sourceChanged?'changed':''));}};
+  context.CryptographicHash_SHA256=api.CryptographicHash_SHA256;
+  context.CryptographicHash=api.CryptographicHash;
+  context.runSCCFixture=function(parameters,template){
+    assert.equal(parameters.isViewTarget,true);assert.equal(parameters.targetView,outputs[outputs.length-1].mainView);
+    assert.equal(context.Parameters.isViewTarget,false,'Global parameters remain untouched');
+    assert.equal(context.Parameters.targetView,input.mainView);
+    assert.equal(parameters.getReal('yellow'),20);assert.equal(parameters.getString('filterMethod'),'Green');
+    assert.equal(parameters.getBoolean('useStarMask'),template.parameters.some(([k,v])=>k==='useStarMask'&&v==='true'));
+    calls.push('SCC');sccParameters.push(template);parameters.targetView.image.pixels[0]+=0.2;
+    ImageWindow.activeWindow={mainView:{id:'SCC_generated_mask'},isNull:false};
+    if(sccFail)throw Error('Process failed: SelectiveColorCorrection');
+  };
   const storedScripts=sccMissing?[]:scriptRecords.map(record=>{
     const instance={processId:()=> 'Script',executeOn(view){
-    assert.equal(view,outputs[outputs.length-1].mainView,'Script receives the current replay target');
-    assert.notEqual(view,input.mainView);
-    calls.push('SCC');sccParameters.push({...this});view.image.pixels[0]+=0.2;
-    ImageWindow.activeWindow={mainView:{id:'SCC_generated_mask'},isNull:false};
-    return !sccFail;
+    throw Error('Attempt to execute a Script instance recursively (view context).');
     }};
     for(const key of ['filePath','md5sum','parameters','information'])Object.defineProperty(instance,key,{value:record[key],writable:false,enumerable:true});
     return instance;
@@ -143,7 +156,8 @@ function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImage
     }
     return !starFail;
   };};
-  vm.runInNewContext(script.replace(/^#.*$/gm,''),context);
+  const expanded=script.replace(/^#include "\/fixture\/src\/scripts\/Toolbox\/SelectiveColorCorrection.js"$/gm,selectiveFixture);
+  vm.runInNewContext(expanded.replace(/^#.*$/gm,''),context);
   assert.deepEqual(input.mainView.image.pixels,[0.1,0.2],'Input pixels never change');
   assert.equal(input.mainView.id,inputId,'Input ID never changes');
   return {calls,messages,outputs,input,gradientParameters,starParameters,paletteParameters,nbParameters,sccParameters,windows:ImageWindow.windows};
@@ -449,8 +463,10 @@ console.log('Passed: StarXTerminator both stars flags, optional output reference
  for(const record of [{...starScc.proc,md5sum:'00000000000000000000000000000000'},
    {...starScc.proc,filePath:'Other.js'},
    {...starScc.proc,parameters:starScc.proc.parameters.map(([k,v])=>[k,k==='green'?'12':v])}]) {
-   const mismatch=run(code,{scriptRecords:[record]});
-   assert.ok(!mismatch.calls.includes('SCC'));assert.match(mismatch.messages[0],/no matching recorded Script/);
+   const independent=run(code,{scriptRecords:[record]});
+   assert.ok(independent.calls.includes('SCC'),'No dependence on workspace Script instances');
  }
+ const changed=run(code,{sourceChanged:true});assert.ok(!changed.calls.includes('SCC'));assert.match(changed.messages[0],/source changed/);
+ assert.ok(run(code).calls.includes('SCC'),'Original history is no longer required');
  console.log('Passed: native SelectiveColorCorrection grouped/standalone/first/middle, saved settings/checksum, one parent call, continued target, missing/failing script, imported/historical masks and star-mask dependency.');
 }

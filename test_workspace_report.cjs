@@ -2,7 +2,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const assert = require('node:assert/strict');
 const source = fs.readFileSync(__dirname + '/AstroProcessAtlas.js', 'utf8').replace(/^#.*$/gm, '');
-const helper = {Console:{writeln(){}}, View:{viewById:()=>({isNull:true})}};
+const helper = {Console:{writeln(){}},coreSrcDirPath:'/fixture/src', View:{viewById:()=>({isNull:true})}};
 vm.runInNewContext(source.replace(/generateHistoryReport\(\);\s*$/, ''), helper);
 const saved = [], changes = [];
 
@@ -960,7 +960,8 @@ console.log('Passed: arbitrary current/before/after selection, shared comparison
  assert.match(elements.replay_status.textContent,/2 consecutive/);
  browser.window.exportReplayScript();new vm.Script(exportedBlob.replace(/^#.*$/gm,''));
  assert.ok(!exportedBlob.includes('new Script'),'Never write read-only native Script properties');
- assert.match(exportedBlob,/findSelectiveReplayInstance/);
+ assert.match(exportedBlob,/function runSelectiveReplay/);
+ assert.match(exportedBlob,/#include "\/fixture\/src\/scripts\/Toolbox\/SelectiveColorCorrection.js"/);
  assert.ok(!exportedBlob.includes('new RGBWorkingSpace'),'Internal settings are delegated to the installed script');
  const imported=helper.collectWorkspaceRecord(image('ImportedSelective',[ws,ws,makeProcess('Script',{filePath:scc.filePath,md5sum:scc.md5sum,parameters:Object.entries({...values,filterMethod:'Imported Mask'})})]),118);
  const plan=helper.workspaceReplayData([imported])[0];

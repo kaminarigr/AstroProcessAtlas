@@ -1311,7 +1311,15 @@ function selectiveColorReplaySource(step) {
    }
    var required = realKeys.concat(boolKeys, ['previewMode','filterMethod']);
    for (var k = 0; k < required.length; ++k) if (values['$'+required[k]] === undefined) return null;
-   return {source:'var P = '+JSON.stringify({filePath:'$PXI_SRCDIR/scripts/Toolbox/SelectiveColorCorrection.js',md5sum:proc.md5sum,parameters:parameters})+';',
+   var includePath = '', sourceDigest = '';
+   try {
+      if (typeof coreSrcDirPath !== 'string' || !coreSrcDirPath) return null;
+      includePath = coreSrcDirPath.split(String.fromCharCode(92)).join('/').replace(/\/+$/, '') + '/scripts/Toolbox/SelectiveColorCorrection.js';
+      if (/["\r\n]/.test(includePath)) return null;
+      sourceDigest = (new CryptographicHash(CryptographicHash_SHA256)).hash(File.readFile(includePath)).toHex();
+      if (!/^[0-9a-f]{64}$/i.test(sourceDigest)) return null;
+   } catch (e) { return null; }
+   return {source:'var P = '+JSON.stringify({filePath:includePath,sourceDigest:sourceDigest,md5sum:proc.md5sum,parameters:parameters})+';',
       variable:'P', starRequired:values.$useStarMask === 'true'};
 }
 
@@ -1320,7 +1328,7 @@ function selectiveColorReplayBlockReason(step) {
    for (var p = 0; p < parameters.length; ++p)
       if (parameters[p] && parameters[p][0] === 'filterMethod' && parameters[p][1] === 'Imported Mask')
          return 'SelectiveColorCorrection imported mask is not recorded and cannot be reconstructed.';
-   return 'SelectiveColorCorrection requires complete saved parameters, valid serialization and a recorded script checksum.';
+   return 'SelectiveColorCorrection requires complete saved parameters, valid serialization and its readable installed source file.';
 }
 
 function workspaceReplayData(records) {
@@ -1425,26 +1433,11 @@ function buildWorkspaceReplayScript(image, start, end) {
       comment + 'Input must contain the pixels BEFORE the first selected step.',
       comment + 'Never select the finished image unless it is the intended starting state.',
       '#include <pjsr/Sizer.jsh>', '#include <pjsr/UndoFlag.jsh>',
-      '#include <pjsr/StdIcon.jsh>', '#include <pjsr/StdButton.jsh>',
+      '#include <pjsr/StdIcon.jsh>', '#include <pjsr/StdButton.jsh>', '#include <pjsr/CryptographicHash.jsh>',
       'var replayImage = ' + JSON.stringify(image.id) + ';',
       'var replayIdentifier = ' + JSON.stringify(identifier) + ';',
       'var replaySteps = ' + JSON.stringify(manifest) + ';',
       'var replayFactories = [' + factories.join(',\n') + '];',
-      'function findSelectiveReplayInstance(template) {',
-      '   var windows=ImageWindow.windows;',
-      '   for(var w=0;w<windows.length;++w){if(windows[w].isNull)continue;var view=windows[w].mainView;',
-      '      for(var h=0;h<2;++h){var history;try{history=h?view.initialProcessing:view.processing;}catch(error){continue;}if(!history||typeof history.at!=="function")continue;',
-      '         for(var i=0;i<history.length;++i){var instance=history.at(i);try{',
-      '            if(!instance||typeof instance.processId!=="function"||instance.processId()!=="Script"||typeof instance.executeOn!=="function")continue;',
-      '            var path=String(instance.filePath).split(String.fromCharCode(92)).join("/");if(path.substr(path.lastIndexOf("/")+1).toLowerCase()!=="selectivecolorcorrection.js"||String(instance.md5sum).toLowerCase()!==template.md5sum.toLowerCase())continue;',
-      '            var rows=instance.parameters;if(!rows||rows.length!==template.parameters.length)continue;var match=true;',
-      '            for(var p=0;p<template.parameters.length;++p){var found=0;for(var q=0;q<rows.length;++q)if(rows[q][0]===template.parameters[p][0]&&String(rows[q][1])===template.parameters[p][1])++found;if(found!==1){match=false;break;}}',
-      '            if(match)return instance;',
-      '         }catch(error){continue;}}',
-      '      }',
-      '   }',
-      '   throw Error("SelectiveColorCorrection: no matching recorded Script instance is available. Keep the original image open with its processing history (matching parameters and checksum).");',
-      '}',
       'function runAtlasReplay() {',
       '   var candidates = [];',
       '   for(var i=0;i<ImageWindow.windows.length;++i) if(!ImageWindow.windows[i].isNull)candidates.push(ImageWindow.windows[i]);',
@@ -1462,7 +1455,7 @@ function buildWorkspaceReplayScript(image, start, end) {
       '   naming.toolTip="A numeric suffix is added if this name already exists.";',
       '   combo.onItemSelected=function(index){if(index>=0&&index<candidates.length)naming.text="Copy name: "+(replayIdentifier||candidates[index].mainView.id)+"_APA_replay";};',
       '   var info=new Label(dialog);info.text="Will apply "+count+" of "+replaySteps.length+" selected processes to "+(palette?"a new RGB result.":"a new copy.");',
-      '   for(var si=0;si<count;++si)if(replaySteps[si].action==="selective"){info.text+=" SelectiveColorCorrection requires the original image to remain open with its recorded history.";info.wordWrapping=true;info.setMinWidth(480);break;}',
+      '   for(var si=0;si<count;++si)if(replaySteps[si].action==="selective"){info.text+=" SelectiveColorCorrection uses the installed source included in this replay file.";info.wordWrapping=true;info.setMinWidth(480);break;}',
       '   var stop=new Label(dialog);stop.text=count<replaySteps.length?"Stops before step "+replaySteps[count].number+": "+replaySteps[count].reason:"All selected processes are supported.";',
       '   stop.wordWrapping=true;stop.setMinWidth(480);',
       '   var confirm=new CheckBox(dialog);confirm.text="I confirm the input is in the state BEFORE the first selected step.";',
@@ -1494,7 +1487,7 @@ function buildWorkspaceReplayScript(image, start, end) {
       '         Console.writeln("Replay "+(k+1)+"/"+replaySteps.length+": "+replaySteps[k].title);',
       '         if(replaySteps[k].starRequired&&typeof StarXTerminator!=="function")throw Error("SelectiveColorCorrection requires StarXTerminator for its star mask.");',
       '         var process=replayFactories[k]();',
-      '         if(replaySteps[k].action==="selective")process=findSelectiveReplayInstance(process);',
+      '         if(replaySteps[k].action==="selective"){runSelectiveReplay(process,output.mainView);processEvents();continue;}',
       '         if(replaySteps[k].action==="palette"){var keys=["expression","expression1","expression2"];for(var e=0;e<keys.length;++e)process[keys[e]]=process[keys[e]].replace(/(?:[0-9]+(?:[.][0-9]*)?|[.][0-9]+)(?:[eE][+-]?[0-9]+)?|[A-Za-z_][A-Za-z0-9_]*/g,function(token){return Object.prototype.hasOwnProperty.call(mapped,"$"+token)?mapped["$"+token]:token;});}',
       '         if(!process||typeof process.executeOn!=="function")throw Error("Required process is unavailable: "+replaySteps[k].title);',
       '         if(process.executeOn(output.mainView)===false)throw Error("Process failed: "+replaySteps[k].title);',
@@ -1506,6 +1499,27 @@ function buildWorkspaceReplayScript(image, start, end) {
       '}',
       'try{runAtlasReplay();}catch(error){new MessageBox(error.message,"AstroProcessAtlas - Replay stopped",StdIcon_Error,StdButton_Ok).execute();}'
    ];
+   var includePath = '';
+   for (var si = 0; si < selected.length; ++si) if (selected[si].action === 'selective' && !selected[si].reason) {
+      // This descriptor was constructed from validated saved parameters, not evaluated.
+      var descriptor = /^var P = (.*);$/.exec(selected[si].source);
+      var config = descriptor ? JSON.parse(descriptor[1]) : null;
+      if (!config || !config.filePath || /["\r\n]/.test(config.filePath) || (includePath && includePath !== config.filePath))
+         throw Error('SelectiveColorCorrection source path is unavailable or inconsistent.');
+      includePath = config.filePath;
+   }
+   if (includePath) {
+      var bridge = [
+         'function runSelectiveReplay(template,target) {',
+         '   var digest=(new CryptographicHash(CryptographicHash_SHA256)).hash(File.readFile(template.filePath)).toHex();',
+         '   if(digest.toLowerCase()!==template.sourceDigest.toLowerCase())throw Error("SelectiveColorCorrection source changed since report generation. Generate a new report and export.");',
+         '   var saved={};for(var p=0;p<template.parameters.length;++p)saved["$"+template.parameters[p][0]]=template.parameters[p][1];',
+         '   var Parameters={isViewTarget:true,isGlobalTarget:false,targetView:target,has:function(key){return Object.prototype.hasOwnProperty.call(saved,"$"+key);},getReal:function(key){return Number(saved["$"+key]);},getInteger:function(key){return Number(saved["$"+key]);},getBoolean:function(key){return saved["$"+key]==="true";},getString:function(key){return saved["$"+key];},set:function(){throw Error("Unexpected SelectiveColorCorrection parameter write.");}};',
+         '#include ' + JSON.stringify(includePath),
+         '}'
+      ];
+      lines.splice.apply(lines, [lines.indexOf('function runAtlasReplay() {'), 0].concat(bridge));
+   }
    return lines.join('\n') + '\n';
 }
 
@@ -1513,7 +1527,7 @@ function workspaceReplayHTML(records) {
    var html = '<details class="replay-workflow"><summary>Export workflow for replay (experimental)</summary>' +
       '<p>Select an image and a consecutive range of applied processes. Run the downloaded .js in PixInsight with an input in the state BEFORE the first selected step. Replay uses a new copy and stops at the first unsupported step. Masks and historical references are not restored in this first version.</p>' +
       '<p>Copy naming: the last ImageIdentifier in the selected range, or the selected input name, followed by _APA_replay. Existing names receive a numeric suffix.</p>' +
-      '<p>SelectiveColorCorrection requires the original image to remain open with its recorded processing history. The matching saved Script instance is reused without changing its read-only properties.</p>' +
+      '<p>SelectiveColorCorrection includes the installed Toolbox source in the replay file and supplies the recorded parameters directly. Keep that installed source available at the exported include path.</p>' +
       '<p>PerfectPalettePicker: start the range at this step, select grayscale inputs and explicitly choose their state: already prepared, or linear with input stretch to median 0.25. Replays the recorded combination into a new RGB image. Other unrecorded channel preparation is not reconstructed.</p>' +
       '<label>Replay image <select id="replay_image" onchange="updateReplayRange(true)">';
    for (var i = 0; i < records.length; ++i)
@@ -2281,6 +2295,8 @@ var REPORT_TRANSLATIONS = [
 ];
 
 REPORT_TRANSLATIONS = REPORT_TRANSLATIONS.concat([
+   ['SelectiveColorCorrection includes the installed Toolbox source in the replay file and supplies the recorded parameters directly. Keep that installed source available at the exported include path.','Το SelectiveColorCorrection συμπεριλαμβάνει τον εγκατεστημένο κώδικα Toolbox στο αρχείο επανάληψης και του δίνει απευθείας τις καταγεγραμμένες παραμέτρους. Ο εγκατεστημένος κώδικας πρέπει να είναι διαθέσιμος στη διαδρομή include της εξαγωγής.'],
+   ['SelectiveColorCorrection requires complete saved parameters, valid serialization and its readable installed source file.','Το SelectiveColorCorrection απαιτεί πλήρεις αποθηκευμένες παραμέτρους, έγκυρο κώδικα και αναγνώσιμο εγκατεστημένο αρχείο πηγής.'],
    ['SelectiveColorCorrection requires the original image to remain open with its recorded processing history. The matching saved Script instance is reused without changing its read-only properties.','Το SelectiveColorCorrection απαιτεί να παραμένει ανοιχτή η αρχική εικόνα με το καταγεγραμμένο ιστορικό της. Χρησιμοποιείται η αντίστοιχη αποθηκευμένη κλήση Script χωρίς αλλαγή των ιδιοτήτων που είναι μόνο για ανάγνωση.'],
    ['SelectiveColorCorrection imported mask is not recorded and cannot be reconstructed.','Η εισαγόμενη μάσκα του SelectiveColorCorrection δεν έχει καταγραφεί και δεν μπορεί να ανακατασκευαστεί.'],
    ['SelectiveColorCorrection requires complete saved parameters, valid serialization and a recorded script checksum.','Το SelectiveColorCorrection απαιτεί πλήρεις αποθηκευμένες παραμέτρους, έγκυρο κώδικα και καταγεγραμμένο checksum του script.'],

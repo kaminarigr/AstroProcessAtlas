@@ -236,22 +236,18 @@ prepared for channels at the original combination state to avoid stretching twic
 This recovers the installed PPP linear-input preparation; other unrecorded steps
 (including OSC extraction/averaging or an unidentified Script) are not inferred.
 
-SelectiveColorCorrection replay executes the installed Toolbox script directly
-as a view-target Script instance, with its complete recorded parameter table and
-script checksum. It runs once per grouped operation (or standalone instance), on
-the current replay result, and regenerates its internal RGBWorkingSpace settings
-and masks. No separate internal RGBWorkingSpace entries are exported. The installed
-script and its dependencies must match the recorded settings/version; when
-useStarMask is enabled StarXTerminator is required. Imported Mask is blocked because
-its input view is not saved by the script, as are missing settings, checksums,
-historical masks/references and invalid serialized process code. Other scripts
-remain unsupported. Generate a new report and export to use this support.
+SelectiveColorCorrection replay includes the installed Toolbox source inside an
+isolated function and supplies the complete saved parameter table through a local
+view-target Parameters adapter. This avoids both read-only Script properties and
+PixInsight's prohibition on recursive Script execution. It runs once per parent
+operation on the current result, regenerating internal RGBWorkingSpace settings
+and masks. No original image/history needs to remain open for this operation.
 
-SelectiveColorCorrection requires an original image with the recorded Script
-instance to remain open. Native Script properties are read-only, so replay searches
-open-image initial/recent processing histories for the saved call with matching
-parameters and checksum, and executes that existing instance on the replay result.
-It never assigns Script.filePath, md5sum, parameters or information. If no match is
-available it stops and preserves any partial replay result. Keep the original
-workspace/history open; exporting parameter text alone cannot recreate this native
-Script instance. The original image and saved process settings remain unchanged.
+The replay file references the installed source by an absolute include path. The
+source and its companion library must remain installed at that path; export a new
+report on another installation. A SHA-256 fingerprint captured when generating
+the report is checked before processing; regenerate the report/export if the tool
+changes. The installed tool version must be suitable for the saved settings.
+StarXTerminator is required with useStarMask. Imported Mask, incomplete settings,
+historical masks/references and invalid serialization remain blockers. No native
+Script instance is constructed or executed, and other scripts remain unsupported.
