@@ -840,3 +840,20 @@ console.log('Passed: arbitrary current/before/after selection, shared comparison
  assert.equal(outputClone.steps[0].liveIndex,3,'Clone normalization and stars origin removal preserve native indices');
  console.log('Passed: linked stars origin collapse, retained output relationship, details/summary/replay numbering, real thumbnails, missing/disabled/redo proof, later operations, repeat generation and stars-output clones.');
 }
+
+{
+ const rename=makeProcess('ImageIdentifier',{id:'Ha_named'});
+ const renamed=helper.collectWorkspaceRecord(image('Ha_named',[ht,rename]),99);
+ helper.workspaceGraph([renamed]);
+ browser.workspaceReplayData=helper.workspaceReplayData([renamed]);
+ elements.replay_image.value='0';browser.window.updateReplayRange(true);
+ assert.equal(elements.replay_export.disabled,false);
+ assert.match(elements.replay_status.textContent,/2 consecutive/);
+ assert.match(elements.replay_readiness.children[1].textContent,/Naming handled at creation: Ha_named_APA_replay/);
+ browser.window.exportReplayScript();
+ assert.match(exportedBlob,/var replayIdentifier = "Ha_named"/);
+ assert.match(exportedBlob,/action==="identifier"/);
+ assert.ok(!exportedBlob.includes('new ImageIdentifier'),'Handle rename metadata without a native constructor');
+ new vm.Script(exportedBlob.replace(/^#.*$/gm,''));
+ console.log('Passed: ImageIdentifier report readiness and downloadable naming metadata script.');
+}

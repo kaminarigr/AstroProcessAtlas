@@ -88,8 +88,16 @@ GradientCorrection preserves its original serialized thresholds, scale, converge
 protection and model-generation settings. Diagnostic model/protection images may be
 created when those flags were enabled; subsequent steps still run on the replay image
 copy. Recorded/unknown masks, historical references, invalid serialization and process
-failures remain blockers. ImageIdentifier and StarXTerminator are not yet supported
-for replay. The report labels unsupported tools as not yet supported by the exporter.
+failures remain blockers. StarXTerminator is not yet supported for replay. The report
+labels unsupported tools as not yet supported by the exporter.
+
+ImageIdentifier is handled as naming metadata at creation, without executing its
+original rename operation. The last valid ImageIdentifier in the selected range
+sets the copy's base name, followed by `_APA_replay` (for example `Ha_processed_APA_replay`).
+Without one, the selected input image's current ID is used (`Ha_APA_replay`).
+The native dialog previews the base name. Collisions receive `_1`, `_2`, etc.;
+existing images and the input ID remain unchanged. Redo and out-of-range identifiers
+are ignored. An empty/invalid recorded identifier remains an explicit blocker.
 
 Initial ImageIntegration entries describe the provenance of an already integrated
 input. They remain available in the report but are omitted from replay, so they do

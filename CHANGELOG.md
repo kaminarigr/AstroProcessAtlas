@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Handle ImageIdentifier as naming metadata at replay-copy creation. Use the last
+  valid identifier in the selected range plus `_APA_replay`, or the selected input
+  ID with that suffix when absent. Preview the base name, resolve collisions with
+  numeric suffixes and keep input/existing image IDs unchanged.
+
 - Support GradientCorrection replay with the complete serialized parameters,
   including diagnostic model/protection outputs; keep subsequent execution on the
   replay image copy and retain mask/reference/serialization checks.

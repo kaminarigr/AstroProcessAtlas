@@ -1251,8 +1251,21 @@ function workspaceReplayData(records) {
       var record = records[r], image = {id:record.id, anchor:record.anchor, steps:[]};
       for (var s = 0; s < record.steps.length; ++s) {
          var step = record.steps[s]; if (step.redo || isImageOriginStep(step, s)) continue;
-         var tool = getProcessName(step.proc), reason = '', source = null;
-         if (!supported[tool]) reason = 'This process is not yet supported by the replay exporter: ' + tool;
+         var tool = getProcessName(step.proc), reason = '', source = null, identifier = '';
+         if (tool === 'ImageIdentifier') {
+            // This changes a view ID, not its pixels. Handle naming once at creation.
+            source = replayProcessSource(step.source, tool);
+            if (!source) reason = 'Serialized process code is not a supported constructor and parameter assignment sequence.';
+            else {
+               if (typeof step.proc.id === 'string') identifier = step.proc.id;
+               else {
+                  var idMatch = /(?:^|\s)\$instance\s*\.\s*id\s*=\s*("(?:\\.|[^"\\])*")\s*;/.exec(historyParameterKey(source.source));
+                  try { if (idMatch) identifier = JSON.parse(idMatch[1]); } catch (e) {}
+               }
+               if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(identifier)) reason = 'The recorded ImageIdentifier value is empty or invalid.';
+            }
+         }
+         else if (!supported[tool]) reason = 'This process is not yet supported by the replay exporter: ' + tool;
          else if (!step.mask || step.mask.status === 'unknown') reason = 'Historical mask state is unknown.';
          else if (step.mask.status === 'recorded') reason = 'This step needs the original historical mask: ' + step.mask.name;
          else if (step.references && step.references.length) reason = 'This step needs historical reference images or creates another image.';
@@ -1264,7 +1277,8 @@ function workspaceReplayData(records) {
          }
          image.steps.push({title:step.title, number:step.displayNumber || s + 1,
             substep:step.substepNumber || 0, tool:tool, reason:reason,
-            source:source ? source.source : '', variable:source ? source.variable : ''});
+            action:tool === 'ImageIdentifier' ? 'identifier' : 'process', identifier:identifier,
+            source:source && tool !== 'ImageIdentifier' ? source.source : '', variable:source && tool !== 'ImageIdentifier' ? source.variable : ''});
       }
       data.push(image);
    }
@@ -1275,11 +1289,12 @@ function workspaceReplayData(records) {
 function buildWorkspaceReplayScript(image, start, end) {
    if (!image || start < 0 || end < start || end >= image.steps.length ||
        start !== Math.floor(start) || end !== Math.floor(end)) throw Error('Select a valid step range.');
-   var selected = image.steps.slice(start, end + 1), factories = [], manifest = [];
+   var selected = image.steps.slice(start, end + 1), factories = [], manifest = [], identifier = '';
    for (var i = 0; i < selected.length; ++i) {
       var step = selected[i];
-      manifest.push({title:step.title, number:step.number, substep:step.substep, reason:step.reason});
-      factories.push(step.reason ? 'null' : 'function(){\n' + step.source + '\nreturn ' + step.variable + ';\n}');
+      manifest.push({title:step.title, number:step.number, substep:step.substep, reason:step.reason, action:step.action});
+      if (!step.reason && step.action === 'identifier') identifier = step.identifier;
+      factories.push(step.reason || step.action === 'identifier' ? 'null' : 'function(){\n' + step.source + '\nreturn ' + step.variable + ';\n}');
    }
    // Build comment delimiters at runtime, as in replayStepHTML. PJSR's
    // preprocessing can truncate nested comment/URL text inside source strings.
@@ -1307,6 +1322,7 @@ function buildWorkspaceReplayScript(image, start, end) {
       '#include <pjsr/Sizer.jsh>', '#include <pjsr/UndoFlag.jsh>',
       '#include <pjsr/StdIcon.jsh>', '#include <pjsr/StdButton.jsh>',
       'var replayImage = ' + JSON.stringify(image.id) + ';',
+      'var replayIdentifier = ' + JSON.stringify(identifier) + ';',
       'var replaySteps = ' + JSON.stringify(manifest) + ';',
       'var replayFactories = [' + factories.join(',\n') + '];',
       'function runAtlasReplay() {',
@@ -1319,6 +1335,9 @@ function buildWorkspaceReplayScript(image, start, end) {
       '   var label=new Label(dialog);label.text="Input for "+replayImage+" - before step "+replaySteps[0].number;',
       '   var combo=new ComboBox(dialog);for(var j=0;j<candidates.length;++j)combo.addItem(candidates[j].mainView.id);',
       '   combo.currentItem=0;',
+      '   var naming=new Label(dialog);naming.text="Copy name: "+(replayIdentifier||candidates[0].mainView.id)+"_APA_replay";',
+      '   naming.toolTip="A numeric suffix is added if this name already exists.";',
+      '   combo.onItemSelected=function(index){if(index>=0&&index<candidates.length)naming.text="Copy name: "+(replayIdentifier||candidates[index].mainView.id)+"_APA_replay";};',
       '   var info=new Label(dialog);info.text="Will apply "+count+" of "+replaySteps.length+" selected processes to a new copy.";',
       '   var stop=new Label(dialog);stop.text=count<replaySteps.length?"Stops before step "+replaySteps[count].number+": "+replaySteps[count].reason:"All selected processes are supported.";',
       '   stop.wordWrapping=true;stop.setMinWidth(480);',
@@ -1328,10 +1347,11 @@ function buildWorkspaceReplayScript(image, start, end) {
       '   var cancel=new PushButton(dialog);cancel.text="Cancel";cancel.onClick=function(){dialog.cancel();};',
       '   var buttons=new HorizontalSizer;buttons.addStretch();buttons.add(run);buttons.add(cancel);',
       '   dialog.sizer=new VerticalSizer;dialog.sizer.margin=12;dialog.sizer.spacing=8;',
-      '   dialog.sizer.add(label);dialog.sizer.add(combo);dialog.sizer.add(info);dialog.sizer.add(stop);dialog.sizer.add(confirm);dialog.sizer.add(buttons);dialog.adjustToContents();',
+      '   dialog.sizer.add(label);dialog.sizer.add(combo);dialog.sizer.add(naming);dialog.sizer.add(info);dialog.sizer.add(stop);dialog.sizer.add(confirm);dialog.sizer.add(buttons);dialog.adjustToContents();',
       '   if(!dialog.execute()||!confirm.checked)return;',
       '   var input=candidates[combo.currentItem];if(!input||input.isNull)throw Error("Selected input is unavailable.");',
-      '   var id="APA_replay",suffix=1;while(!View.viewById(id).isNull)id="APA_replay_"+(suffix++);',
+      '   var baseId=(replayIdentifier||input.mainView.id)+"_APA_replay",id=baseId,suffix=1;',
+      '   while(!View.viewById(id).isNull)id=baseId+"_"+(suffix++);',
       '   var img=input.mainView.image;',
       '   var output=new ImageWindow(1,1,img.numberOfChannels,img.bitsPerSample,img.isReal,img.isColor,id);',
       '   output.mainView.beginProcess(UndoFlag_NoSwapFile);',
@@ -1342,6 +1362,7 @@ function buildWorkspaceReplayScript(image, start, end) {
       '   try {',
       '      for(var k=0;k<replaySteps.length;++k){',
       '         if(replaySteps[k].reason)throw Error("Stopped before step "+replaySteps[k].number+": "+replaySteps[k].reason);',
+      '         if(replaySteps[k].action==="identifier"){Console.writeln("ImageIdentifier handled at creation: "+output.mainView.id);continue;}',
       '         Console.writeln("Replay "+(k+1)+"/"+replaySteps.length+": "+replaySteps[k].title);',
       '         var process=replayFactories[k]();',
       '         if(!process||typeof process.executeOn!=="function")throw Error("Required process is unavailable: "+replaySteps[k].title);',
@@ -1359,6 +1380,7 @@ function buildWorkspaceReplayScript(image, start, end) {
 function workspaceReplayHTML(records) {
    var html = '<details class="replay-workflow"><summary>Export workflow for replay (experimental)</summary>' +
       '<p>Select an image and a consecutive range of applied processes. Run the downloaded .js in PixInsight with an input in the state BEFORE the first selected step. Replay uses a new copy and stops at the first unsupported step. Masks and historical references are not restored in this first version.</p>' +
+      '<p>Copy naming: the last ImageIdentifier in the selected range, or the selected input name, followed by _APA_replay. Existing names receive a numeric suffix.</p>' +
       '<label>Replay image <select id="replay_image" onchange="updateReplayRange(true)">';
    for (var i = 0; i < records.length; ++i)
       html += '<option value="' + i + '" data-no-i18n>' + escapeHTML(records[i].id) + '</option>';
@@ -1612,6 +1634,10 @@ function generateHistoryReport() {
 }
 
 var REPORT_TRANSLATIONS = [
+   ['Copy naming: the last ImageIdentifier in the selected range, or the selected input name, followed by _APA_replay. Existing names receive a numeric suffix.',
+    'Όνομα αντιγράφου: το τελευταίο ImageIdentifier στο επιλεγμένο εύρος ή το όνομα της επιλεγμένης εισόδου, με κατάληξη _APA_replay. Αν το όνομα υπάρχει, προστίθεται αριθμός.'],
+   ['The recorded ImageIdentifier value is empty or invalid.','Η καταγεγραμμένη τιμή ImageIdentifier είναι κενή ή μη έγκυρη.'],
+   ['Naming handled at creation:','Το όνομα ορίζεται στη δημιουργία:'],
    ['StarXTerminator origin is shown on the source image:','Η προέλευση από το StarXTerminator εμφανίζεται στην εικόνα προέλευσης:'],
    ['The linked output origin is not repeated as a processing step here. Later steps are preserved.',
     'Η συνδεδεμένη δημιουργία εξόδου δεν επαναλαμβάνεται εδώ ως βήμα επεξεργασίας. Τα μεταγενέστερα βήματα διατηρούνται.'],
@@ -2194,10 +2220,11 @@ var WORKSPACE_BROWSER_SOURCE = [
    "      }",
    "      if(Number(last.value)<Number(first.value))last.value=first.value;",
    "      var start=Number(first.value),end=Number(last.value),ready=0,blocked=false,list=document.getElementById('replay_readiness');",
+   "      var namingId='';for(var ni=start;ni<=end&&ni<image.steps.length;++ni)if(image.steps[ni].action==='identifier'&&!image.steps[ni].reason)namingId=image.steps[ni].identifier;",
    "      if(list)while(list.firstChild)list.removeChild(list.firstChild);",
    "      for(var j=start;j<=end&&j<image.steps.length;++j){",
    "         var step=image.steps[j];if(step.reason)blocked=true;if(!blocked)++ready;",
-   "         if(list){var item=document.createElement('li');item.textContent=step.number+(step.substep?'.'+step.substep:'')+' — '+step.title+': '+translated(step.reason?'STOP — '+step.reason:blocked?'Not reached until earlier blocker is resolved.':'Ready for replay');list.appendChild(item);}",
+   "         if(list){var item=document.createElement('li');item.textContent=step.number+(step.substep?'.'+step.substep:'')+' — '+step.title+': '+translated(step.reason?'STOP — '+step.reason:blocked?'Not reached until earlier blocker is resolved.':step.action==='identifier'?'Naming handled at creation: '+namingId+'_APA_replay':'Ready for replay');list.appendChild(item);}",
    "      }",
    "      var status=document.getElementById('replay_status');if(status)status.textContent=translated(image.steps.length?ready+' consecutive processes can run from the selected input state.':'No applied processes to replay.');",
    "      var button=document.getElementById('replay_export');if(button)button.disabled=!ready;",
