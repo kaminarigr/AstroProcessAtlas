@@ -781,3 +781,62 @@ console.log('Passed: arbitrary current/before/after selection, shared comparison
  assert.ok(chain.edges.some(e=>e.from===clone.steps[0].anchor&&e.to===derived.anchor));
  console.log('Passed: common clone prefix removal across tree/details/summary/replay, source branch links, numbering, real live indices, idempotence, missing parent, different parameters/masks, redo and clone chains.');
 }
+
+// Collapse only the corroborating stars-output origin after the output link is established.
+{
+ const sxt=makeProcess('StarXTerminator',{stars:true});
+ const scnr=makeProcess('SCNR',{amount:0.6});
+ const sourceRecord=helper.collectWorkspaceRecord(image('StarsSource',[sxt]),90);
+ const outputRecord=helper.collectWorkspaceRecord(image('StarsSource_stars',[sxt,scnr]),91);
+ const starGraph=helper.workspaceGraph([outputRecord,sourceRecord]);
+ const link=starGraph.edges.find(e=>e.kind==='output'&&e.to===outputRecord.anchor);
+ assert.equal(link.from,sourceRecord.steps[0].anchor);
+ assert.equal(sourceRecord.steps.length,1,'Preserve the source process and parameters');
+ assert.equal(outputRecord.starsOrigin.image,sourceRecord.id);
+ assert.equal(outputRecord.steps.length,1);assert.equal(outputRecord.steps[0].title,'SCNR');
+ assert.equal(outputRecord.steps[0].displayNumber,1);assert.equal(outputRecord.steps[0].liveIndex,2);
+ assert.equal(outputRecord.steps[0].historyEntryIndex,1);
+ assert.equal(starGraph.nodes.filter(n=>n.image===outputRecord.id&&!n.header).length,1);
+ assert.ok(!starGraph.nodes.some(n=>n.id===outputRecord.starsOrigin.removedStep));
+ const detail=helper.imageReportHTML(outputRecord);
+ assert.equal((detail.match(/class="step-card"/g)||[]).length,1);
+ assert.ok(!detail.includes('Full history code'));
+ assert.match(detail,/StarXTerminator origin is shown on the source image/);
+ assert.match(detail,/Original history entries:<\/b> 2/);
+ const replay=helper.workspaceReplayData([outputRecord])[0];
+ assert.equal(replay.steps.length,1);assert.equal(replay.steps[0].reason,'');
+ assert.match(helper.processingSummaryHTML([sourceRecord,outputRecord]),/StarXTerminator × 1/);
+ helper.collectWorkspaceThumbnails([sourceRecord,outputRecord],'/preview','report_thumbs');
+ assert.ok(outputRecord.steps[0].beforeThumb.endsWith('_state_1.png'));
+ assert.equal(outputRecord.view.historyIndex,2);
+ assert.ok(helper.workspaceGraph([sourceRecord,outputRecord]).edges.some(e=>e.kind==='output'));
+ assert.equal(outputRecord.steps.length,1,'Repeated generation retains the origin proof without removing more steps');
+ helper.workspaceGraph([outputRecord]);assert.equal(outputRecord.steps.length,2);
+ assert.equal(outputRecord.starsOrigin,null,'No selected source means no removal');
+ const disabled=helper.collectWorkspaceRecord(image('StarsSource',[makeProcess('StarXTerminator',{stars:false})]),92);
+ assert.ok(!helper.workspaceGraph([disabled,outputRecord]).edges.some(e=>e.kind==='output'));
+ assert.equal(outputRecord.steps.length,2,'Disabled stars does not authorize removal');
+ const redoSource=helper.collectWorkspaceRecord(image('StarsSource',[sxt],[],0),93);
+ helper.workspaceGraph([redoSource,outputRecord]);assert.equal(outputRecord.steps.length,2);
+ const redoOutput=helper.collectWorkspaceRecord(image('StarsSource_stars',[sxt],[],0),94);
+ helper.workspaceGraph([sourceRecord,redoOutput]);assert.equal(redoOutput.steps.length,1);
+ assert.equal(redoOutput.starsOrigin,undefined,'Redo cannot corroborate a stars origin');
+ const missingProof=helper.collectWorkspaceRecord(image('StarsSource_stars',[scnr]),95);
+ const unlinked=helper.workspaceGraph([sourceRecord,missingProof]);
+ assert.ok(!unlinked.edges.some(e=>e.kind==='output'));assert.equal(missingProof.steps.length,1);
+ const later=helper.collectWorkspaceRecord(image('StarsSource_stars',[sxt,scnr,makeProcess('StarXTerminator',{stars:false})]),96);
+ helper.workspaceGraph([sourceRecord,later]);assert.equal(later.steps.length,2);
+ assert.equal(later.steps[1].title,'StarXTerminator','Preserve an actual later StarXTerminator operation');
+ const unchanged=helper.collectWorkspaceRecord(image('StarsSource_stars',[sxt]),97);
+ const originOnly=helper.workspaceGraph([sourceRecord,unchanged]);assert.equal(unchanged.steps.length,0);
+ assert.ok(originOnly.edges.some(e=>e.kind==='output'&&e.to===unchanged.anchor));
+ assert.match(helper.imageReportHTML(unchanged),/No additional history steps.*stars output/);
+ assert.equal(helper.workspaceReplayData([unchanged])[0].steps.length,0);
+ const outputClone=helper.collectWorkspaceRecord(image('StarsSource_stars_clone',[sxt,scnr,ht]),98);
+ const combined=helper.workspaceGraph([sourceRecord,outputRecord,outputClone]);
+ assert.equal(outputRecord.steps.length,1);assert.equal(outputClone.steps.length,1);
+ assert.ok(combined.edges.some(e=>e.kind==='output'&&e.to===outputRecord.anchor));
+ assert.ok(combined.edges.some(e=>e.kind==='input'&&e.to===outputClone.anchor));
+ assert.equal(outputClone.steps[0].liveIndex,3,'Clone normalization and stars origin removal preserve native indices');
+ console.log('Passed: linked stars origin collapse, retained output relationship, details/summary/replay numbering, real thumbnails, missing/disabled/redo proof, later operations, repeat generation and stars-output clones.');
+}

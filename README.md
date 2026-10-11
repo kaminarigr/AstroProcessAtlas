@@ -98,6 +98,14 @@ The original PixInsight histories are unchanged. Missing sources, differing valu
 and redo entries are not deduplicated; naming and parameter matches do not prove
 identical historical pixels.
 
+After a StarXTerminator output link passes the existing `stars=true`, exact output
+name and applied output-history checks, its corroborating origin entry is shown on
+the source image rather than repeated on the `_stars` image. Subsequent stars-image
+operations and their real history positions remain available in the tree, details,
+summary and replay. Without that link, the output history remains visible. A later
+StarXTerminator operation is retained, as is any process node required to explain
+another selected output. The inferred link still does not establish exact historical pixels.
+
 Run `node test_workflow_replay.cjs` for the generator and simulated native execution
 checks, alongside the existing history/report tests. Actual PixInsight execution
 still requires validation with real images and installed processes.

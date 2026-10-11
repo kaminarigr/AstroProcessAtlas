@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Show StarXTerminator only on the source after a selected `_stars` output passes
+  the existing enabled-output/name/history checks and receives its output link.
+  Omit its corroborating output-origin entry from the stars tree/details/summary
+  and replay, while preserving later operations, original live indices and proof
+  for repeated report generation. Keep history intact when the link is unavailable.
+
 - Treat initial ImageIntegration entries as image-origin metadata rather than
   replay processes; keep later integration operations as explicit blockers.
 - Remove only the identical applied initial prefix from named `_clone`/`_cloneN`

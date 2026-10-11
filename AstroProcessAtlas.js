@@ -683,8 +683,9 @@ function imageReferences(step, records, owner) {
          var outputId = owner.id + '_stars';
          for (var r = 0; r < records.length; ++r) {
             if (records[r].id !== outputId) continue;
-            for (var j = 0; j < records[r].steps.length; ++j) {
-               var outputStep = records[r].steps[j];
+            var outputHistory = records[r].starsFullSteps || records[r].steps;
+            for (var j = 0; j < outputHistory.length; ++j) {
+               var outputStep = outputHistory[j];
                if (!outputStep.redo && getProcessName(outputStep.proc) === 'StarXTerminator') {
                   addReference(refs, outputId, 'output', 'StarXTerminator stars=true — inferred from output name and StarXTerminator history');
                   break;
@@ -791,6 +792,7 @@ function normalizeWorkspaceCloneHistories(records) {
    var byId = {}, originals = {};
    for (var r = 0; r < records.length; ++r) {
       var record = records[r]; byId['$' + record.id] = record;
+      if (record.starsFullSteps) { record.steps = record.starsFullSteps; record.starsOrigin = null; record.displayGroups = null; }
       if (record.cloneFullSteps) { record.steps = record.cloneFullSteps; record.cloneShared = null; record.displayGroups = null; }
       originals['$' + record.id] = record.cloneFullSteps || record.steps;
    }
@@ -816,8 +818,48 @@ function normalizeWorkspaceCloneHistories(records) {
    }
 }
 
+function normalizeWorkspaceStarsHistories(records) {
+   var candidates = [];
+   // Check all relationships before removing an output's corroborating origin entry.
+   for (var r = 0; r < records.length; ++r) {
+      var source = records[r];
+      for (var i = 0; i < source.steps.length; ++i) {
+         var step = source.steps[i];
+         if (step.redo || getProcessName(step.proc) !== 'StarXTerminator' || step.proc.stars !== true) continue;
+         var refs = imageReferences(step, records, source);
+         for (var j = 0; j < refs.length; ++j) {
+            if (refs[j].kind !== 'output' || refs[j].name !== source.id + '_stars') continue;
+            for (var o = 0; o < records.length; ++o) {
+               var output = records[o]; if (output.id !== refs[j].name) continue;
+               for (var k = 0; k < output.steps.length; ++k) {
+                  var origin = output.steps[k];
+                  if (origin.redo || getProcessName(origin.proc) !== 'StarXTerminator') continue;
+                  candidates.push({output:output, origin:origin, source:source, sourceStep:step});
+                  break;
+               }
+            }
+         }
+      }
+   }
+   for (var i = 0; i < candidates.length; ++i) {
+      var candidate = candidates[i], output = candidate.output;
+      if (output.starsOrigin) continue;
+      // Keep a process node that is itself needed to explain another selected output.
+      var needed = false;
+      for (var j = 0; j < candidates.length; ++j)
+         if (candidates[j].sourceStep === candidate.origin) needed = true;
+      if (needed) continue;
+      output.starsFullSteps = output.steps;
+      output.starsOrigin = {image:candidate.source.id, anchor:candidate.source.anchor,
+         sourceStep:candidate.sourceStep.anchor, removedStep:candidate.origin.anchor};
+      output.steps = output.steps.filter(function(step) { return step !== candidate.origin; });
+      output.displayGroups = null;
+   }
+}
+
 function workspaceGraph(records) {
    normalizeWorkspaceCloneHistories(records);
+   normalizeWorkspaceStarsHistories(records);
    var graph = {nodes:[], edges:[], unresolved:[]}, headerById = {};
    for (var r = 0; r < records.length; ++r) {
       var record = records[r];
@@ -1085,15 +1127,18 @@ function imageReportHTML(record, emit) {
    var html = '<section class="image-report" data-image="' + record.anchor + '" id="' + record.anchor + '"><h2 data-no-i18n>' + escapeHTML(record.id) + '</h2>';
    html += '<div class="meta-info">' + (record.currentThumb ? '<img class="image-snapshot" src="' + escapeHTML(record.currentThumb) + '" alt="Current image">' : '') +
       '<b>File:</b> ' + (record.filePath ? '<span data-no-i18n>' + escapeHTML(record.filePath) + '</span>' : 'No file path') + '<br><b>Total Process Steps:</b> ' + groups.length +
-      (groups.length !== record.steps.length || record.cloneShared ? ' · <b>Original history entries:</b> ' + (record.cloneFullSteps || record.steps).length : '') +
+      (groups.length !== record.steps.length || record.cloneShared || record.starsOrigin ? ' · <b>Original history entries:</b> ' + (record.cloneFullSteps || record.starsFullSteps || record.steps).length : '') +
       ' · Current history position: ' + record.historyIndex + '<br><b>Current mask:</b> ' + record.currentMaskInfo +
       maskThumbnailHTML(record.currentMaskThumbnail, record.currentMaskInverted) + '</div>';
    if (record.cloneShared) html += '<p>Common initial history is shown on the source image: <a href="#' +
       escapeHTML(record.cloneShared.anchor) + '" onclick="selectGraphNode(' + escapeHTML(JSON.stringify(record.cloneShared.anchor)) +
       ');return false" data-no-i18n>' + escapeHTML(record.cloneShared.image) + '</a> (' +
       record.cloneShared.count + ' entries). Only subsequent clone steps are shown here. This relationship is inferred from the image name and matching parameters.</p>';
+   if (record.starsOrigin) html += '<p>StarXTerminator origin is shown on the source image: <a href="#' +
+      escapeHTML(record.starsOrigin.sourceStep) + '" onclick="selectGraphNode(' + escapeHTML(JSON.stringify(record.starsOrigin.sourceStep)) +
+      ');return false" data-no-i18n>' + escapeHTML(record.starsOrigin.image) + '</a>. The linked output origin is not repeated as a processing step here. Later steps are preserved.</p>';
    if (record.error || record.initialNote) html += '<p>' + escapeHTML(record.error || record.initialNote) + '</p>';
-   if (!record.steps.length) html += '<p>' + (record.cloneShared ? 'No additional history steps were found for this clone.' : 'No history steps were found for this image.') + '</p>';
+   if (!record.steps.length) html += '<p>' + (record.starsOrigin ? 'No additional history steps were found for this stars output.' : record.cloneShared ? 'No additional history steps were found for this clone.' : 'No history steps were found for this image.') + '</p>';
    if (emit) { emit(html); html = ''; }
    for (var i = 0; i < record.steps.length; ++i) {
       var step = record.steps[i];
@@ -1133,7 +1178,7 @@ function imageReportHTML(record, emit) {
       if (groupEnd) html += '</details></div>';
       if (emit) { emit(html); html = ''; }
    }
-   for (var i = 0; !record.cloneShared && i < record.historySources.length; ++i) {
+   for (var i = 0; !record.cloneShared && !record.starsOrigin && i < record.historySources.length; ++i) {
       html += '<details><summary>Full history code — ' + record.historySources[i].phase + '</summary>' + copyBlock('History ProcessContainer', record.historySources[i].source) + '</details>';
       if (emit) { emit(html); html = ''; }
    }
@@ -1567,6 +1612,10 @@ function generateHistoryReport() {
 }
 
 var REPORT_TRANSLATIONS = [
+   ['StarXTerminator origin is shown on the source image:','Η προέλευση από το StarXTerminator εμφανίζεται στην εικόνα προέλευσης:'],
+   ['The linked output origin is not repeated as a processing step here. Later steps are preserved.',
+    'Η συνδεδεμένη δημιουργία εξόδου δεν επαναλαμβάνεται εδώ ως βήμα επεξεργασίας. Τα μεταγενέστερα βήματα διατηρούνται.'],
+   ['No additional history steps were found for this stars output.','Δεν βρέθηκαν επιπλέον βήματα ιστορικού για αυτή την εικόνα stars.'],
    ['Image origin metadata. Replay starts with the already integrated image; this entry is not exported as a replay process.',
     'Στοιχεία προέλευσης εικόνας. Η επανάληψη ξεκινά από την ήδη ολοκληρωμένη εικόνα· αυτή η εγγραφή δεν εξάγεται ως διεργασία επανάληψης.'],
    ['Common initial history is shown on the source image:','Το κοινό αρχικό ιστορικό εμφανίζεται στην εικόνα προέλευσης:'],
