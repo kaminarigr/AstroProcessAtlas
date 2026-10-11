@@ -101,3 +101,16 @@ Manual connections save automatically in browser storage when available. Export
 JSON for a portable backup, and import it alongside the same report in another
 browser. This does not rewrite the HTML. Clearing connections also clears their
 saved state. Invalid imports leave existing connections intact.
+
+## Connection details and large trees
+
+Click a connection line (or focus it and press Enter) to inspect its origin,
+source, destination, evidence and historical uncertainty. Manual and possible
+connections remain clearly distinguished from recorded history.
+
+Use **Organize tree** to find and jump to an image/process node, collapse the
+steps of an image branch while retaining its image header, or show only the
+selected image and the branches feeding it. Possible and manual connections
+are included in that path; redo entries do not establish dependencies.
+**Expand all branches** restores the complete tree. These controls change the
+tree view only; process records remain available in the report.

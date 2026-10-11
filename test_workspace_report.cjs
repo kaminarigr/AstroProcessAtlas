@@ -652,3 +652,41 @@ browser.document.createElement=normalCreate;
 console.log('Passed: arbitrary current/before/after selection, shared comparison dialog, same-stage rejection, annotation restore/clear, duplicates, invalid/oversized import and storage-denied export fallback.');
 
 }
+
+{
+ elements.connection_info=element();elements.connection_info.hidden=true;elements.connection_description=element();
+ let edgeStopped=false;
+ browser.window.showConnection({preventDefault(){},stopPropagation(){edgeStopped=true;}},'history',0);
+ assert.ok(edgeStopped);assert.equal(elements.connection_info.hidden,false);
+ assert.ok(elements.connection_description.textContent.includes('Recorded in history'));
+ const inputIndex=graph.edges.findIndex(e=>e.provenance==='parameter');
+ browser.window.showConnection(null,'history',inputIndex);
+ assert.ok(elements.connection_description.textContent.includes('Detected from parameters'));
+ assert.ok(elements.connection_description.textContent.includes('historical source pixels'));
+ browser.window.showConnection(null,'manual',0);
+ assert.ok(elements.connection_description.textContent.includes('User annotation'));
+ assert.ok(fullOutput.includes('onclick="showConnection(event'));
+ elements.tree_image=element('image_4');elements.tree_path_only={checked:false};elements.tree_organization_status=element();
+ elements.tree_node_search=element('Histogram');elements.tree_node_results=element();
+ browser.window.findTreeNodes();assert.ok(elements.tree_node_results.children.length>1);
+ assert.ok(elements.tree_node_results.children.slice(1).every(option=>option.textContent.includes('Histogram')));
+ const collapseEdgeIndex=graph.edges.findIndex(e=>e.kind==='input');
+ const collapseEdge=graphPaths[collapseEdgeIndex];collapseEdge._treeOriginalD=helper.graphEdgePath(graph.edges[collapseEdgeIndex],graph.nodes);collapseEdge.setAttribute('d',collapseEdge._treeOriginalD);
+ const expandedEdgeD=collapseEdge.getAttribute('d');
+ browser.window.toggleTreeBranch();
+ assert.ok(graphGroups.find(g=>g.getAttribute('data-node')==='image_4_step_1').classList.contains('is-tree-hidden'));
+ assert.ok(!graphGroups.find(g=>g.getAttribute('data-node')==='image_4').classList.contains('is-tree-hidden'));
+ assert.ok(!collapseEdge.classList.contains('is-tree-hidden'),'Preserve connections to collapsed image');assert.notEqual(collapseEdge.getAttribute('d'),expandedEdgeD);
+ browser.window.toggleTreeBranch();
+ assert.ok(!graphGroups.find(g=>g.getAttribute('data-node')==='image_4_step_1').classList.contains('is-tree-hidden'));
+ assert.equal(collapseEdge.getAttribute('d'),expandedEdgeD,'Restore original line geometry on expansion');
+ const isolatedNode={id:'isolated_for_test',image:'Unused',header:true};graph.nodes.push(isolatedNode);
+ const isolatedGroup=element();isolatedGroup.setAttribute('data-node',isolatedNode.id);graphGroups.push(isolatedGroup);
+ elements.tree_path_only.checked=true;browser.window.organizeTree();
+ assert.ok(isolatedGroup.classList.contains('is-tree-hidden'));
+ assert.ok(!graphGroups.find(g=>g.getAttribute('data-node')==='image_0').classList.contains('is-tree-hidden'),'Keep the source feeding the destination');
+ browser.window.resetTreeOrganization();assert.ok(!isolatedGroup.classList.contains('is-tree-hidden'));
+ assert.equal(elements.tree_path_only.checked,false);
+ graph.nodes.pop();graphGroups.pop();
+ console.log('Passed: clickable recorded/parameter/manual provenance, uncertainty, node search, branch collapse/expand, ancestors-only view and reset.');
+}

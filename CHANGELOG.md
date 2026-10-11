@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Inspect connection origin, endpoints, evidence and uncertainty by clicking a line.
+- Add node search/jump, image branch collapse/expand and upstream path filtering
+  for large workspace trees.
+
 - Show a translucent copy of the dragged tree tile, dim its source and highlight
   the destination while selecting stages for comparison.
 
