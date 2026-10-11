@@ -620,12 +620,25 @@ console.log('Passed: node drag to A/B and node-to-node comparison, synchronized 
 
 const pointerTarget=element();pointerTarget.setAttribute('data-node','image_0');
 browser.document.elementFromPoint=()=>({closest:selector=>selector==='.stage-drop'?null:pointerTarget});
+
+const ghostSource=element();ghostSource.getBoundingClientRect=()=>({left:0,top:0,width:250,height:72});
+ghostSource.cloneNode=()=>({removeAttribute(){}});
+browser.document.querySelector=()=>ghostSource;
+const ghostBody=element();ghostBody.appendChild=function(child){this.children.push(child);child.parentNode=this;};
+browser.document.body=ghostBody;
+const originalNS=browser.document.createElementNS;
+browser.document.createElementNS=()=>{const el=element();el.style={};return el;};
 browser.window.beginComparisonDrag({button:0,pointerId:7,clientX:10,clientY:10},'image_0_step_0');
 listeners.pointermove({pointerId:7,clientX:40,clientY:10,preventDefault(){}});
+assert.equal(ghostBody.children.length,1);
+assert.equal(ghostBody.children[0].style.left,'30px');
+assert.ok(ghostSource.classList.contains('is-drag-origin'));
 listeners.pointerup({pointerId:7,clientX:100,clientY:10,preventDefault(){}});
 assert.equal(elements.stage_compare_a.value,'image_0_step_0:after');
 assert.equal(elements.stage_compare_b.value,'image_0:current');
 assert.equal(elements.comparison_dialog.hidden,false);
+assert.equal(ghostBody.children.length,0);assert.ok(!ghostSource.classList.contains('is-drag-origin'));
+browser.document.querySelector=()=>null;browser.document.createElementNS=originalNS;
 browser.window.closeComparison();
 let clickSuppressed=false;listeners.click({target:{closest:()=>true},preventDefault(){clickSuppressed=true;},stopPropagation(){}});
 assert.ok(clickSuppressed,'Dragging must not also activate the normal graph click');

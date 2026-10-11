@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Show a translucent copy of the dragged tree tile, dim its source and highlight
+  the destination while selecting stages for comparison.
+
 - Compare any two available stages with synchronized dropdowns, tree A/B markers
   and drag/drop into slots or onto another node.
 - Automatically save manual connections in browser storage; preserve portable
