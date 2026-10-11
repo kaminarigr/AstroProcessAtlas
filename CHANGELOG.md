@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Preserve and execute both recorded RGBWorkingSpace components before grouped
+  SelectiveColorCorrection replay, in history order within one parent step. Stop
+  on component failure; standalone script entries do not invent components.
+
 - Add a standalone numerical replay-difference diagnostic for original/replay
   checkpoints before and after a process. Report per-channel maximum/mean absolute
   differences using unclipped, unscaled 64-bit outputs without modifying inputs.

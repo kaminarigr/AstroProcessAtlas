@@ -1376,15 +1376,23 @@ function workspaceReplayData(records) {
             var palette = paletteReplaySource(group);
             var selective = group.title === 'SelectiveColorCorrection' ? selectiveColorReplaySource(group.members[group.members.length-1]) : null;
             var selectiveReason = group.title === 'SelectiveColorCorrection' ? selectiveColorReplayBlockReason(group.members[group.members.length-1]) : '';
+            var preparations = [];
             for (var m = 0; selective && m < group.members.length; ++m)
                if (!group.members[m].mask || group.members[m].mask.status !== 'unrecorded' || (group.members[m].references || []).length) {
                   selective = null; selectiveReason = 'SelectiveColorCorrection needs an unavailable historical mask or reference image.';
                }
+            for (var p = 0; selective && p < group.members.length-1; ++p) {
+               var preparation = replayProcessSource(group.members[p].source, 'RGBWorkingSpace');
+               if (!preparation) {
+                  selective = null; selectiveReason = 'SelectiveColorCorrection RGBWorkingSpace serialization is unavailable or invalid.';
+               } else preparations.push(preparation);
+            }
             image.steps.push({title:group.title, number:step.displayNumber, substep:0,
                time:step.time || '',
                tool:group.title, reason:palette || selective ? '' : selectiveReason || 'This process is not yet supported by the replay exporter: ' + group.title,
                action:palette ? 'palette' : selective ? 'selective' : 'process', inputs:palette ? palette.inputs : [],
                starRequired:!!(selective && selective.starRequired), identifier:'',
+               preparations:selective ? preparations : [],
                source:palette ? palette.source : selective ? selective.source : '', variable:palette ? palette.variable : selective ? selective.variable : ''});
             continue;
          }
@@ -1437,7 +1445,7 @@ function workspaceReplayData(records) {
 function buildWorkspaceReplayScript(image, start, end) {
    if (!image || start < 0 || end < start || end >= image.steps.length ||
        start !== Math.floor(start) || end !== Math.floor(end)) throw Error('Select a valid step range.');
-   var selected = image.steps.slice(start, end + 1), factories = [], manifest = [], identifier = '';
+   var selected = image.steps.slice(start, end + 1), factories = [], preparations = [], manifest = [], identifier = '';
    for (var i = 0; i < selected.length; ++i) {
       var step = selected[i];
       manifest.push({title:step.title, number:step.number, substep:step.substep,
@@ -1445,6 +1453,13 @@ function buildWorkspaceReplayScript(image, start, end) {
          action:step.action, inputs:step.inputs || [], starRequired:!!step.starRequired, mask:step.mask || null, time:step.time || ''});
       if (!step.reason && step.action === 'identifier') identifier = step.identifier;
       factories.push(step.reason || step.action === 'identifier' ? 'null' : 'function(){\n' + step.source + '\nreturn ' + step.variable + ';\n}');
+      var preparationFactories = [];
+      if (!step.reason && step.action === 'selective')
+         for (var p = 0; p < (step.preparations || []).length; ++p) {
+            var preparation = step.preparations[p];
+            preparationFactories.push('function(){\n' + preparation.source + '\nreturn ' + preparation.variable + ';\n}');
+         }
+      preparations.push('[' + preparationFactories.join(',\n') + ']');
    }
    // Build comment delimiters at runtime, as in replayStepHTML. PJSR's
    // preprocessing can truncate nested comment/URL text inside source strings.
@@ -1476,6 +1491,7 @@ function buildWorkspaceReplayScript(image, start, end) {
       'var replayOriginalInputs = ' + JSON.stringify(image.originalInputs || []) + ';',
       'var replaySteps = ' + JSON.stringify(manifest) + ';',
       'var replayFactories = [' + factories.join(',\n') + '];',
+      'var replayPreparations = [' + preparations.join(',\n') + '];',
       'function suggestPaletteInput(name,candidates) {',
       '   function base(id){return id.toLowerCase().replace(/(?:_(?:final|processed|clone|linear|starless|nbn|replay)(?:_[0-9]+)?)+$/g,"");}',
       '   var wanted=name.toLowerCase(),root=base(name),best=0,score=-1,tied=false;',
@@ -1558,7 +1574,7 @@ function buildWorkspaceReplayScript(image, start, end) {
       '         if(replaySteps[k].starRequired&&typeof StarXTerminator!=="function")throw Error("SelectiveColorCorrection requires StarXTerminator for its star mask.");',
       '         var process=replayFactories[k]();',
       '         applyReplayMask(output,replaySteps[k].mask,maskCache,replaySteps[k]);',
-      '         if(replaySteps[k].action==="selective"){runSelectiveReplay(process,output.mainView);processEvents();continue;}',
+      '         if(replaySteps[k].action==="selective"){runSelectiveReplay(process,output.mainView,replayPreparations[k]);processEvents();continue;}',
       '         if(replaySteps[k].action==="dark"){runDarkStructureReplay(process,output.mainView);processEvents();continue;}',
       '         if(replaySteps[k].action==="palette"){var keys=["expression","expression1","expression2"];for(var e=0;e<keys.length;++e)process[keys[e]]=process[keys[e]].replace(/(?:[0-9]+(?:[.][0-9]*)?|[.][0-9]+)(?:[eE][+-]?[0-9]+)?|[A-Za-z_][A-Za-z0-9_]*/g,function(token){return Object.prototype.hasOwnProperty.call(mapped,"$"+token)?mapped["$"+token]:token;});}',
       '         if(!process||typeof process.executeOn!=="function")throw Error("Required process is unavailable: "+replaySteps[k].title);',
@@ -1603,9 +1619,10 @@ function buildWorkspaceReplayScript(image, start, end) {
    }
    if (includePath) {
       var bridge = [
-         'function runSelectiveReplay(template,target) {',
+         'function runSelectiveReplay(template,target,preparations) {',
          '   var digest=(new CryptographicHash(CryptographicHash_SHA256)).hash(File.readFile(template.filePath)).toHex();',
          '   if(digest.toLowerCase()!==template.sourceDigest.toLowerCase())throw Error("SelectiveColorCorrection source changed since report generation. Generate a new report and export.");',
+         '   for(var r=0;r<preparations.length;++r){if(!preparations[r]().executeOn(target))throw Error("SelectiveColorCorrection RGBWorkingSpace component failed: "+(r+1));processEvents();}',
          '   var saved={};for(var p=0;p<template.parameters.length;++p)saved["$"+template.parameters[p][0]]=template.parameters[p][1];',
          '   var Parameters={isViewTarget:true,isGlobalTarget:false,targetView:target,has:function(key){return Object.prototype.hasOwnProperty.call(saved,"$"+key);},getReal:function(key){return Number(saved["$"+key]);},getInteger:function(key){return Number(saved["$"+key]);},getBoolean:function(key){return saved["$"+key]==="true";},getString:function(key){return saved["$"+key];},set:function(){throw Error("Unexpected SelectiveColorCorrection parameter write.");}};',
          '#include ' + JSON.stringify(includePath),
@@ -2398,6 +2415,7 @@ REPORT_TRANSLATIONS = REPORT_TRANSLATIONS.concat([
    ['SelectiveColorCorrection imported mask is not recorded and cannot be reconstructed.','Η εισαγόμενη μάσκα του SelectiveColorCorrection δεν έχει καταγραφεί και δεν μπορεί να ανακατασκευαστεί.'],
    ['SelectiveColorCorrection requires complete saved parameters, valid serialization and a recorded script checksum.','Το SelectiveColorCorrection απαιτεί πλήρεις αποθηκευμένες παραμέτρους, έγκυρο κώδικα και καταγεγραμμένο checksum του script.'],
    ['SelectiveColorCorrection needs an unavailable historical mask or reference image.','Το SelectiveColorCorrection χρειάζεται μη διαθέσιμη ιστορική μάσκα ή εικόνα αναφοράς.'],
+   ['SelectiveColorCorrection RGBWorkingSpace serialization is unavailable or invalid.','Ο καταγεγραμμένος κώδικας RGBWorkingSpace του SelectiveColorCorrection δεν είναι διαθέσιμος ή είναι μη έγκυρος.'],
    ['PerfectPalettePicker: start the range at this step, select grayscale inputs and explicitly choose their state: already prepared, or linear with input stretch to median 0.25. Replays the recorded combination into a new RGB image. Other unrecorded channel preparation is not reconstructed.','PerfectPalettePicker: ξεκίνα το εύρος σε αυτό το βήμα, διάλεξε grayscale εισόδους και όρισε την κατάστασή τους: ήδη προετοιμασμένες ή linear με stretch εισόδου σε διάμεσο 0,25. Επαναλαμβάνει τον καταγεγραμμένο συνδυασμό σε νέα RGB εικόνα. Άλλη μη καταγεγραμμένη προετοιμασία καναλιών δεν ανακατασκευάζεται.'],
    ['PerfectPalettePicker: start the range at this step and select prepared grayscale inputs in PixInsight. Replays the recorded final combination into a new RGB image; earlier channel preparation is not reconstructed.','PerfectPalettePicker: ξεκίνα το εύρος σε αυτό το βήμα και διάλεξε προετοιμασμένες grayscale εισόδους στο PixInsight. Επαναλαμβάνει τον καταγεγραμμένο τελικό συνδυασμό σε νέα RGB εικόνα· η προηγούμενη προετοιμασία καναλιών δεν ανακατασκευάζεται.'],
    ['Start the selected range at PerfectPalettePicker and choose its prepared inputs.','Ξεκίνα το επιλεγμένο εύρος στο PerfectPalettePicker και διάλεξε τις προετοιμασμένες εισόδους του.'],
