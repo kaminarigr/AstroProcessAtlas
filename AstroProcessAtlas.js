@@ -1352,6 +1352,7 @@ function workspaceReplayData(records) {
                   selective = null; selectiveReason = 'SelectiveColorCorrection needs an unavailable historical mask or reference image.';
                }
             image.steps.push({title:group.title, number:step.displayNumber, substep:0,
+               time:step.time || '',
                tool:group.title, reason:palette || selective ? '' : selectiveReason || 'This process is not yet supported by the replay exporter: ' + group.title,
                action:palette ? 'palette' : selective ? 'selective' : 'process', inputs:palette ? palette.inputs : [],
                starRequired:!!(selective && selective.starRequired), identifier:'',
@@ -1389,6 +1390,7 @@ function workspaceReplayData(records) {
             if (!source) reason = 'Serialized process code is not a supported constructor and parameter assignment sequence.';
          }
          image.steps.push({title:step.title, number:step.displayNumber || s + 1,
+            time:step.time || '',
             substep:step.substepNumber || 0, tool:selective ? 'SelectiveColorCorrection' : tool, reason:reason,
             action:tool === 'ImageIdentifier' ? 'identifier' : selective ? 'selective' : 'process', identifier:identifier,
             starRequired:!!(selective && selective.starRequired),
@@ -1409,7 +1411,7 @@ function buildWorkspaceReplayScript(image, start, end) {
       var step = selected[i];
       manifest.push({title:step.title, number:step.number, substep:step.substep,
          reason:step.reason || (step.action === 'palette' && i > 0 ? 'Start the selected range at PerfectPalettePicker and choose its prepared inputs.' : ''),
-         action:step.action, inputs:step.inputs || [], starRequired:!!step.starRequired, mask:step.mask || null});
+         action:step.action, inputs:step.inputs || [], starRequired:!!step.starRequired, mask:step.mask || null, time:step.time || ''});
       if (!step.reason && step.action === 'identifier') identifier = step.identifier;
       factories.push(step.reason || step.action === 'identifier' ? 'null' : 'function(){\n' + step.source + '\nreturn ' + step.variable + ';\n}');
    }
@@ -1450,27 +1452,28 @@ function buildWorkspaceReplayScript(image, start, end) {
       '      var value=original&&base(id)===root?400:id===root?300:id===wanted?200:base(id)===root?100:-1;if(value>score){score=value;best=i;tied=false;}else if(value===score&&value>=0)tied=true;',
       '   }return score<0||tied?0:best;',
       '}',
-      'function applyReplayMask(output,request,cache) {',
+      'function applyReplayMask(output,request,cache,step) {',
       '   output.removeMask();if(!request)return;',
       '   var inverted=request.inverted;',
       '   if(typeof inverted!=="boolean"){inverted=false;Console.writeln("WARNING: Historical mask value inversion is not recorded for "+request.name+"; using the user-selected Color invert setting.");}',
       '   var key="$"+request.name,entry=cache[key];',
-      '   if(!entry){',
+      '   {',
       '      var candidates=[];for(var i=0;i<ImageWindow.windows.length;++i){var w=ImageWindow.windows[i];if(!w.isNull&&w!==output&&w.mainView.image.width===output.mainView.image.width&&w.mainView.image.height===output.mainView.image.height)candidates.push(w);}',
       '      if(!candidates.length)throw Error("Open a mask with matching dimensions for "+request.name);',
       '      var dialog=new Dialog;dialog.windowTitle="AstroProcessAtlas - Select mask";',
-      '      var label=new Label(dialog);label.text="Required mask: "+request.name;label.wordWrapping=true;label.setMinWidth(480);',
-      '      var note=new Label(dialog);note.text="Select the mask image and choose whether its values need Color invert for this step. The image and this setting are remembered; later recorded inversion changes are automatic.";note.wordWrapping=true;note.setMinWidth(480);',
+      '      var label=new Label(dialog);label.text="Step "+step.number+" - "+step.title+": mask "+request.name+(step.time?"\\nRecorded step time: "+step.time:"");label.wordWrapping=true;label.setMinWidth(480);',
+      '      var note=new Label(dialog);note.text="Choose the mask version and Color invert for this step. Previous choices are preselected, but the same mask name may refer to different historical pixels. Timestamps alone do not prove a mask version.";note.wordWrapping=true;note.setMinWidth(480);',
       '      var combo=new ComboBox(dialog);for(var i=0;i<candidates.length;++i)combo.addItem(candidates[i].mainView.id);combo.currentItem=0;for(var i=0;i<candidates.length;++i)if(candidates[i].mainView.id===request.name)combo.currentItem=i;',
+      '      if(entry&&!entry.window.isNull){for(var i=0;i<candidates.length;++i)if(candidates[i]===entry.window)combo.currentItem=i;inverted=typeof request.inverted==="boolean"?entry.colorInvert!==(entry.historicalInvert!==inverted):entry.colorInvert;}',
       '      var colorInvert=new CheckBox(dialog);colorInvert.text="Color invert (black/white mask values)";colorInvert.checked=inverted;colorInvert.toolTip="Checked: use 1-mask. Unchecked: use the selected image values. No geometry or image pixels are changed.";',
       '      var ok=new PushButton(dialog);ok.text="Continue";ok.onClick=function(){dialog.ok();};',
       '      var cancel=new PushButton(dialog);cancel.text="Stop replay";cancel.onClick=function(){dialog.cancel();};',
       '      var buttons=new HorizontalSizer;buttons.addStretch();buttons.add(ok);buttons.add(cancel);dialog.sizer=new VerticalSizer;dialog.sizer.margin=12;dialog.sizer.spacing=8;dialog.sizer.add(label);dialog.sizer.add(note);dialog.sizer.add(combo);dialog.sizer.add(colorInvert);dialog.sizer.add(buttons);dialog.adjustToContents();',
       '      if(!dialog.execute())throw Error("Mask selection cancelled: "+request.name);',
-      '      entry={window:candidates[combo.currentItem],colorInvert:colorInvert.checked,historicalInvert:inverted};if(!entry.window||entry.window.isNull)throw Error("Selected mask is unavailable: "+request.name);cache[key]=entry;',
+      '      entry={window:candidates[combo.currentItem],colorInvert:colorInvert.checked,historicalInvert:request.inverted===true};if(!entry.window||entry.window.isNull)throw Error("Selected mask is unavailable: "+request.name);cache[key]=entry;',
       '   }',
       '   if(entry.window.isNull)throw Error("Previously selected mask is unavailable: "+request.name);',
-      '   inverted=typeof request.inverted==="boolean"?entry.colorInvert!==(entry.historicalInvert!==inverted):entry.colorInvert;',
+      '   inverted=entry.colorInvert;',
       '   output.setMask(entry.window,inverted);output.maskEnabled=true;output.maskInverted=inverted;output.maskVisible=false;',
       '   Console.writeln("Mask: "+request.name+" -> "+entry.window.mainView.id+"; Mask > Invert Mask: "+(inverted?"ON (1-mask)":"OFF"));',
       '}',
@@ -1523,7 +1526,7 @@ function buildWorkspaceReplayScript(image, start, end) {
       '         Console.writeln("Replay "+(k+1)+"/"+replaySteps.length+": "+replaySteps[k].title);',
       '         if(replaySteps[k].starRequired&&typeof StarXTerminator!=="function")throw Error("SelectiveColorCorrection requires StarXTerminator for its star mask.");',
       '         var process=replayFactories[k]();',
-      '         applyReplayMask(output,replaySteps[k].mask,maskCache);',
+      '         applyReplayMask(output,replaySteps[k].mask,maskCache,replaySteps[k]);',
       '         if(replaySteps[k].action==="selective"){runSelectiveReplay(process,output.mainView);processEvents();continue;}',
       '         if(replaySteps[k].action==="palette"){var keys=["expression","expression1","expression2"];for(var e=0;e<keys.length;++e)process[keys[e]]=process[keys[e]].replace(/(?:[0-9]+(?:[.][0-9]*)?|[.][0-9]+)(?:[eE][+-]?[0-9]+)?|[A-Za-z_][A-Za-z0-9_]*/g,function(token){return Object.prototype.hasOwnProperty.call(mapped,"$"+token)?mapped["$"+token]:token;});}',
       '         if(!process||typeof process.executeOn!=="function")throw Error("Required process is unavailable: "+replaySteps[k].title);',

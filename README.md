@@ -94,11 +94,13 @@ matching dimensions. Choose **Color invert (black/white mask values)** in the
 same dialog when the selected mask needs value inversion for this step. The
 checkbox defaults to the recorded inversion, or off when it is unspecified.
 Continue is available with either setting; there is no confirmation checkbox.
-The selected setting is remembered, and later recorded inversion changes are
-applied relative to that first choice through Mask > Invert Mask.
+At every masked step the picker reopens, showing the process number/title and
+available recorded timestamp. The last selected image and Color invert choice
+are preselected; recorded inversion changes adjust the default. Both can be
+changed for each step, since the same mask name does not identify a pixel version.
 Inversion means a weight of 1-mask at the same pixel coordinates, not a geometric
-flip. The selection is cached by historical mask name for this replay run; later
-uses need no new mask-image prompt, and opposite states use PixInsight's mask inversion flag.
+flip. Choices are cached by historical mask name for this replay run, and
+inversion uses PixInsight's mask inversion flag.
 Mask pixels are never changed. Masks are removed between operations. Cancellation
 stops replay and retains the partial result. The report cannot reconstruct a mask's
 historical pixels. Download is enabled only when the entire selected range is supported;
@@ -107,6 +109,9 @@ If the mask name is recorded but its inversion is unspecified, download remains
 available and replay uses your Color invert choice, with a warning in the report
 and console. There is no separate inversion-selection dialog. The mask image selection is still reused. An entirely unknown mask state
 remains a blocker.
+Timestamps can help compare a target step with a mask's Invert/Blur history, but
+are not proof of its pixel version: times can be missing or inherited, and the
+history does not link the target operation to an exact mask-history position.
 Historical pixels, masks and missing inputs are not bundled in the exported script.
 
 GradientCorrection preserves its original serialized thresholds, scale, convergence,

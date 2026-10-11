@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Reopen the mask picker at every masked replay step, allowing different image
+  versions and Color invert overrides. Preselect previous choices for that mask
+  name and show the step number/title and available timestamp. Timestamps provide
+  context, not proof of the mask pixel version.
+
 - Replace mask confirmation with an editable Color invert checkbox in the mask
   picker. Default to recorded inversion, cache the user's choice, and apply later
   historical inversion changes relative to it. Continue works for either setting.
