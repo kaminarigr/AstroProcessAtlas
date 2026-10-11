@@ -123,6 +123,25 @@ are not proof of its pixel version: times can be missing or inherited, and the
 history does not link the target operation to an exact mask-history position.
 Historical pixels, masks and missing inputs are not bundled in the exported script.
 
+Standalone PixelMath replay preserves the serialized expressions and processing
+settings, including single or separate channel expressions, symbols, rescaling,
+truncation and working precision. `$T` refers to the current replay result. For
+explicit image identifiers in active expressions or symbol definitions, a dialog
+opens at that step to select open images at their original processing state. It
+suggests matching IDs and reuses previous choices as defaults; each selection can
+be changed. References to the report image suggest the current replay result.
+Different image names are supported. Function names, local/symbol declarations,
+numbers, comments and target/mask placeholders are not remapped as image inputs.
+
+Recorded `createNewImage` operations use a collision-free temporary output ID;
+that new image becomes the current replay result with the existing replay name,
+and subsequent steps run on it. Only the superseded replay copy is closed.
+Selected input images remain unchanged. Recorded masks use the existing picker.
+Missing inputs/processes, cancellation or process failure stop the workflow.
+Quoted strings, directives, preview references, implicit global image placeholders
+such as `$A`, and cache-only/no-output operations remain blocked. `$M`/`$mask`
+require a recorded mask. Native PixInsight validation of this support is required.
+
 Invert replay uses the native PixInsight process to invert pixel values (color or
 grayscale), without changing image geometry. It runs on the replay copy. Recorded
 masks use the same per-step picker and Color invert controls as other native
@@ -288,7 +307,7 @@ This repeats the captured final combination, not the original interactive script
 or its earlier channel extraction and OSC preparation. Supply images at
 that prepared state, or select the linear-input stretch. Missing final PixelMath, masks, single-expression mode,
 custom symbols, alpha expressions or formulas beyond the supported arithmetic
-remain blockers. Other grouped scripts besides SelectiveColorCorrection and standalone PixelMath remain unsupported.
+remain blockers. Other grouped scripts besides the explicitly supported tools remain unsupported.
 
 NarrowbandNormalization replay preserves the recorded native parameters. If it is
 the first selected step, choose its starting image in the PixInsight replay dialog;

@@ -1291,6 +1291,69 @@ function paletteReplaySource(group) {
    return {source:parsed.source, variable:parsed.variable, inputs:inputs};
 }
 
+function pixelMathTextTokens(text) {
+   var tokens = [], i = 0, depth = 0, itemStart = true;
+   while (i < text.length) {
+      var c = text.charAt(i), next = text.charAt(i+1);
+      if (c === '/' && next === '/') { i += 2; while (i < text.length && !/[\r\n]/.test(text.charAt(i))) ++i; }
+      else if (c === '/' && next === '*') {
+         var end = text.indexOf('*/', i+2); if (end < 0) throw Error('Unterminated PixelMath comment.'); i = end+2;
+      } else if (c === '"' || c === "'" || c === '#' || text.substr(i,2) === '->' || text.substr(i,2) === '::') {
+         throw Error('PixelMath quoted strings, directives and preview references are not supported by replay.');
+      } else {
+         var number = /^(?:0[xX][0-9a-fA-F]+|(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)/.exec(text.slice(i));
+         if (number) { i += number[0].length; itemStart = false; continue; }
+         var name = /^[A-Za-z_]\w*/.exec(text.slice(i));
+         if (name) {
+            var start = i; i += name[0].length;
+            var after = i;
+            while (after < text.length) {
+               if (/\s/.test(text.charAt(after))) ++after;
+               else if (text.charAt(after) === '/' && text.charAt(after+1) === '*') { var end = text.indexOf('*/',after+2); if (end < 0) throw Error('Unterminated PixelMath comment.'); after = end+2; }
+               else if (text.charAt(after) === '/' && text.charAt(after+1) === '/') { after += 2; while (after < text.length && !/[\r\n]/.test(text.charAt(after))) ++after; }
+               else break;
+            }
+            tokens.push({name:name[0],start:start,end:i,macro:text.charAt(start-1)==='$',call:text.charAt(after)==='(',local:text.charAt(after)==='='&&text.charAt(after+1)!=='=',itemStart:depth===0&&itemStart});
+            itemStart = false;
+         } else {
+            if (c === '(' || c === '[' || c === '{') { ++depth; itemStart = false; }
+            else if (c === ')' || c === ']' || c === '}') { --depth; itemStart = false; }
+            else if ((c === ',' || c === ';') && depth === 0) itemStart = true;
+            else if (!/\s/.test(c)) itemStart = false;
+            ++i;
+         }
+      }
+   }
+   return tokens;
+}
+
+function pixelMathReplaySource(step) {
+   if (getProcessName(step.proc) !== 'PixelMath') return null;
+   var proc = step.proc, parsed = replayProcessSource(step.source, 'PixelMath');
+   if (!parsed || proc.generateOutput === false || proc.clearImageCacheAndExit === true) return null;
+   var keys = proc.useSingleExpression === false ? ['expression','expression1','expression2','expression3'] : ['expression','expression3'];
+   var texts = [], tokenLists = [], locals = {}, inputs = [], hasExpression = false;
+   try {
+      for (var e = 0; e < keys.length; ++e) { var text = proc[keys[e]] || ''; texts.push(text); if (text.trim()) hasExpression = true; }
+      if (!hasExpression) return null;
+      texts.push(proc.symbols || '');
+      for (var e = 0; e < texts.length; ++e) {
+         var tokens = pixelMathTextTokens(texts[e]); tokenLists.push(tokens);
+         for (var t = 0; t < tokens.length; ++t) if (tokens[t].local) locals['$'+tokens[t].name] = true;
+         if (e === texts.length-1)
+            for (var t = 0; t < tokens.length; ++t) if (tokens[t].itemStart && !tokens[t].call && !tokens[t].macro) locals['$'+tokens[t].name] = true;
+      }
+      for (var e = 0; e < tokenLists.length; ++e) for (var t = 0; t < tokenLists[e].length; ++t) {
+         var token = tokenLists[e][t];
+         if (token.macro) {
+            if (['T','target','M','mask'].indexOf(token.name) < 0) return null;
+            if ((token.name === 'M' || token.name === 'mask') && (!step.mask || step.mask.status !== 'recorded')) return null;
+         } else if (!token.call && !locals['$'+token.name] && ['true','false'].indexOf(token.name) < 0 && inputs.indexOf(token.name) < 0) inputs.push(token.name);
+      }
+   } catch (e) { return null; }
+   return {source:parsed.source,variable:parsed.variable,inputs:inputs};
+}
+
 function gameReplaySource(step) {
    var proc = step.proc;
    if (getProcessName(proc) !== 'Script' || getProcessTitle(proc).toLowerCase() !== 'game' ||
@@ -1399,9 +1462,10 @@ function workspaceReplayData(records) {
             continue;
          }
          if (isImageOriginStep(step, record.steps.indexOf(step))) continue;
-         var tool = getProcessName(step.proc), reason = '', source = null, identifier = '', selective = selectiveColorReplaySource(step), dark = darkStructureReplaySource(step), game = gameReplaySource(step);
+         var tool = getProcessName(step.proc), reason = '', source = null, identifier = '', selective = selectiveColorReplaySource(step), dark = darkStructureReplaySource(step), game = gameReplaySource(step), pixel = pixelMathReplaySource(step);
          var requiredReferences = (step.references || []).filter(function(ref) {
             if (ref.kind === 'mask' && step.mask && step.mask.status === 'recorded' && ref.name === step.mask.name) return false;
+            if (pixel && (ref.kind === 'input' || ref.kind === 'reference' || (ref.kind === 'output' && step.proc.createNewImage === true))) return false;
             return !(tool === 'StarXTerminator' && step.proc.stars === true && ref.kind === 'output');
          });
          if (tool === 'ImageIdentifier') {
@@ -1417,7 +1481,8 @@ function workspaceReplayData(records) {
                if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(identifier)) reason = 'The recorded ImageIdentifier value is empty or invalid.';
             }
          }
-         else if (!supported[tool] && !selective && !dark && !game) reason = getProcessTitle(step.proc).toLowerCase() === 'selectivecolorcorrection' ? selectiveColorReplayBlockReason(step) : 'This process is not yet supported by the replay exporter: ' + getProcessTitle(step.proc);
+         else if (tool === 'PixelMath' && !pixel) reason = 'PixelMath needs valid serialized expressions without quoted strings, directives, preview/global references or cache-only execution.';
+         else if (!supported[tool] && !selective && !dark && !game && !pixel) reason = getProcessTitle(step.proc).toLowerCase() === 'selectivecolorcorrection' ? selectiveColorReplayBlockReason(step) : 'This process is not yet supported by the replay exporter: ' + getProcessTitle(step.proc);
          else if (!step.mask || step.mask.status === 'unknown') reason = 'Historical mask state is unknown.';
          else if (step.mask.status === 'recorded' && !step.mask.name) reason = 'Historical mask state is unknown.';
          else if (step.mask.status === 'recorded' && selective) reason = 'SelectiveColorCorrection needs an unavailable historical mask or reference image.';
@@ -1427,14 +1492,15 @@ function workspaceReplayData(records) {
          else if (tool === 'RGBWorkingSpace' && step.proc.applyGlobalRGBWS === true)
             reason = 'This step uses the global RGB working space, whose historical settings are unavailable.';
          else {
-            source = selective || dark || game || replayProcessSource(step.source, tool);
+            source = selective || dark || game || pixel || replayProcessSource(step.source, tool);
             if (!source) reason = 'Serialized process code is not a supported constructor and parameter assignment sequence.';
          }
          image.steps.push({title:step.title, number:step.displayNumber || s + 1,
             time:step.time || '',
             substep:step.substepNumber || 0, tool:selective ? 'SelectiveColorCorrection' : dark ? 'DarkStructureEnhance' : game ? 'GAME' : tool, reason:reason,
-            action:tool === 'ImageIdentifier' ? 'identifier' : selective ? 'selective' : dark ? 'dark' : game ? 'game' : 'process', identifier:identifier,
-            warning:game ? 'GAME drawing settings were not recorded. Select the completed original GAME mask in PixInsight; mask creation is not repeated.' : dark ? 'DarkStructureEnhance settings were not recorded. Choose them manually in PixInsight.' : '', library:dark ? dark.library : '',
+            action:tool === 'ImageIdentifier' ? 'identifier' : selective ? 'selective' : dark ? 'dark' : game ? 'game' : pixel ? 'pixelmath' : 'process', identifier:identifier,
+            inputs:pixel ? pixel.inputs : [],
+            warning:pixel && pixel.inputs.length ? 'Choose PixelMath reference images in PixInsight at their recorded processing state.' : game ? 'GAME drawing settings were not recorded. Select the completed original GAME mask in PixInsight; mask creation is not repeated.' : dark ? 'DarkStructureEnhance settings were not recorded. Choose them manually in PixInsight.' : '', library:dark ? dark.library : '',
             starRequired:!!(selective && selective.starRequired),
             mask:step.mask && step.mask.status === 'recorded' ? {name:step.mask.name, inverted:typeof step.mask.inverted === 'boolean' ? step.mask.inverted : null} : null,
             source:source && tool !== 'ImageIdentifier' ? source.source : '', variable:source && tool !== 'ImageIdentifier' ? source.variable : ''});
@@ -1487,6 +1553,34 @@ function buildWorkspaceReplayScript(image, start, end) {
       'var replayOriginalInputs = ' + JSON.stringify(image.originalInputs || []) + ';',
       'var replaySteps = ' + JSON.stringify(manifest) + ';',
       'var replayFactories = [' + factories.join(',\n') + '];',
+      pixelMathTextTokens.toString(),
+      'function remapPixelMathText(text,mapped) {',
+      '   var tokens=pixelMathTextTokens(text),result="",last=0;',
+      '   for(var i=0;i<tokens.length;++i){var token=tokens[i];if(!token.macro&&!token.call&&!token.local&&Object.prototype.hasOwnProperty.call(mapped,"$"+token.name)){result+=text.slice(last,token.start)+mapped["$"+token.name];last=token.end;}}',
+      '   return result+text.slice(last);',
+      '}',
+      'function choosePixelMathInputs(output,step,cache) {',
+      '   var mapped={},names=step.inputs||[];if(!names.length)return mapped;',
+      '   var candidates=[];for(var i=0;i<ImageWindow.windows.length;++i)if(!ImageWindow.windows[i].isNull)candidates.push(ImageWindow.windows[i]);if(candidates.indexOf(output)<0)candidates.push(output);',
+      '   var dialog=new Dialog;dialog.windowTitle="AstroProcessAtlas - PixelMath inputs";dialog.sizer=new VerticalSizer;dialog.sizer.margin=8;dialog.sizer.spacing=6;',
+      '   var info=new Label(dialog);info.text="Step "+step.number+": select each reference image at its recorded processing state. The current replay result is also available.";info.wordWrapping=true;info.setMinWidth(480);dialog.sizer.add(info);',
+      '   var boxes=[];for(var n=0;n<names.length;++n){var label=new Label(dialog);label.text=names[n];dialog.sizer.add(label);var combo=new ComboBox(dialog);combo.addItem("Choose an image");combo.currentItem=0;for(var c=0;c<candidates.length;++c){combo.addItem(candidates[c].mainView.id);if(cache["$"+names[n]]===candidates[c])combo.currentItem=c+1;}if(combo.currentItem===0){for(var c=0;c<candidates.length;++c)if(names[n]===replayImage?candidates[c]===output:candidates[c].mainView.id===names[n]){combo.currentItem=c+1;break;}}boxes.push(combo);dialog.sizer.add(combo);}',
+      '   var run=new PushButton(dialog);run.text="Continue";run.onClick=function(){dialog.ok();};var update=function(){run.enabled=true;for(var b=0;b<boxes.length;++b)if(boxes[b].currentItem<1)run.enabled=false;};for(var b=0;b<boxes.length;++b)boxes[b].onItemSelected=update;update();',
+      '   var cancel=new PushButton(dialog);cancel.text="Cancel";cancel.onClick=function(){dialog.cancel();};var buttons=new HorizontalSizer;buttons.addStretch();buttons.add(run);buttons.add(cancel);dialog.sizer.add(buttons);dialog.adjustToContents();',
+      '   if(!dialog.execute())throw Error("PixelMath input selection cancelled.");',
+      '   for(var n=0;n<names.length;++n){var selected=candidates[boxes[n].currentItem-1];if(!selected||selected.isNull)throw Error("Select an available image for PixelMath input: "+names[n]);mapped["$"+names[n]]=selected.mainView.id;cache["$"+names[n]]=selected;}',
+      '   return mapped;',
+      '}',
+      'function runPixelMathReplay(process,output,step,cache) {',
+      '   var mapped=choosePixelMathInputs(output,step,cache),keys=process.useSingleExpression===false?["expression","expression1","expression2","expression3","symbols"]:["expression","expression3","symbols"];',
+      '   for(var e=0;e<keys.length;++e)if(typeof process[keys[e]]==="string")process[keys[e]]=remapPixelMathText(process[keys[e]],mapped);',
+      '   var newId="",resultId=output.mainView.id;if(process.createNewImage){newId=resultId+"_APA_pixelmath";var suffix=1;while(!View.viewById(newId).isNull)newId=resultId+"_APA_pixelmath_"+(suffix++);process.newImageId=newId;process.showNewImage=false;}',
+      '   try{if(!process||typeof process.executeOn!=="function"||process.executeOn(output.mainView)===false)throw Error("PixelMath process failed.");}finally{output.removeMask();}',
+      '   if(!newId)return output;',
+      '   var replacement=null;for(var i=0;i<ImageWindow.windows.length;++i)if(!ImageWindow.windows[i].isNull&&ImageWindow.windows[i].mainView.id===newId){replacement=ImageWindow.windows[i];break;}',
+      '   if(!replacement)throw Error("PixelMath did not create its expected output image.");',
+      '   output.forceClose();replacement.mainView.id=resultId;replacement.show();return replacement;',
+      '}',
       'function suggestPaletteInput(name,candidates) {',
       '   function base(id){return id.toLowerCase().replace(/(?:_(?:final|processed|clone|linear|starless|nbn|replay)(?:_[0-9]+)?)+$/g,"");}',
       '   var wanted=name.toLowerCase(),root=base(name),best=0,score=-1,tied=false;',
@@ -1551,7 +1645,7 @@ function buildWorkspaceReplayScript(image, start, end) {
       '   if(palette){combo.visible=false;naming.text="Output name: "+(replayIdentifier||replayImage)+"_APA_replay";confirm.text="I confirm the selected input states match the original palette preparation.";dialog.adjustToContents();}',
       '   if(!dialog.execute()||!confirm.checked)return;',
       '   var input=candidates[combo.currentItem];if(!input||input.isNull)throw Error("Selected input is unavailable.");',
-      '   var mapped={},temporary=[],prepared={},maskCache={},output=null;',
+      '   var mapped={},temporary=[],prepared={},maskCache={},pixelMathCache={},output=null;',
       '   try {',
       '   if(palette){for(var b=0;b<bindings.length;++b){var channel=candidates[bindings[b].combo.currentItem];if(!channel||channel.isNull||channel.mainView.image.isColor)throw Error("Select an available grayscale channel for "+bindings[b].name);if(bindings[b].state.currentItem!==1&&bindings[b].state.currentItem!==2)throw Error("Choose the preparation state for "+bindings[b].name);if(b===0)input=channel;else if(channel.mainView.image.width!==input.mainView.image.width||channel.mainView.image.height!==input.mainView.image.height)throw Error("Palette inputs must have matching dimensions.");}}',
       '   if(palette){for(var b=0;b<bindings.length;++b){var channel=candidates[bindings[b].combo.currentItem],view=channel.mainView;if(bindings[b].state.currentItem===2){var key="$"+view.id;if(prepared[key])view=prepared[key];else{var tid=view.id+"_APA_ppp_input",ti=1;while(!View.viewById(tid).isNull)tid=view.id+"_APA_ppp_input_"+(ti++);var ci=view.image,copy=new ImageWindow(ci.width,ci.height,ci.numberOfChannels,ci.bitsPerSample,ci.isReal,false,tid);temporary.push(copy);copy.mainView.beginProcess(UndoFlag_NoSwapFile);try{copy.mainView.image.assign(ci);}finally{copy.mainView.endProcess();}view=copy.mainView;var expressions=["($T-max(min($T),med($T)-2.7*sdev($T)))/(1-max(min($T),med($T)-2.7*sdev($T)))","mtf(mtf(0.25,med($T)),$T)"];for(var p=0;p<expressions.length;++p){var stretch=new PixelMath;stretch.expression=expressions[p];stretch.useSingleExpression=true;stretch.symbols="";stretch.generateOutput=true;stretch.clearImageCacheAndExit=false;stretch.cacheGeneratedImages=false;stretch.use64BitWorkingImage=true;stretch.rescale=false;stretch.truncate=true;stretch.truncateLower=0;stretch.truncateUpper=1;stretch.createNewImage=false;stretch.showNewImage=false;if(stretch.executeOn(view)===false)throw Error("PPP input stretch failed: "+channel.mainView.id);processEvents();}prepared[key]=view;}}mapped["$"+bindings[b].name]=view.id;}}',
@@ -1572,6 +1666,7 @@ function buildWorkspaceReplayScript(image, start, end) {
       '         if(replaySteps[k].starRequired&&typeof StarXTerminator!=="function")throw Error("SelectiveColorCorrection requires StarXTerminator for its star mask.");',
       '         var process=replayFactories[k]();',
       '         applyReplayMask(output,replaySteps[k].mask,maskCache,replaySteps[k]);',
+      '         if(replaySteps[k].action==="pixelmath"){try{output=runPixelMathReplay(process,output,replaySteps[k],pixelMathCache);}finally{if(output&&!output.isNull)output.removeMask();}processEvents();continue;}',
       '         if(replaySteps[k].action==="selective"){Parameters.set("apaSelectiveStep",k);try{runSelectiveReplay(process,output.mainView);}finally{Parameters.set("apaSelectiveStep",-1);}processEvents();continue;}',
       '         if(replaySteps[k].action==="dark"){runDarkStructureReplay(process,output.mainView);processEvents();continue;}',
       '         if(replaySteps[k].action==="palette"){var keys=["expression","expression1","expression2"];for(var e=0;e<keys.length;++e)process[keys[e]]=process[keys[e]].replace(/(?:[0-9]+(?:[.][0-9]*)?|[.][0-9]+)(?:[eE][+-]?[0-9]+)?|[A-Za-z_][A-Za-z0-9_]*/g,function(token){return Object.prototype.hasOwnProperty.call(mapped,"$"+token)?mapped["$"+token]:token;});}',
@@ -1643,6 +1738,7 @@ function workspaceReplayHTML(records) {
       '<p>Select an image and a consecutive range of applied processes. Run the downloaded .js in PixInsight with an input in the state BEFORE the first selected step. Replay uses a new copy and stops at the first unsupported step. Recorded masks are requested when needed; historical reference images are not restored.</p>' +
       '<p>Copy naming: the last ImageIdentifier in the selected range, or the selected input name, followed by _APA_replay. Existing names receive a numeric suffix.</p>' +
       '<p>GAME: start the range at this step and select the completed original grayscale mask. Replay copies that mask and applies subsequent steps; it does not recreate the GAME drawing.</p>' +
+      '<p>PixelMath: select reference images when prompted in PixInsight. Use their original processing state. The recorded expressions and settings are preserved; a new-image result becomes the target for following steps.</p>' +
       '<p>SelectiveColorCorrection includes the installed Toolbox source in the replay file and supplies the recorded parameters directly. Keep that installed source available at the exported include path.</p>' +
       '<p>PerfectPalettePicker: start the range at this step, select grayscale inputs and explicitly choose their state: already prepared, or linear with input stretch to median 0.25. Replays the recorded combination into a new RGB image. Other unrecorded channel preparation is not reconstructed.</p>' +
       '<label>Replay image <select id="replay_image" onchange="updateReplayRange(true)">';
@@ -1891,7 +1987,7 @@ function generateHistoryReport() {
    html += '<script>var workspaceGraphData=' + JSON.stringify(graph).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026') +
       ';var workspaceReplayData=' + JSON.stringify(workspaceReplayData(records)).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026') +
       ';var DARK_STRUCTURE_GPL_LICENSE=' + JSON.stringify(DARK_STRUCTURE_GPL_LICENSE).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026') +
-      ';' + buildWorkspaceReplayScript.toString() + ';' + reportBrowserScript() + '</script></body></html>';
+      ';' + pixelMathTextTokens.toString() + ';' + buildWorkspaceReplayScript.toString() + ';' + reportBrowserScript() + '</script></body></html>';
    writeReportText(file, html);
    } finally { file.close(); }
    progress.update(100, 'Report complete');
@@ -1918,6 +2014,9 @@ var REPORT_TRANSLATIONS = [
    ['Replay image','Εικόνα επανάληψης'],['First process','Πρώτη διεργασία'],['Last process','Τελευταία διεργασία'],
    ['Download PixInsight replay script','Λήψη script επανάληψης για το PixInsight'],
    ['Ready for replay','Έτοιμο για επανάληψη'],
+   ['Choose PixelMath reference images in PixInsight at their recorded processing state.','Επίλεξε τις εικόνες αναφοράς του PixelMath στο PixInsight στην καταγεγραμμένη κατάσταση επεξεργασίας τους.'],
+   ['PixelMath needs valid serialized expressions without quoted strings, directives, preview/global references or cache-only execution.','Το PixelMath απαιτεί έγκυρες καταγεγραμμένες εκφράσεις χωρίς συμβολοσειρές σε εισαγωγικά, directives, αναφορές preview/καθολικού περιβάλλοντος ή εκτέλεση μόνο για cache.'],
+   ['PixelMath: select reference images when prompted in PixInsight. Use their original processing state. The recorded expressions and settings are preserved; a new-image result becomes the target for following steps.','PixelMath: επίλεξε τις εικόνες αναφοράς όταν ζητηθούν στο PixInsight, στην αρχική τους κατάσταση επεξεργασίας. Διατηρούνται οι καταγεγραμμένες εκφράσεις και ρυθμίσεις· ένα αποτέλεσμα νέας εικόνας γίνεται ο στόχος των επόμενων βημάτων.'],
    ['GAME drawing settings were not recorded. Select the completed original GAME mask in PixInsight; mask creation is not repeated.','Οι ρυθμίσεις σχεδίασης του GAME δεν καταγράφηκαν. Επίλεξε την έτοιμη αρχική μάσκα GAME στο PixInsight· η δημιουργία της μάσκας δεν επαναλαμβάνεται.'],
    ['Start the selected range at GAME and select its completed original mask.','Ξεκίνα το επιλεγμένο εύρος από το GAME και επίλεξε την έτοιμη αρχική του μάσκα.'],
    ['GAME: start the range at this step and select the completed original grayscale mask. Replay copies that mask and applies subsequent steps; it does not recreate the GAME drawing.','GAME: ξεκίνα το εύρος από αυτό το βήμα και επίλεξε την έτοιμη αρχική ασπρόμαυρη μάσκα. Η επανάληψη αντιγράφει τη μάσκα και εφαρμόζει τα επόμενα βήματα· δεν αναδημιουργεί τα σχήματα του GAME.'],

@@ -1039,3 +1039,32 @@ console.log('Passed: arbitrary current/before/after selection, shared comparison
  assert.equal(elements.replay_export.disabled,false);
  console.log('Passed: Invert readiness/download and masked orange warning.');
 }
+
+{
+ const values={expression:'$T + Ha_stars',expression1:'',expression2:'',expression3:'',symbols:'',useSingleExpression:true,
+   generateOutput:true,clearImageCacheAndExit:false,createNewImage:false,rescale:false,truncate:true,use64BitWorkingImage:true};
+ const pixel=makeProcess('PixelMath',values);
+ const rec=helper.collectWorkspaceRecord(image('PixelReplay',[pixel,ht]),122);
+ browser.workspaceReplayData=helper.workspaceReplayData([rec]);elements.replay_image.value='0';
+ browser.window.setReportLanguage('en');browser.window.updateReplayRange(true);
+ assert.equal(elements.replay_readiness.children[0].className,'replay-warning');
+ assert.match(elements.replay_readiness.children[0].textContent,/Choose PixelMath reference images/);
+ assert.equal(elements.replay_export.disabled,false);
+ browser.window.exportReplayScript();new vm.Script(exportedBlob.replace(/^#.*$/gm,''));
+ assert.match(exportedBlob,/"inputs":\["Ha_stars"\]/);assert.match(exportedBlob,/PixelMath inputs/);
+ browser.window.setReportLanguage('el');browser.window.updateReplayRange(false);
+ assert.match(elements.replay_readiness.children[0].textContent,/εικόνες αναφοράς του PixelMath/);
+ browser.window.setReportLanguage('en');
+ const noRef=helper.collectWorkspaceRecord(image('NoRefPixel',[makeProcess('PixelMath',{...values,expression:'1-$T'})]),123);
+ browser.workspaceReplayData=helper.workspaceReplayData([noRef]);browser.window.updateReplayRange(true);
+ assert.equal(elements.replay_readiness.children[0].className,'replay-supported');
+ const invalid=helper.collectWorkspaceRecord(image('InvalidPixel',[makeProcess('PixelMath',{...values,expression:'$A+$T'})]),124);
+ browser.workspaceReplayData=helper.workspaceReplayData([invalid]);browser.window.updateReplayRange(true);
+ assert.equal(elements.replay_export.disabled,true);
+ assert.match(elements.replay_readiness.children[0].textContent,/STOP.*PixelMath needs/);
+ const standaloneBuilder={};
+ vm.runInNewContext(helper.pixelMathTextTokens.toString()+';'+helper.buildWorkspaceReplayScript.toString(),standaloneBuilder);
+ const exported=standaloneBuilder.buildWorkspaceReplayScript(helper.workspaceReplayData([rec])[0],0,1);
+ new vm.Script(exported.replace(/^#.*$/gm,''));
+ console.log('Passed: PixelMath reference warnings, EN/EL text, ready no-reference step, unsupported syntax blocker, download and isolated browser builder dependencies.');
+}

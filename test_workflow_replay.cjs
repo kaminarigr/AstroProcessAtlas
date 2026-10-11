@@ -63,8 +63,8 @@ assert.throws(()=>api.buildWorkspaceReplayScript(plan,0.5,1),/valid step range/)
 
 function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImages=false,gradientMissing=false,gradientFail=false,
   starMissing=false,starFail=false,paletteMissing=false,paletteFail=false,nbMissing=false,nbFail=false,sccMissing=false,sccFail=false,sourceChanged=false,scriptRecords=[],initialScripts=false,channels=[],choices=[],states=[],prepFail=false,
-  dseCancel=false,dseOtherTarget=false,dseFail=false,mltMissing=false,invertMissing=false,historyTarget=false,historyStep,inputColor=false,maskCancel=false,maskBlend=false,unsharpMissing=false,maskChoices=[],maskInvertChoices=[],orientations=[1],inputId='Ha_input',existingIds=['Ha_input_APA_replay']}={}) {
-  const calls=[], messages=[], outputs=[], gradientParameters=[], starParameters=[],paletteParameters=[],nbParameters=[],sccParameters=[],combos=[],maskApplications=[],unsharpParameters=[];let checkbox,maskPrompts=0;
+  dseCancel=false,dseOtherTarget=false,dseFail=false,mltMissing=false,invertMissing=false,pmMode=false,pmMissing=false,pmFail=false,pmNoOutput=false,pmCancel=false,pmNoSelection=false,pmChoices=[],historyTarget=false,historyStep,inputColor=false,maskCancel=false,maskBlend=false,unsharpMissing=false,maskChoices=[],maskInvertChoices=[],orientations=[1],inputId='Ha_input',existingIds=['Ha_input_APA_replay']}={}) {
+  const calls=[], messages=[], outputs=[], gradientParameters=[], starParameters=[],paletteParameters=[],nbParameters=[],sccParameters=[],combos=[],maskApplications=[],unsharpParameters=[],pmParameters=[];let checkbox,maskPrompts=0,pmPrompts=0;
   const input={isNull:false,rgbWorkingSpace:{gamma:2.2},mainView:{id:inputId,stf:[[1,2]],
     image:{width:2,height:1,numberOfChannels:inputColor?3:1,bitsPerSample:32,isReal:true,isColor:inputColor,pixels:[0.1,0.2]}}};
   function ImageWindow(w,h,channelCount,bits,real,color,id){
@@ -91,6 +91,15 @@ function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImage
     HistogramTransformation:Process,Console:{writeln(){}},processEvents(){},
     UndoFlag_NoSwapFile:0,StdIcon_Information:0,StdIcon_Error:1,StdButton_Ok:0};
   Process.prototype.AkimaSubsplines=1;
+  const BaseDialog=context.Dialog;
+  context.Dialog=function(){BaseDialog.call(this);const defaultExecute=this.execute;
+    this.execute=()=>{if(this.windowTitle!=='AstroProcessAtlas - PixelMath inputs')return defaultExecute();
+      const boxes=combos.filter(c=>c.items[0]==='Choose an image'),selected=pmChoices[pmPrompts]||[];
+      const count=selected.length||boxes.length;const current=boxes.slice(-count);
+      current.forEach((box,i)=>{if(selected[i]!==undefined)box.currentItem=selected[i];else if(box.currentItem===0&&!pmNoSelection)box.currentItem=1;});
+      ++pmPrompts;return !pmCancel;
+    };
+  };
   if(!gradientMissing)context.GradientCorrection=function(){this.executeOn=view=>{
     assert.equal(view,outputs[0].mainView,'GradientCorrection applies to the replay copy');
     calls.push('GC');gradientParameters.push({...this});
@@ -149,7 +158,22 @@ function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImage
     context.NarrowbandNormalization.prototype.Palette_SHO=5;
     context.NarrowbandNormalization.prototype.Lightness_Preserve=1;
   }
-  if(!paletteMissing)context.PixelMath=function(){this.executeOn=view=>{
+  if(!paletteMissing&&!pmMissing)context.PixelMath=function(){this.executeOn=view=>{
+    if(pmMode){
+      assert.equal(view,outputs[outputs.length-1].mainView);assert.notEqual(view,input.mainView);
+      calls.push('PixelMath');pmParameters.push({...this});
+      if(pmFail)return false;
+      const pixels=view.image.pixels.map((target,i)=>{
+        const scope={target,max:Math.max,min:Math.min};
+        for(const window of ImageWindow.windows)if(!window.isNull)scope[window.mainView.id]=window.mainView.image.pixels[i];
+        scope[view.id]=target;
+        if(this.symbols)for(const definition of this.symbols.split(',')){const match=/^\s*(\w+)\s*=\s*(.*)$/.exec(definition);if(match)scope[match[1]]=vm.runInNewContext(match[2],scope);}
+        return vm.runInNewContext(this.expression.replace(/\$T/g,'target'),scope);
+      });
+      if(this.createNewImage){if(!pmNoOutput){const result=new ImageWindow(2,1,1,32,true,false,this.newImageId);result.mainView.image.pixels=pixels;ImageWindow.windows.push(result);}}
+      else view.image.pixels=pixels;
+      return true;
+    }
     if(this.useSingleExpression){
       assert.notEqual(view,input.mainView);calls.push('stretch');paletteParameters.push({...this});
       const values=view.image.pixels,median=values.reduce((a,b)=>a+b,0)/values.length;
@@ -179,9 +203,71 @@ function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImage
   vm.runInNewContext(expanded.replace(/^#.*$/gm,''),context);
   if(!historyTarget)assert.deepEqual(input.mainView.image.pixels,[0.1,0.2],'Input pixels never change');
   assert.equal(input.mainView.id,inputId,'Input ID never changes');
-  return {calls,messages,outputs,input,gradientParameters,starParameters,paletteParameters,nbParameters,sccParameters,recordedParameters,windows:ImageWindow.windows,maskPrompts,maskApplications,unsharpParameters};
+  return {calls,messages,outputs,input,gradientParameters,starParameters,paletteParameters,nbParameters,sccParameters,recordedParameters,windows:ImageWindow.windows,maskPrompts,maskApplications,unsharpParameters,pmParameters,pmPrompts};
 }
 const complete=api.buildWorkspaceReplayScript(plan,0,1);
+{
+ function pixelStep(overrides={}) {
+   const values={expression:'$T*2',expression1:'',expression2:'',expression3:'',symbols:'',useSingleExpression:true,
+     generateOutput:true,clearImageCacheAndExit:false,createNewImage:false,rescale:false,truncate:false,use64BitWorkingImage:true,...overrides};
+   return step('PixelMath',Object.entries(values).map(([key,value])=>'P.'+key+'='+JSON.stringify(value)+';').join('\n'),{proc:{processId:()=> 'PixelMath',...values}});
+ }
+ const pm=pixelStep(),plan=api.workspaceReplayData([{id:'Pixel_test',steps:[pm,ht]}])[0];
+ assert.equal(plan.steps[0].action,'pixelmath');assert.equal(plan.steps[0].reason,'');assert.equal(plan.steps[0].inputs.length,0);
+ let result=run(api.buildWorkspaceReplayScript(plan,0,1),{pmMode:true});
+ assert.deepEqual(result.calls.filter(c=>c==='PixelMath'||c==='HT'),['PixelMath','HT']);
+ assert.deepEqual(result.input.mainView.image.pixels,[0.1,0.2]);assert.equal(result.pmPrompts,0);
+ assert.equal(result.pmParameters[0].use64BitWorkingImage,true);assert.equal(result.pmParameters[0].truncate,false);
+ const prepared=(id,pixels)=>({isNull:false,mainView:{id,stf:[],image:{width:2,height:1,numberOfChannels:1,bitsPerSample:32,isReal:true,isColor:false,pixels}}});
+ const ha=prepared('PreparedHa',[0.4,0.5]),oiii=prepared('PreparedOiii',[0.7,0.8]);
+ const ref=pixelStep({expression:'max(Ha, Oiii)*k + $T*1e-3 /* Ha_stars should not be mapped */',symbols:'k=0.25'});
+ ref.references=[{kind:'input',name:'Ha'},{kind:'reference',name:'Oiii'}];
+ const refPlan=api.workspaceReplayData([{id:'Pixel_refs',steps:[ref]}])[0];
+ assert.deepEqual(Array.from(refPlan.steps[0].inputs),['Ha','Oiii']);assert.ok(!refPlan.steps[0].reason);
+ const refCode=api.buildWorkspaceReplayScript(refPlan,0,0);
+ result=run(refCode,{pmMode:true,channels:[ha,oiii],pmChoices:[[2,3]]});
+ assert.equal(result.pmPrompts,1);assert.match(result.pmParameters[0].expression,/max\(PreparedHa, PreparedOiii\)/);
+ assert.match(result.pmParameters[0].expression,/Ha_stars should not be mapped/);assert.equal(result.pmParameters[0].symbols,'k=0.25');
+ assert.ok(Math.abs(result.outputs[0].mainView.image.pixels[0]-0.1751)<1e-12);
+ assert.deepEqual(ha.mainView.image.pixels,[0.4,0.5]);assert.deepEqual(oiii.mainView.image.pixels,[0.7,0.8]);
+ const fromSymbol=pixelStep({expression:'k+$T',symbols:'k=Ha*0.5'});
+ const symbolPlan=api.workspaceReplayData([{id:'Symbols',steps:[fromSymbol]}])[0];
+ assert.deepEqual(Array.from(symbolPlan.steps[0].inputs),['Ha']);
+ result=run(api.buildWorkspaceReplayScript(symbolPlan,0,0),{pmMode:true,channels:[ha],pmChoices:[[2]]});
+ assert.equal(result.pmParameters[0].symbols,'k=PreparedHa*0.5');assert.ok(Math.abs(result.outputs[0].mainView.image.pixels[0]-0.3)<1e-12);
+ const channel=pixelStep({useSingleExpression:false,expression:'Ha[0]',expression1:'Ha_stars[1]',expression2:'max(Oiii[0],1e-4)',expression3:'$T[3]'});
+ assert.deepEqual(Array.from(api.pixelMathReplaySource(channel).inputs),['Ha','Ha_stars','Oiii']);
+ assert.equal(api.pixelMathReplaySource(pixelStep({expression:'a=$T; a*2',symbols:''})).inputs.length,0);
+ assert.equal(api.pixelMathReplaySource(pixelStep({expression:'a+$T',symbols:'a,b'})).inputs.length,0);
+ assert.deepEqual(Array.from(api.pixelMathReplaySource(pixelStep({expression:'a+b+$T',symbols:'a,b=max(Ha,Oiii)'})).inputs),['Ha','Oiii']);
+ assert.deepEqual(Array.from(api.pixelMathReplaySource(pixelStep({expression:'max /* function */ (Ha,1e-3)+0xFF'})).inputs),['Ha']);
+ assert.equal(api.pixelMathReplaySource(pixelStep({expression1:'UnusedImage',expression2:'UnusedImage'})).inputs.length,0);
+ for(const options of [{pmMissing:true},{pmFail:true}]) {
+   const stopped=run(api.buildWorkspaceReplayScript(plan,0,1),{pmMode:true,...options});assert.match(stopped.messages[0],/PixelMath/);assert.ok(!stopped.calls.includes('HT'));
+ }
+ for(const options of [{pmCancel:true},{pmNoSelection:true}]) {
+   const stopped=run(refCode,{pmMode:true,...options});assert.match(stopped.messages[0],/PixelMath/);assert.ok(!stopped.calls.includes('PixelMath'));
+ }
+ const newImage=pixelStep({createNewImage:true,newImageId:'HistoricalOutput',showNewImage:true});
+ const newPlan=api.workspaceReplayData([{id:'Created',steps:[newImage,ht]}])[0];
+ result=run(api.buildWorkspaceReplayScript(newPlan,0,1),{pmMode:true});
+ assert.equal(result.outputs.length,2);assert.equal(result.outputs[0].isNull,true);
+ assert.equal(result.outputs[1].mainView.id,'Ha_input_APA_replay_1');assert.equal(result.pmParameters[0].showNewImage,false);
+ assert.notEqual(result.pmParameters[0].newImageId,'HistoricalOutput');assert.ok(result.calls.includes('HT'));
+ const absent=run(api.buildWorkspaceReplayScript(newPlan,0,1),{pmMode:true,pmNoOutput:true});
+ assert.match(absent.messages[0],/expected output/);assert.ok(!absent.calls.includes('HT'));assert.equal(absent.outputs[0].isNull,false);
+ const mask=prepared('PM_mask',[0.25,0.75]);
+ const masked={...ref,mask:{status:'recorded',name:'PM_mask',inverted:false}};
+ const maskedCode=api.buildWorkspaceReplayScript(api.workspaceReplayData([{id:'MaskedPM',steps:[masked]}])[0],0,0);
+ const cancelled=run(maskedCode,{pmMode:true,channels:[mask],pmCancel:true});assert.equal(cancelled.outputs[0].mask,null);
+ const twice=api.workspaceReplayData([{id:'RepeatedPM',steps:[ref,ref]}])[0];
+ result=run(api.buildWorkspaceReplayScript(twice,0,1),{pmMode:true,channels:[ha,oiii],pmChoices:[[2,3],[2,3]]});assert.equal(result.pmPrompts,2);
+ for(const overrides of [{generateOutput:false},{clearImageCacheAndExit:true},{expression:'image("Ha")'},
+   {expression:'$A+$T'},{expression:'$M+$T'},{expression:'Ha::Preview'},{expression:'#define a 1\n$T'},
+   {expression:'$T /* broken'},{expression:'',expression3:''}])
+   assert.match(api.workspaceReplayData([{id:'InvalidPM',steps:[pixelStep(overrides)]}])[0].steps[0].reason,/PixelMath/);
+ console.log('Passed: PixelMath expressions/settings, image/symbol remapping, numeric/comment/function/local exclusions, prompted inputs, unchanged sources, new-image continuation, masks/cancel/failure and unsupported syntax.');
+}
 {
  const invert=step('Invert');
  const plan=api.workspaceReplayData([{id:'Invert_test',steps:[invert,ht]}])[0];

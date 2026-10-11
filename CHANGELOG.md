@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Support standalone PixelMath replay with per-step selection/remapping of explicit
+  image inputs, including symbol definitions. Preserve native expressions/settings
+  and distinguish image identifiers from functions, locals, numbers and comments.
+  Continue on new-image outputs with replay naming; support recorded masks and
+  stop on cancellation/failure. Add EN/EL guidance and native/browser mock checks.
+  Quoted/dynamic strings, directives, previews, global placeholders and cache-only
+  operations remain blocked; native PixInsight validation is required.
+
 - Support native Invert replay (pixel-value/color inversion), including prompted
   historical masks and their independent Mask > Invert Mask setting. Keep the
   source image unchanged and stop on unavailable/failed processes.
