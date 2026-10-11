@@ -136,6 +136,14 @@ numbers, comments and target/mask placeholders are not remapped as image inputs.
 Recorded `createNewImage` operations use a collision-free temporary output ID;
 that new image becomes the current replay result with the existing replay name,
 and subsequent steps run on it. Only the superseded replay copy is closed.
+When the range starts with a new-image PixelMath expression using explicit image
+references and no target/mask dependency, the initial dialog asks for an editable
+output name instead of a separate target input. It defaults to the recorded
+`newImageId` plus `_APA_replay` (or the selected naming metadata). Choose the
+referenced images next; the first selected reference supplies the working
+geometry/sample format where the recorded settings inherit those from a target.
+Expressions using `$T`, masks or implicit no-argument functions retain the target
+input selector. A name collision adds a numeric suffix without replacing images.
 Selected input images remain unchanged. Recorded masks use the existing picker.
 Missing inputs/processes, cancellation or process failure stop the workflow.
 Quoted strings, directives, preview references, implicit global image placeholders

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- For a range starting with new-image PixelMath using only explicit image inputs,
+  replace the separate target selector with an editable output name. Select actual
+  references once before processing and derive the working image from the first
+  reference. Preserve target selection for target/mask dependencies and handle
+  output-name validation/collisions.
+
 - Support standalone PixelMath replay with per-step selection/remapping of explicit
   image inputs, including symbol definitions. Preserve native expressions/settings
   and distinguish image identifiers from functions, locals, numbers and comments.

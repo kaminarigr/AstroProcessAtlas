@@ -63,8 +63,8 @@ assert.throws(()=>api.buildWorkspaceReplayScript(plan,0.5,1),/valid step range/)
 
 function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImages=false,gradientMissing=false,gradientFail=false,
   starMissing=false,starFail=false,paletteMissing=false,paletteFail=false,nbMissing=false,nbFail=false,sccMissing=false,sccFail=false,sourceChanged=false,scriptRecords=[],initialScripts=false,channels=[],choices=[],states=[],prepFail=false,
-  dseCancel=false,dseOtherTarget=false,dseFail=false,mltMissing=false,invertMissing=false,pmMode=false,pmMissing=false,pmFail=false,pmNoOutput=false,pmCancel=false,pmNoSelection=false,pmChoices=[],historyTarget=false,historyStep,inputColor=false,maskCancel=false,maskBlend=false,unsharpMissing=false,maskChoices=[],maskInvertChoices=[],orientations=[1],inputId='Ha_input',existingIds=['Ha_input_APA_replay']}={}) {
-  const calls=[], messages=[], outputs=[], gradientParameters=[], starParameters=[],paletteParameters=[],nbParameters=[],sccParameters=[],combos=[],maskApplications=[],unsharpParameters=[],pmParameters=[];let checkbox,maskPrompts=0,pmPrompts=0;
+  dseCancel=false,dseOtherTarget=false,dseFail=false,mltMissing=false,invertMissing=false,pmMode=false,pmMissing=false,pmFail=false,pmNoOutput=false,pmCancel=false,pmNoSelection=false,pmChoices=[],pmOutputName,historyTarget=false,historyStep,inputColor=false,maskCancel=false,maskBlend=false,unsharpMissing=false,maskChoices=[],maskInvertChoices=[],orientations=[1],inputId='Ha_input',existingIds=['Ha_input_APA_replay']}={}) {
+  const calls=[], messages=[], outputs=[], gradientParameters=[], starParameters=[],paletteParameters=[],nbParameters=[],sccParameters=[],combos=[],maskApplications=[],unsharpParameters=[],pmParameters=[],edits=[];let checkbox,maskPrompts=0,pmPrompts=0;
   const input={isNull:false,rgbWorkingSpace:{gamma:2.2},mainView:{id:inputId,stf:[[1,2]],
     image:{width:2,height:1,numberOfChannels:inputColor?3:1,bitsPerSample:32,isReal:true,isColor:inputColor,pixels:[0.1,0.2]}}};
   function ImageWindow(w,h,channelCount,bits,real,color,id){
@@ -86,14 +86,15 @@ function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImage
     Dialog:function(){this.ok=()=>{};this.cancel=()=>{};this.adjustToContents=()=>{};
       this.execute=()=>{if(this.windowTitle==='AstroProcessAtlas - Mask orientation'){combos[combos.length-1].currentItem=orientations.shift()||0;return !maskCancel;}if(this.windowTitle==='AstroProcessAtlas - Select mask'){const choice=maskChoices[maskPrompts];if(maskInvertChoices[maskPrompts]!==undefined)checkbox.checked=maskInvertChoices[maskPrompts];++maskPrompts;if(choice!==undefined)combos[combos.length-1].currentItem=choice;return !maskCancel;}checkbox.checked=confirm;const inputs=combos.filter(c=>c.items[0]!=='Choose input state');const stateBoxes=combos.filter(c=>c.items[0]==='Choose input state');for(let i=0;i<choices.length;i++)inputs[i+1].currentItem=choices[i];stateBoxes.forEach((c,i)=>c.currentItem=states[i]===undefined?1:states[i]);return !cancel;};},
     CheckBox:function(){checkbox=this;}, ComboBox:function(){this.items=[];this.addItem=v=>this.items.push(v);combos.push(this);},
-    Label:function(){this.setMinWidth=()=>{};},PushButton:function(){},HorizontalSizer:Sizer,VerticalSizer:Sizer,
+    Label:function(){this.setMinWidth=()=>{};},Edit:function(){edits.push(this);},PushButton:function(){},HorizontalSizer:Sizer,VerticalSizer:Sizer,
     MessageBox:function(message){this.execute=()=>messages.push(message);},
     HistogramTransformation:Process,Console:{writeln(){}},processEvents(){},
     UndoFlag_NoSwapFile:0,StdIcon_Information:0,StdIcon_Error:1,StdButton_Ok:0};
   Process.prototype.AkimaSubsplines=1;
   const BaseDialog=context.Dialog;
   context.Dialog=function(){BaseDialog.call(this);const defaultExecute=this.execute;
-    this.execute=()=>{if(this.windowTitle!=='AstroProcessAtlas - PixelMath inputs')return defaultExecute();
+    this.execute=()=>{if(this.windowTitle==='AstroProcessAtlas - Replay'&&pmOutputName!==undefined)edits[0].text=pmOutputName;
+      if(this.windowTitle!=='AstroProcessAtlas - PixelMath inputs')return defaultExecute();
       const boxes=combos.filter(c=>c.items[0]==='Choose an image'),selected=pmChoices[pmPrompts]||[];
       const count=selected.length||boxes.length;const current=boxes.slice(-count);
       current.forEach((box,i)=>{if(selected[i]!==undefined)box.currentItem=selected[i];else if(box.currentItem===0&&!pmNoSelection)box.currentItem=1;});
@@ -203,7 +204,7 @@ function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImage
   vm.runInNewContext(expanded.replace(/^#.*$/gm,''),context);
   if(!historyTarget)assert.deepEqual(input.mainView.image.pixels,[0.1,0.2],'Input pixels never change');
   assert.equal(input.mainView.id,inputId,'Input ID never changes');
-  return {calls,messages,outputs,input,gradientParameters,starParameters,paletteParameters,nbParameters,sccParameters,recordedParameters,windows:ImageWindow.windows,maskPrompts,maskApplications,unsharpParameters,pmParameters,pmPrompts};
+  return {calls,messages,outputs,input,gradientParameters,starParameters,paletteParameters,nbParameters,sccParameters,recordedParameters,windows:ImageWindow.windows,maskPrompts,maskApplications,unsharpParameters,pmParameters,pmPrompts,edits,combos};
 }
 const complete=api.buildWorkspaceReplayScript(plan,0,1);
 {
@@ -252,10 +253,29 @@ const complete=api.buildWorkspaceReplayScript(plan,0,1);
  const newPlan=api.workspaceReplayData([{id:'Created',steps:[newImage,ht]}])[0];
  result=run(api.buildWorkspaceReplayScript(newPlan,0,1),{pmMode:true});
  assert.equal(result.outputs.length,2);assert.equal(result.outputs[0].isNull,true);
- assert.equal(result.outputs[1].mainView.id,'Ha_input_APA_replay_1');assert.equal(result.pmParameters[0].showNewImage,false);
+ assert.equal(result.outputs[1].mainView.id,'HistoricalOutput_APA_replay');assert.equal(result.pmParameters[0].showNewImage,false);
  assert.notEqual(result.pmParameters[0].newImageId,'HistoricalOutput');assert.ok(result.calls.includes('HT'));
  const absent=run(api.buildWorkspaceReplayScript(newPlan,0,1),{pmMode:true,pmNoOutput:true});
  assert.match(absent.messages[0],/expected output/);assert.ok(!absent.calls.includes('HT'));assert.equal(absent.outputs[0].isNull,false);
+ const combine=pixelStep({expression:'Final_SHO+NBtoRGB_stars',createNewImage:true,newImageId:'IC_1805_Final'});
+ combine.references=[{kind:'input',name:'Final_SHO'},{kind:'input',name:'NBtoRGB_stars'},{kind:'output',name:'IC_1805_Final'}];
+ const combinationPlan=api.workspaceReplayData([{id:'IC_1805_Final',steps:[combine,ht]}])[0];
+ assert.equal(combinationPlan.steps[0].requiresTarget,false);assert.equal(combinationPlan.steps[0].createsImage,true);
+ const combinationCode=api.buildWorkspaceReplayScript(combinationPlan,0,1);
+ result=run(combinationCode,{pmMode:true,channels:[ha,oiii],pmChoices:[[2,3]]});
+ assert.equal(result.combos[0].visible,false,'No separate target input for explicit-reference new-image PixelMath');
+ assert.equal(result.edits[0].visible,true);assert.equal(result.edits[0].text,'IC_1805_Final_APA_replay');
+ assert.equal(result.pmPrompts,1,'Select references once, before making the working copy');
+ assert.equal(result.outputs[1].mainView.id,'IC_1805_Final_APA_replay');
+ assert.equal(result.pmParameters[0].expression,'PreparedHa+PreparedOiii');
+ assert.ok(Math.abs(result.outputs[1].mainView.image.pixels[0]-2.1)<1e-12);
+ assert.deepEqual(result.input.mainView.image.pixels,[0.1,0.2],'Unrelated initial candidate is not used');
+ result=run(combinationCode,{pmMode:true,channels:[ha,oiii],pmChoices:[[2,3]],pmOutputName:'Custom_result',existingIds:['Custom_result']});
+ assert.equal(result.outputs[1].mainView.id,'Custom_result_1');
+ assert.equal(run(combinationCode,{pmMode:true,pmOutputName:'1 invalid'}).outputs.length,0);
+ assert.equal(run(combinationCode,{pmMode:true,pmCancel:true}).outputs.length,0);
+ assert.notEqual(run(api.buildWorkspaceReplayScript(newPlan,0,0),{pmMode:true}).combos[0].visible,false,'$T still requires a target input');
+ assert.equal(api.pixelMathReplaySource(pixelStep({createNewImage:true,expression:'Ha+med()'})).requiresTarget,true);
  const mask=prepared('PM_mask',[0.25,0.75]);
  const masked={...ref,mask:{status:'recorded',name:'PM_mask',inverted:false}};
  const maskedCode=api.buildWorkspaceReplayScript(api.workspaceReplayData([{id:'MaskedPM',steps:[masked]}])[0],0,0);

@@ -1313,7 +1313,7 @@ function pixelMathTextTokens(text) {
                else if (text.charAt(after) === '/' && text.charAt(after+1) === '/') { after += 2; while (after < text.length && !/[\r\n]/.test(text.charAt(after))) ++after; }
                else break;
             }
-            tokens.push({name:name[0],start:start,end:i,macro:text.charAt(start-1)==='$',call:text.charAt(after)==='(',local:text.charAt(after)==='='&&text.charAt(after+1)!=='=',itemStart:depth===0&&itemStart});
+            tokens.push({name:name[0],start:start,end:i,macro:text.charAt(start-1)==='$',call:text.charAt(after)==='(',noArguments:/^\(\s*\)/.test(text.slice(after)),local:text.charAt(after)==='='&&text.charAt(after+1)!=='=',itemStart:depth===0&&itemStart});
             itemStart = false;
          } else {
             if (c === '(' || c === '[' || c === '{') { ++depth; itemStart = false; }
@@ -1332,7 +1332,7 @@ function pixelMathReplaySource(step) {
    var proc = step.proc, parsed = replayProcessSource(step.source, 'PixelMath');
    if (!parsed || proc.generateOutput === false || proc.clearImageCacheAndExit === true) return null;
    var keys = proc.useSingleExpression === false ? ['expression','expression1','expression2','expression3'] : ['expression','expression3'];
-   var texts = [], tokenLists = [], locals = {}, inputs = [], hasExpression = false;
+   var texts = [], tokenLists = [], locals = {}, inputs = [], hasExpression = false, requiresTarget = false;
    try {
       for (var e = 0; e < keys.length; ++e) { var text = proc[keys[e]] || ''; texts.push(text); if (text.trim()) hasExpression = true; }
       if (!hasExpression) return null;
@@ -1345,13 +1345,14 @@ function pixelMathReplaySource(step) {
       }
       for (var e = 0; e < tokenLists.length; ++e) for (var t = 0; t < tokenLists[e].length; ++t) {
          var token = tokenLists[e][t];
+         if (token.macro || (token.call && token.noArguments)) requiresTarget = true;
          if (token.macro) {
             if (['T','target','M','mask'].indexOf(token.name) < 0) return null;
             if ((token.name === 'M' || token.name === 'mask') && (!step.mask || step.mask.status !== 'recorded')) return null;
          } else if (!token.call && !locals['$'+token.name] && ['true','false'].indexOf(token.name) < 0 && inputs.indexOf(token.name) < 0) inputs.push(token.name);
       }
    } catch (e) { return null; }
-   return {source:parsed.source,variable:parsed.variable,inputs:inputs};
+   return {source:parsed.source,variable:parsed.variable,inputs:inputs,createsImage:proc.createNewImage===true,requiresTarget:requiresTarget,outputId:proc.newImageId||''};
 }
 
 function gameReplaySource(step) {
@@ -1500,6 +1501,7 @@ function workspaceReplayData(records) {
             substep:step.substepNumber || 0, tool:selective ? 'SelectiveColorCorrection' : dark ? 'DarkStructureEnhance' : game ? 'GAME' : tool, reason:reason,
             action:tool === 'ImageIdentifier' ? 'identifier' : selective ? 'selective' : dark ? 'dark' : game ? 'game' : pixel ? 'pixelmath' : 'process', identifier:identifier,
             inputs:pixel ? pixel.inputs : [],
+            createsImage:!!(pixel && pixel.createsImage), requiresTarget:!!(pixel && pixel.requiresTarget), outputId:pixel ? pixel.outputId : '',
             warning:pixel && pixel.inputs.length ? 'Choose PixelMath reference images in PixInsight at their recorded processing state.' : game ? 'GAME drawing settings were not recorded. Select the completed original GAME mask in PixInsight; mask creation is not repeated.' : dark ? 'DarkStructureEnhance settings were not recorded. Choose them manually in PixInsight.' : '', library:dark ? dark.library : '',
             starRequired:!!(selective && selective.starRequired),
             mask:step.mask && step.mask.status === 'recorded' ? {name:step.mask.name, inverted:typeof step.mask.inverted === 'boolean' ? step.mask.inverted : null} : null,
@@ -1519,7 +1521,7 @@ function buildWorkspaceReplayScript(image, start, end) {
       var step = selected[i];
       manifest.push({title:step.title, number:step.number, substep:step.substep,
          reason:step.reason || (step.action === 'palette' && i > 0 ? 'Start the selected range at PerfectPalettePicker and choose its prepared inputs.' : step.action === 'game' && i > 0 ? 'Start the selected range at GAME and select its completed original mask.' : ''),
-         action:step.action, inputs:step.inputs || [], starRequired:!!step.starRequired, mask:step.mask || null, time:step.time || ''});
+         action:step.action, inputs:step.inputs || [], createsImage:!!step.createsImage, requiresTarget:!!step.requiresTarget, outputId:step.outputId||'', starRequired:!!step.starRequired, mask:step.mask || null, time:step.time || ''});
       if (!step.reason && step.action === 'identifier') identifier = step.identifier;
       factories.push(step.reason || step.action === 'identifier' ? 'null' : 'function(){\n' + step.source + '\nreturn ' + step.variable + ';\n}');
    }
@@ -1561,18 +1563,18 @@ function buildWorkspaceReplayScript(image, start, end) {
       '}',
       'function choosePixelMathInputs(output,step,cache) {',
       '   var mapped={},names=step.inputs||[];if(!names.length)return mapped;',
-      '   var candidates=[];for(var i=0;i<ImageWindow.windows.length;++i)if(!ImageWindow.windows[i].isNull)candidates.push(ImageWindow.windows[i]);if(candidates.indexOf(output)<0)candidates.push(output);',
+      '   var candidates=[];for(var i=0;i<ImageWindow.windows.length;++i)if(!ImageWindow.windows[i].isNull)candidates.push(ImageWindow.windows[i]);if(output&&candidates.indexOf(output)<0)candidates.push(output);',
       '   var dialog=new Dialog;dialog.windowTitle="AstroProcessAtlas - PixelMath inputs";dialog.sizer=new VerticalSizer;dialog.sizer.margin=8;dialog.sizer.spacing=6;',
-      '   var info=new Label(dialog);info.text="Step "+step.number+": select each reference image at its recorded processing state. The current replay result is also available.";info.wordWrapping=true;info.setMinWidth(480);dialog.sizer.add(info);',
-      '   var boxes=[];for(var n=0;n<names.length;++n){var label=new Label(dialog);label.text=names[n];dialog.sizer.add(label);var combo=new ComboBox(dialog);combo.addItem("Choose an image");combo.currentItem=0;for(var c=0;c<candidates.length;++c){combo.addItem(candidates[c].mainView.id);if(cache["$"+names[n]]===candidates[c])combo.currentItem=c+1;}if(combo.currentItem===0){for(var c=0;c<candidates.length;++c)if(names[n]===replayImage?candidates[c]===output:candidates[c].mainView.id===names[n]){combo.currentItem=c+1;break;}}boxes.push(combo);dialog.sizer.add(combo);}',
+      '   var info=new Label(dialog);info.text="Step "+step.number+": select each reference image at its recorded processing state."+(output?" The current replay result is also available.":"");info.wordWrapping=true;info.setMinWidth(480);dialog.sizer.add(info);',
+      '   var boxes=[];for(var n=0;n<names.length;++n){var label=new Label(dialog);label.text=names[n];dialog.sizer.add(label);var combo=new ComboBox(dialog);combo.addItem("Choose an image");combo.currentItem=0;for(var c=0;c<candidates.length;++c){combo.addItem(candidates[c].mainView.id);if(cache["$"+names[n]]===candidates[c])combo.currentItem=c+1;}if(combo.currentItem===0){for(var c=0;c<candidates.length;++c)if(output&&names[n]===replayImage?candidates[c]===output:candidates[c].mainView.id===names[n]){combo.currentItem=c+1;break;}}boxes.push(combo);dialog.sizer.add(combo);}',
       '   var run=new PushButton(dialog);run.text="Continue";run.onClick=function(){dialog.ok();};var update=function(){run.enabled=true;for(var b=0;b<boxes.length;++b)if(boxes[b].currentItem<1)run.enabled=false;};for(var b=0;b<boxes.length;++b)boxes[b].onItemSelected=update;update();',
       '   var cancel=new PushButton(dialog);cancel.text="Cancel";cancel.onClick=function(){dialog.cancel();};var buttons=new HorizontalSizer;buttons.addStretch();buttons.add(run);buttons.add(cancel);dialog.sizer.add(buttons);dialog.adjustToContents();',
       '   if(!dialog.execute())throw Error("PixelMath input selection cancelled.");',
       '   for(var n=0;n<names.length;++n){var selected=candidates[boxes[n].currentItem-1];if(!selected||selected.isNull)throw Error("Select an available image for PixelMath input: "+names[n]);mapped["$"+names[n]]=selected.mainView.id;cache["$"+names[n]]=selected;}',
       '   return mapped;',
       '}',
-      'function runPixelMathReplay(process,output,step,cache) {',
-      '   var mapped=choosePixelMathInputs(output,step,cache),keys=process.useSingleExpression===false?["expression","expression1","expression2","expression3","symbols"]:["expression","expression3","symbols"];',
+      'function runPixelMathReplay(process,output,step,cache,initialMapping) {',
+      '   var mapped=initialMapping||choosePixelMathInputs(output,step,cache),keys=process.useSingleExpression===false?["expression","expression1","expression2","expression3","symbols"]:["expression","expression3","symbols"];',
       '   for(var e=0;e<keys.length;++e)if(typeof process[keys[e]]==="string")process[keys[e]]=remapPixelMathText(process[keys[e]],mapped);',
       '   var newId="",resultId=output.mainView.id;if(process.createNewImage){newId=resultId+"_APA_pixelmath";var suffix=1;while(!View.viewById(newId).isNull)newId=resultId+"_APA_pixelmath_"+(suffix++);process.newImageId=newId;process.showNewImage=false;}',
       '   try{if(!process||typeof process.executeOn!=="function"||process.executeOn(output.mainView)===false)throw Error("PixelMath process failed.");}finally{output.removeMask();}',
@@ -1615,8 +1617,9 @@ function buildWorkspaceReplayScript(image, start, end) {
       '}',
       'function runAtlasReplay() {',
       '   var candidates = [],game=replaySteps[0].action==="game";',
+      '   var pixelOutput=replaySteps[0].action==="pixelmath"&&replaySteps[0].createsImage,pixelStart=pixelOutput&&!replaySteps[0].requiresTarget&&!replaySteps[0].mask&&replaySteps[0].inputs.length>0;',
       '   for(var i=0;i<ImageWindow.windows.length;++i) if(!ImageWindow.windows[i].isNull&&(!game||!ImageWindow.windows[i].mainView.image.isColor))candidates.push(ImageWindow.windows[i]);',
-      '   if(!candidates.length)throw Error(game?"Open the completed original grayscale GAME mask before replay.":"Open an image in the state BEFORE the first selected step.");',
+      '   if(!candidates.length)throw Error(game?"Open the completed original grayscale GAME mask before replay.":pixelStart?"Open the PixelMath reference images before replay.":"Open an image in the state BEFORE the first selected step.");',
       '   var count=0;while(count<replaySteps.length&&!replaySteps[count].reason)++count;',
       '   if(!count)throw Error("Replay cannot start: "+replaySteps[0].reason);',
       '   var dialog=new Dialog;dialog.windowTitle="AstroProcessAtlas - Replay";',
@@ -1629,7 +1632,8 @@ function buildWorkspaceReplayScript(image, start, end) {
       '   for(var b=0;b<inputNames.length;++b){var bl=new Label(dialog);bl.text=inputNames[b];var bc=new ComboBox(dialog);for(var c=0;c<candidates.length;++c)bc.addItem(candidates[c].mainView.id);bc.currentItem=suggestPaletteInput(inputNames[b],candidates);var state=new ComboBox(dialog);state.addItem("Choose input state");state.addItem("Already prepared - combine without stretching");state.addItem("Linear - apply PPP stretch (median 0.25) on a copy");state.currentItem=0;bindings.push({name:inputNames[b],label:bl,combo:bc,state:state});}',
       '   var naming=new Label(dialog);naming.text="Copy name: "+(replayIdentifier||candidates[combo.currentItem].mainView.id)+"_APA_replay";',
       '   naming.toolTip="A numeric suffix is added if this name already exists.";',
-      '   combo.onItemSelected=function(index){if(index>=0&&index<candidates.length)naming.text="Copy name: "+(replayIdentifier||candidates[index].mainView.id)+"_APA_replay";};',
+      '   var outputName=new Edit(dialog);outputName.visible=pixelOutput;outputName.text=(replayIdentifier||replaySteps[0].outputId||replayImage)+"_APA_replay";',
+      '   combo.onItemSelected=function(index){if(!pixelOutput&&index>=0&&index<candidates.length)naming.text="Copy name: "+(replayIdentifier||candidates[index].mainView.id)+"_APA_replay";};',
       '   var info=new Label(dialog);info.text="Will apply "+count+" of "+replaySteps.length+" selected processes to "+(palette?"a new RGB result.":"a new copy.");',
       '   for(var si=0;si<count;++si)if(replaySteps[si].action==="selective"){info.text+=" SelectiveColorCorrection uses the installed source included in this replay file.";info.wordWrapping=true;info.setMinWidth(480);break;}',
       '   var stop=new Label(dialog);stop.text=count<replaySteps.length?"Stops before step "+replaySteps[count].number+": "+replaySteps[count].reason:"All selected processes are supported.";',
@@ -1637,20 +1641,24 @@ function buildWorkspaceReplayScript(image, start, end) {
       '   var confirm=new CheckBox(dialog);confirm.text="I confirm the input is in the state BEFORE the first selected step.";',
       '   if(game){confirm.text="I confirm this is the completed original GAME mask before the following steps.";info.text="GAME mask creation is not repeated. Subsequent steps will run on a copy of the selected mask.";info.wordWrapping=true;info.setMinWidth(480);}',
       '   var run=new PushButton(dialog);run.text="Run on copy";run.enabled=false;run.onClick=function(){dialog.ok();};',
-      '   var updateRun=function(){var valid=confirm.checked;for(var b=0;b<bindings.length;++b)if(bindings[b].state.currentItem<1)valid=false;run.enabled=valid;};confirm.onCheck=updateRun;for(var b=0;b<bindings.length;++b)bindings[b].state.onItemSelected=updateRun;',
+      '   var updateRun=function(){var valid=confirm.checked&&(!pixelOutput||/^[A-Za-z_][A-Za-z0-9_]*$/.test(outputName.text));for(var b=0;b<bindings.length;++b)if(bindings[b].state.currentItem<1)valid=false;run.enabled=valid;};confirm.onCheck=updateRun;outputName.onTextUpdated=updateRun;for(var b=0;b<bindings.length;++b)bindings[b].state.onItemSelected=updateRun;',
       '   var cancel=new PushButton(dialog);cancel.text="Cancel";cancel.onClick=function(){dialog.cancel();};',
       '   var buttons=new HorizontalSizer;buttons.addStretch();buttons.add(run);buttons.add(cancel);',
       '   dialog.sizer=new VerticalSizer;dialog.sizer.margin=12;dialog.sizer.spacing=8;',
-      '   dialog.sizer.add(label);dialog.sizer.add(combo);for(var b=0;b<bindings.length;++b){dialog.sizer.add(bindings[b].label);dialog.sizer.add(bindings[b].combo);dialog.sizer.add(bindings[b].state);}dialog.sizer.add(naming);dialog.sizer.add(info);dialog.sizer.add(stop);dialog.sizer.add(confirm);dialog.sizer.add(buttons);dialog.adjustToContents();',
+      '   dialog.sizer.add(label);dialog.sizer.add(combo);for(var b=0;b<bindings.length;++b){dialog.sizer.add(bindings[b].label);dialog.sizer.add(bindings[b].combo);dialog.sizer.add(bindings[b].state);}dialog.sizer.add(naming);dialog.sizer.add(outputName);dialog.sizer.add(info);dialog.sizer.add(stop);dialog.sizer.add(confirm);dialog.sizer.add(buttons);dialog.adjustToContents();',
       '   if(palette){combo.visible=false;naming.text="Output name: "+(replayIdentifier||replayImage)+"_APA_replay";confirm.text="I confirm the selected input states match the original palette preparation.";dialog.adjustToContents();}',
+      '   if(pixelOutput){naming.text="Output name:";if(pixelStart){combo.visible=false;label.text="PixelMath: set the output name. Reference images will be selected next.";confirm.text="I will select reference images at their original processing state.";info.text="Create a new PixelMath result and continue subsequent steps on it.";run.text="Create result";}dialog.adjustToContents();}',
       '   if(!dialog.execute()||!confirm.checked)return;',
-      '   var input=candidates[combo.currentItem];if(!input||input.isNull)throw Error("Selected input is unavailable.");',
-      '   var mapped={},temporary=[],prepared={},maskCache={},pixelMathCache={},output=null;',
+      '   if(pixelOutput&&!/^[A-Za-z_][A-Za-z0-9_]*$/.test(outputName.text))throw Error("Enter a valid output image identifier (letters, digits and underscores; no initial digit).");',
+      '   var input=candidates[combo.currentItem];if(!pixelStart&&(!input||input.isNull))throw Error("Selected input is unavailable.");',
+      '   var mapped={},temporary=[],prepared={},maskCache={},pixelMathCache={},firstPixelMapping=null,output=null;',
       '   try {',
+      '   if(pixelStart){firstPixelMapping=choosePixelMathInputs(null,replaySteps[0],pixelMathCache);input=pixelMathCache["$"+replaySteps[0].inputs[0]];}',
       '   if(palette){for(var b=0;b<bindings.length;++b){var channel=candidates[bindings[b].combo.currentItem];if(!channel||channel.isNull||channel.mainView.image.isColor)throw Error("Select an available grayscale channel for "+bindings[b].name);if(bindings[b].state.currentItem!==1&&bindings[b].state.currentItem!==2)throw Error("Choose the preparation state for "+bindings[b].name);if(b===0)input=channel;else if(channel.mainView.image.width!==input.mainView.image.width||channel.mainView.image.height!==input.mainView.image.height)throw Error("Palette inputs must have matching dimensions.");}}',
       '   if(palette){for(var b=0;b<bindings.length;++b){var channel=candidates[bindings[b].combo.currentItem],view=channel.mainView;if(bindings[b].state.currentItem===2){var key="$"+view.id;if(prepared[key])view=prepared[key];else{var tid=view.id+"_APA_ppp_input",ti=1;while(!View.viewById(tid).isNull)tid=view.id+"_APA_ppp_input_"+(ti++);var ci=view.image,copy=new ImageWindow(ci.width,ci.height,ci.numberOfChannels,ci.bitsPerSample,ci.isReal,false,tid);temporary.push(copy);copy.mainView.beginProcess(UndoFlag_NoSwapFile);try{copy.mainView.image.assign(ci);}finally{copy.mainView.endProcess();}view=copy.mainView;var expressions=["($T-max(min($T),med($T)-2.7*sdev($T)))/(1-max(min($T),med($T)-2.7*sdev($T)))","mtf(mtf(0.25,med($T)),$T)"];for(var p=0;p<expressions.length;++p){var stretch=new PixelMath;stretch.expression=expressions[p];stretch.useSingleExpression=true;stretch.symbols="";stretch.generateOutput=true;stretch.clearImageCacheAndExit=false;stretch.cacheGeneratedImages=false;stretch.use64BitWorkingImage=true;stretch.rescale=false;stretch.truncate=true;stretch.truncateLower=0;stretch.truncateUpper=1;stretch.createNewImage=false;stretch.showNewImage=false;if(stretch.executeOn(view)===false)throw Error("PPP input stretch failed: "+channel.mainView.id);processEvents();}prepared[key]=view;}}mapped["$"+bindings[b].name]=view.id;}}',
       '   var baseId=(replayIdentifier||input.mainView.id)+"_APA_replay",id=baseId,suffix=1;',
       '   if(palette){baseId=(replayIdentifier||replayImage)+"_APA_replay";id=baseId;}',
+      '   if(pixelOutput){baseId=outputName.text;id=baseId;}',
       '   while(!View.viewById(id).isNull)id=baseId+"_"+(suffix++);',
       '   var img=input.mainView.image;',
       '   output=new ImageWindow(palette?img.width:1,palette?img.height:1,palette?3:img.numberOfChannels,img.bitsPerSample,img.isReal,palette?true:img.isColor,id);',
@@ -1666,7 +1674,7 @@ function buildWorkspaceReplayScript(image, start, end) {
       '         if(replaySteps[k].starRequired&&typeof StarXTerminator!=="function")throw Error("SelectiveColorCorrection requires StarXTerminator for its star mask.");',
       '         var process=replayFactories[k]();',
       '         applyReplayMask(output,replaySteps[k].mask,maskCache,replaySteps[k]);',
-      '         if(replaySteps[k].action==="pixelmath"){try{output=runPixelMathReplay(process,output,replaySteps[k],pixelMathCache);}finally{if(output&&!output.isNull)output.removeMask();}processEvents();continue;}',
+      '         if(replaySteps[k].action==="pixelmath"){try{output=runPixelMathReplay(process,output,replaySteps[k],pixelMathCache,k===0?firstPixelMapping:null);}finally{if(output&&!output.isNull)output.removeMask();}processEvents();continue;}',
       '         if(replaySteps[k].action==="selective"){Parameters.set("apaSelectiveStep",k);try{runSelectiveReplay(process,output.mainView);}finally{Parameters.set("apaSelectiveStep",-1);}processEvents();continue;}',
       '         if(replaySteps[k].action==="dark"){runDarkStructureReplay(process,output.mainView);processEvents();continue;}',
       '         if(replaySteps[k].action==="palette"){var keys=["expression","expression1","expression2"];for(var e=0;e<keys.length;++e)process[keys[e]]=process[keys[e]].replace(/(?:[0-9]+(?:[.][0-9]*)?|[.][0-9]+)(?:[eE][+-]?[0-9]+)?|[A-Za-z_][A-Za-z0-9_]*/g,function(token){return Object.prototype.hasOwnProperty.call(mapped,"$"+token)?mapped["$"+token]:token;});}',
