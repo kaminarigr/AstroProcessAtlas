@@ -1337,7 +1337,8 @@ function workspaceReplayData(records) {
       SCNR:true, ColorSaturation:true, BlurXTerminator:true, NoiseXTerminator:true, GradientCorrection:true,
       StarXTerminator:true, NarrowbandNormalization:true, UnsharpMask:true};
    for (var r = 0; r < records.length; ++r) {
-      var record = records[r], image = {id:record.id, anchor:record.anchor, steps:[]};
+      var record = records[r], image = {id:record.id, anchor:record.anchor, originalInputs:[], steps:[]};
+      for (var oi = 0; oi < records.length; ++oi) if (records[oi].isOriginalInput) image.originalInputs.push(records[oi].id);
       var groups = workspaceStepGroups(record);
       for (var s = 0; s < groups.length; ++s) {
          var group = groups[s], step = group.members[0];
@@ -1439,20 +1440,20 @@ function buildWorkspaceReplayScript(image, start, end) {
       '#include <pjsr/StdIcon.jsh>', '#include <pjsr/StdButton.jsh>', '#include <pjsr/CryptographicHash.jsh>',
       'var replayImage = ' + JSON.stringify(image.id) + ';',
       'var replayIdentifier = ' + JSON.stringify(identifier) + ';',
+      'var replayOriginalInputs = ' + JSON.stringify(image.originalInputs || []) + ';',
       'var replaySteps = ' + JSON.stringify(manifest) + ';',
       'var replayFactories = [' + factories.join(',\n') + '];',
+      'function suggestPaletteInput(name,candidates) {',
+      '   function base(id){return id.toLowerCase().replace(/(?:_(?:final|processed|clone|linear|starless|nbn|replay)(?:_[0-9]+)?)+$/g,"");}',
+      '   var wanted=name.toLowerCase(),root=base(name),best=0,score=-1,tied=false;',
+      '   for(var i=0;i<candidates.length;++i){if(candidates[i].mainView.image.isColor)continue;var id=candidates[i].mainView.id.toLowerCase(),original=false;for(var j=0;j<replayOriginalInputs.length;++j)if(replayOriginalInputs[j].toLowerCase()===id)original=true;',
+      '      var value=original&&base(id)===root?400:id===root?300:id===wanted?200:base(id)===root?100:-1;if(value>score){score=value;best=i;tied=false;}else if(value===score&&value>=0)tied=true;',
+      '   }return score<0||tied?0:best;',
+      '}',
       'function applyReplayMask(output,request,cache) {',
       '   output.removeMask();if(!request)return;',
       '   var inverted=request.inverted;',
-      '   if(typeof inverted!=="boolean"){',
-      '      var orientation=new Dialog;orientation.windowTitle="AstroProcessAtlas - Mask orientation";',
-      '      var label=new Label(orientation);label.text="Historical inversion is unknown for mask "+request.name+". Choose the orientation used at this step.";label.wordWrapping=true;label.setMinWidth(480);',
-      '      var choice=new ComboBox(orientation);choice.addItem("Choose historical orientation");choice.addItem("Normal");choice.addItem("Inverted");choice.currentItem=0;',
-      '      var ok=new PushButton(orientation);ok.text="Continue";ok.enabled=false;ok.onClick=function(){orientation.ok();};choice.onItemSelected=function(index){ok.enabled=index>0;};',
-      '      var cancel=new PushButton(orientation);cancel.text="Stop replay";cancel.onClick=function(){orientation.cancel();};',
-      '      var buttons=new HorizontalSizer;buttons.addStretch();buttons.add(ok);buttons.add(cancel);orientation.sizer=new VerticalSizer;orientation.sizer.margin=12;orientation.sizer.spacing=8;orientation.sizer.add(label);orientation.sizer.add(choice);orientation.sizer.add(buttons);orientation.adjustToContents();',
-      '      if(!orientation.execute()||choice.currentItem<1)throw Error("Mask orientation not confirmed: "+request.name);inverted=choice.currentItem===2;',
-      '   }',
+      '   if(typeof inverted!=="boolean"){inverted=false;Console.writeln("WARNING: Historical mask value inversion is not recorded for "+request.name+"; using normal values.");}',
       '   var key="$"+request.name,entry=cache[key];',
       '   if(!entry){',
       '      var candidates=[];for(var i=0;i<ImageWindow.windows.length;++i){var w=ImageWindow.windows[i];if(!w.isNull&&w!==output&&w.mainView.image.width===output.mainView.image.width&&w.mainView.image.height===output.mainView.image.height)candidates.push(w);}',
@@ -1484,7 +1485,7 @@ function buildWorkspaceReplayScript(image, start, end) {
       '   combo.currentItem=0;',
       '   var palette=replaySteps[0].action==="palette",bindings=[],inputNames=palette?replaySteps[0].inputs:[];',
       '   if(palette)label.text="PerfectPalettePicker: select each input and its preparation state.";',
-      '   for(var b=0;b<inputNames.length;++b){var bl=new Label(dialog);bl.text=inputNames[b];var bc=new ComboBox(dialog);for(var c=0;c<candidates.length;++c)bc.addItem(candidates[c].mainView.id);bc.currentItem=0;for(var c=0;c<candidates.length;++c)if(candidates[c].mainView.id===inputNames[b])bc.currentItem=c;var state=new ComboBox(dialog);state.addItem("Choose input state");state.addItem("Already prepared - combine without stretching");state.addItem("Linear - apply PPP stretch (median 0.25) on a copy");state.currentItem=0;bindings.push({name:inputNames[b],label:bl,combo:bc,state:state});}',
+      '   for(var b=0;b<inputNames.length;++b){var bl=new Label(dialog);bl.text=inputNames[b];var bc=new ComboBox(dialog);for(var c=0;c<candidates.length;++c)bc.addItem(candidates[c].mainView.id);bc.currentItem=suggestPaletteInput(inputNames[b],candidates);var state=new ComboBox(dialog);state.addItem("Choose input state");state.addItem("Already prepared - combine without stretching");state.addItem("Linear - apply PPP stretch (median 0.25) on a copy");state.currentItem=0;bindings.push({name:inputNames[b],label:bl,combo:bc,state:state});}',
       '   var naming=new Label(dialog);naming.text="Copy name: "+(replayIdentifier||candidates[0].mainView.id)+"_APA_replay";',
       '   naming.toolTip="A numeric suffix is added if this name already exists.";',
       '   combo.onItemSelected=function(index){if(index>=0&&index<candidates.length)naming.text="Copy name: "+(replayIdentifier||candidates[index].mainView.id)+"_APA_replay";};',
@@ -1847,7 +1848,7 @@ var REPORT_TRANSLATIONS = [
    ['Serialized process code is not a supported constructor and parameter assignment sequence.','Ο καταγεγραμμένος κώδικας δεν έχει υποστηριζόμενη μορφή δημιουργίας διεργασίας και ανάθεσης παραμέτρων.'],
    ['Select an image and a consecutive range of applied processes. Run the downloaded .js in PixInsight with an input in the state BEFORE the first selected step. Replay uses a new copy and stops at the first unsupported step. Recorded masks are requested when needed; historical reference images are not restored.',
     'Επίλεξε εικόνα και συνεχόμενο εύρος εφαρμοσμένων διεργασιών. Εκτέλεσε το .js στο PixInsight με εικόνα στην κατάσταση ΠΡΙΝ από το πρώτο επιλεγμένο βήμα. Η επανάληψη γίνεται σε νέο αντίγραφο και σταματά στην πρώτη μη υποστηριζόμενη διεργασία. Οι καταγεγραμμένες μάσκες ζητούνται όταν χρειάζονται· οι ιστορικές εικόνες αναφοράς δεν αποκαθίστανται.'],
-   ['inversion to confirm','αντιστροφή προς επιβεβαίωση'],['Mask requested in PixInsight:','Επιλογή μάσκας στο PixInsight:'],['Mask value inversion ON (1-mask)','Αντιστροφή τιμών μάσκας ON (1-mask)'],['Mask value inversion OFF','Αντιστροφή τιμών μάσκας OFF'],
+   ['inversion not recorded; normal values used','η αντιστροφή δεν καταγράφηκε· χρήση κανονικών τιμών'],['Mask requested in PixInsight:','Επιλογή μάσκας στο PixInsight:'],['Mask value inversion ON (1-mask)','Αντιστροφή τιμών μάσκας ON (1-mask)'],['Mask value inversion OFF','Αντιστροφή τιμών μάσκας OFF'],
    [
       "View.processing is unavailable in this version of PixInsight.",
       "Το View.processing δεν είναι διαθέσιμο σε αυτή την έκδοση του PixInsight."
@@ -2421,7 +2422,7 @@ var WORKSPACE_BROWSER_SOURCE = [
    "      for(var j=start;j<=end&&j<image.steps.length;++j){",
    "         var step=image.steps[j],reason=step.reason||(step.action==='palette'&&j>start?'Start the selected range at PerfectPalettePicker and choose its prepared inputs.':'');if(reason)blocked=true;if(!blocked)++ready;",
    "         if(list){var item=document.createElement('li');item.className=reason?'replay-unsupported':step.mask?'replay-warning':'replay-supported';item.textContent=step.number+(step.substep?'.'+step.substep:'')+' — '+step.title+': '+translated(reason?'STOP — '+reason:blocked?'Not reached until earlier blocker is resolved.':step.action==='palette'?'Choose prepared inputs in PixInsight for the recorded palette combination.':step.action==='identifier'?'Naming handled at creation: '+namingId+'_APA_replay':'Ready for replay');list.appendChild(item);}",
-   "         if(list&&step.mask&&!reason)item.textContent+=' — WARNING — '+translated('Mask requested in PixInsight:')+' '+step.mask.name+' ('+translated(typeof step.mask.inverted!=='boolean'?'inversion to confirm':step.mask.inverted?'Mask value inversion ON (1-mask)':'Mask value inversion OFF')+')';",
+   "         if(list&&step.mask&&!reason)item.textContent+=' — WARNING — '+translated('Mask requested in PixInsight:')+' '+step.mask.name+' ('+translated(typeof step.mask.inverted!=='boolean'?'inversion not recorded; normal values used':step.mask.inverted?'Mask value inversion ON (1-mask)':'Mask value inversion OFF')+')';",
    "      }",
    "      var status=document.getElementById('replay_status');if(status)status.textContent=translated(image.steps.length?ready+' consecutive processes can run from the selected input state.':'No applied processes to replay.');",
    "      var button=document.getElementById('replay_export');if(button)button.disabled=!ready||blocked;",

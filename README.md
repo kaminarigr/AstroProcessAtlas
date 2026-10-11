@@ -68,6 +68,10 @@ the first selected process**, then confirm that starting state. The script creat
 a new image copy, preserves its RGB working space and STF, and applies the original
 serialized process parameters. It never changes the selected input.
 
+PerfectPalettePicker channel dropdowns suggest matching user-selected original
+images, or base channel names such as Sii for SII_final, ignoring case and common
+processing suffixes. Suggestions remain editable.
+
 The first implementation supports independent, in-place HistogramTransformation,
 CurvesTransformation, RGBWorkingSpace, SCNR, ColorSaturation, BlurXTerminator,
 NoiseXTerminator, GradientCorrection, StarXTerminator, NarrowbandNormalization and UnsharpMask instances with supported serialization and no
@@ -97,8 +101,8 @@ stops replay and retains the partial result. The report cannot reconstruct a mas
 historical pixels. Download is enabled only when the entire selected range is supported;
 supported entries are green, mask prompts orange with WARNING, and blockers pink/red.
 If the mask name is recorded but its inversion is unspecified, download remains
-available and replay asks you to choose the historical orientation at each affected
-step. The mask image selection is still reused. An entirely unknown mask state
+available and replay uses normal mask values, with a warning in the report and
+console. There is no separate inversion-selection dialog. The mask image selection is still reused. An entirely unknown mask state
 remains a blocker.
 Historical pixels, masks and missing inputs are not bundled in the exported script.
 

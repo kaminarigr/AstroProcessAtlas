@@ -166,6 +166,20 @@ function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImage
 }
 const complete=api.buildWorkspaceReplayScript(plan,0,1);
 {
+ const data=api.workspaceReplayData([{id:'Final',steps:[ht]},{id:'Sii',isOriginalInput:true,steps:[]}])[0];
+ assert.deepEqual(Array.from(data.originalInputs),['Sii']);
+ const code=api.buildWorkspaceReplayScript(data,0,0);
+ const helper=code.slice(code.indexOf('var replayOriginalInputs'),code.indexOf('function applyReplayMask'));
+ const context={HistogramTransformation:function(){}};vm.runInNewContext(helper,context);
+ const candidates=['SII_final','Sii','Ha','OiiI','Sii_clone'].map(id=>({mainView:{id,image:{isColor:false}}}));
+ assert.equal(context.suggestPaletteInput('SII_final',candidates),1,'Prefer original Sii over the processed exact match');
+ assert.equal(context.suggestPaletteInput('Ha_final',candidates),2);
+ assert.equal(context.suggestPaletteInput('OIII_final',candidates),3,'Match channel names without case sensitivity');
+ assert.equal(context.suggestPaletteInput('Other',candidates),0,'Retain default when no useful match exists');
+ candidates[1].mainView.image.isColor=true;assert.equal(context.suggestPaletteInput('SII_final',candidates),0,'Never suggest an RGB image as an original channel');
+ console.log('Passed: palette original-input suggestions, suffix/case matching, grayscale requirement and fallback.');
+}
+{
  const usm=step('UnsharpMask','P.sigma=2.5; P.amount=0.65; P.useLuminance=true;');
  const masked=inverted=>({...usm,mask:{status:'recorded',name:'Mask_history',inverted},references:[{kind:'mask',name:'Mask_history'}]});
  const maskWindow={isNull:false,mainView:{id:'Mask_history',image:{width:2,height:1,isColor:false,pixels:[0.2,0.8]}}};
@@ -184,9 +198,9 @@ const complete=api.buildWorkspaceReplayScript(plan,0,1);
  const unknown=api.workspaceReplayData([{id:'UnknownInversion',steps:[masked(null),masked(null)]}])[0];
  assert.ok(unknown.steps.every(s=>!s.reason),'A known mask name with unknown inversion is a prompt, not a blocker');
  const unknownCode=api.buildWorkspaceReplayScript(unknown,0,1);
- result=run(unknownCode,{channels:[maskWindow],orientations:[2,1]});
- assert.equal(result.maskPrompts,1);assert.deepEqual(result.maskApplications.map(m=>m.inverted),[true,false]);
- result=run(unknownCode,{channels:[maskWindow],orientations:[0]});assert.match(result.messages[0],/Mask orientation not confirmed/);assert.equal(result.maskPrompts,0);
+ result=run(unknownCode,{channels:[maskWindow]});
+ assert.equal(result.maskPrompts,1);assert.deepEqual(result.maskApplications.map(m=>m.inverted),[false,false]);
+ assert.ok(!unknownCode.includes('Mask orientation'),'No separate inversion-selection dialog');
  result=run(code,{channels:[maskWindow],maskCancel:true});assert.equal(result.calls.filter(c=>c==='USM').length,0);assert.match(result.messages[0],/Mask selection cancelled.*Partial result/s);
  result=run(code,{channels:[maskWindow],fail:true});assert.equal(result.outputs[0].mask,null);assert.equal(result.calls.filter(c=>c==='USM').length,1);
  result=run(api.buildWorkspaceReplayScript(api.workspaceReplayData([{id:'USM',steps:[usm]}])[0],0,0),{unsharpMissing:true});assert.match(result.messages[0],/UnsharpMask/);

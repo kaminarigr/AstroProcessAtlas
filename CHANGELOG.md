@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Suggest matching original/base-channel images in PerfectPalettePicker input
+  dropdowns, ignoring case and common processing suffixes. Remove the separate
+  mask inversion dialog; recorded value inversion remains automatic and missing
+  inversion uses normal values with report/console warnings.
+
 - Fix first-use inverted replay masks: always select normal mask pixels and apply
   the recorded Mask > Invert Mask flag directly, rather than assuming the supplied
   image was physically inverted. Clarify black/white value inversion (1-mask), add

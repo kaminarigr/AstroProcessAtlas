@@ -741,7 +741,7 @@ console.log('Passed: arbitrary current/before/after selection, shared comparison
  browser.window.setReportLanguage('en');
  browser.workspaceReplayData[0].steps[0].mask.inverted=null;browser.window.updateReplayRange(false);
  assert.equal(elements.replay_export.disabled,false,'Unknown inversion is resolved in PixInsight');
- assert.match(elements.replay_readiness.children[0].textContent,/inversion to confirm/);
+ assert.match(elements.replay_readiness.children[0].textContent,/inversion not recorded; normal values used/);
  assert.ok(!elements.replay_readiness.children[0].textContent.includes('STOP'));
 }
 
