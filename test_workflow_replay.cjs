@@ -58,25 +58,27 @@ assert.throws(()=>api.buildWorkspaceReplayScript(plan,0,99),/valid step range/);
 assert.throws(()=>api.buildWorkspaceReplayScript(plan,0.5,1),/valid step range/);
 
 function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImages=false,gradientMissing=false,gradientFail=false,
-  starMissing=false,starFail=false,inputId='Ha_input',existingIds=['Ha_input_APA_replay']}={}) {
-  const calls=[], messages=[], outputs=[], gradientParameters=[], starParameters=[];let checkbox;
+  starMissing=false,starFail=false,paletteMissing=false,paletteFail=false,channels=[],choices=[],
+  inputId='Ha_input',existingIds=['Ha_input_APA_replay']}={}) {
+  const calls=[], messages=[], outputs=[], gradientParameters=[], starParameters=[],paletteParameters=[],combos=[];let checkbox;
   const input={isNull:false,rgbWorkingSpace:{gamma:2.2},mainView:{id:inputId,stf:[[1,2]],
-    image:{numberOfChannels:1,bitsPerSample:32,isReal:true,isColor:false,pixels:[0.1,0.2]}}};
-  function ImageWindow(w,h,channels,bits,real,color,id){
+    image:{width:2,height:1,numberOfChannels:1,bitsPerSample:32,isReal:true,isColor:false,pixels:[0.1,0.2]}}};
+  function ImageWindow(w,h,channelCount,bits,real,color,id){
     this.isNull=false;this.mainView={id,beginProcess(){calls.push('begin');},endProcess(){calls.push('end');},
-      image:{assign(image){this.pixels=image.pixels.slice();calls.push('copy');}}};
+      image:{assign(image){this.pixels=image.pixels.slice();calls.push('copy');},fill(value){this.pixels=[value,value];calls.push('fill');}}};
     this.show=()=>calls.push('show');outputs.push(this);
-    assert.equal(w,1);assert.equal(h,1);assert.equal(bits,32);assert.equal(real,true);
+    assert.equal(w,channels.length?2:1);assert.equal(h,1);assert.equal(bits,32);assert.equal(real,true);
+    if(channels.length){assert.equal(channelCount,3);assert.equal(color,true);}
   }
-  ImageWindow.windows=noImages?[]:[input];
+  ImageWindow.windows=noImages?[]:[input,...channels];
   function Sizer(){this.add=()=>{};this.addStretch=()=>{};}
   function Process(){this.executeOn=view=>{assert.notEqual(view,input.mainView);
     assert.equal(view,outputs[0].mainView,'Continue on the replay copy even if diagnostic output becomes active');
     calls.push(this.H?'HT':'CT');view.image.pixels[0]+=1;return !fail;};}
   const context={ImageWindow,View:{viewById:id=>({isNull:!existingIds.includes(id)})},
     Dialog:function(){this.ok=()=>{};this.cancel=()=>{};this.adjustToContents=()=>{};
-      this.execute=()=>{checkbox.checked=confirm;return !cancel;};},
-    CheckBox:function(){checkbox=this;}, ComboBox:function(){this.addItem=()=>{};},
+      this.execute=()=>{checkbox.checked=confirm;for(let i=0;i<choices.length;i++)combos[i+1].currentItem=choices[i];return !cancel;};},
+    CheckBox:function(){checkbox=this;}, ComboBox:function(){this.addItem=()=>{};combos.push(this);},
     Label:function(){this.setMinWidth=()=>{};},PushButton:function(){},HorizontalSizer:Sizer,VerticalSizer:Sizer,
     MessageBox:function(message){this.execute=()=>messages.push(message);},
     HistogramTransformation:Process,Console:{writeln(){}},processEvents(){},
@@ -91,6 +93,10 @@ function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImage
     return !gradientFail;
   };};
   if(!missing)context.CurvesTransformation=Process;
+  if(!paletteMissing)context.PixelMath=function(){this.executeOn=view=>{
+    assert.equal(view,outputs[0].mainView);calls.push('PM');paletteParameters.push({...this});
+    view.image.pixels[0]=0.5;return !paletteFail;
+  };};
   if(!starMissing)context.StarXTerminator=function(){this.executeOn=view=>{
     assert.equal(view,outputs[0].mainView,'Star removal targets the replay copy');
     calls.push('SXT');starParameters.push({...this});view.image.pixels[0]-=0.05;
@@ -103,7 +109,7 @@ function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImage
   vm.runInNewContext(script.replace(/^#.*$/gm,''),context);
   assert.deepEqual(input.mainView.image.pixels,[0.1,0.2],'Input pixels never change');
   assert.equal(input.mainView.id,inputId,'Input ID never changes');
-  return {calls,messages,outputs,input,gradientParameters,starParameters,windows:ImageWindow.windows};
+  return {calls,messages,outputs,input,gradientParameters,starParameters,paletteParameters,windows:ImageWindow.windows};
 }
 const complete=api.buildWorkspaceReplayScript(plan,0,1);
 const generatorSource=api.buildWorkspaceReplayScript.toString();
@@ -234,3 +240,47 @@ for (const stars of [false,true]) {
   ]) assert.ok(api.workspaceReplayData([{id:'Ha',steps:[{...sx,...extra}]}])[0].steps[0].reason);
 }
 console.log('Passed: StarXTerminator both stars flags, optional output references, parameter preservation, continued starless target, masks, missing module and failures.');
+
+{
+ const scripts=[step('Script','',{proc:{processId:()=> 'Script',filePath:'PerfectPalettePicker.js'},title:'PerfectPalettePicker'}),
+ step('Script','',{proc:{processId:()=> 'Script',filePath:'PerfectPalettePicker.js'},title:'PerfectPalettePicker'})];
+ const params={expression:'oldHa',expression1:'(oldHa + oldO)*1e-3',expression2:'oldO ^ ~oldO',
+ expression3:'',symbols:'',useSingleExpression:false,createNewImage:false,generateOutput:true,
+ clearImageCacheAndExit:false,rescale:false,truncate:true,truncateLower:0,truncateUpper:1};
+ const pm=step('PixelMath',Object.entries(params).map(([k,v])=>'P.'+k+'='+JSON.stringify(v)+';').join('\n'),
+ {proc:{processId:()=> 'PixelMath',...params}});
+ const palette=api.workspaceReplayData([{id:'Palette',steps:[...scripts,pm,ht]}])[0];
+ assert.equal(palette.steps.length,2);assert.equal(palette.steps[0].action,'palette');
+ assert.deepEqual(Array.from(palette.steps[0].inputs),['oldHa','oldO']);
+ const channel={isNull:false,mainView:{id:'O_prepared',image:{width:2,height:1,isColor:false,pixels:[0.3,0.4]}}};
+ const code=api.buildWorkspaceReplayScript(palette,0,1);
+ const result=run(code,{channels:[channel],choices:[0,1]});
+ assert.deepEqual(result.calls,['begin','fill','end','show','PM','HT']);
+ assert.equal(result.outputs[0].mainView.id,'Palette_APA_replay');
+ assert.equal(result.paletteParameters[0].expression,'Ha_input');
+ assert.equal(result.paletteParameters[0].expression1,'(Ha_input + O_prepared)*1e-3');
+ assert.equal(result.paletteParameters[0].expression2,'O_prepared ^ ~O_prepared');
+ assert.equal(result.paletteParameters[0].rescale,false);
+ assert.deepEqual(channel.mainView.image.pixels,[0.3,0.4]);
+ assert.match(result.messages[0],/Replay complete/);
+ for(const options of [{paletteMissing:true},{paletteFail:true}]) {
+   const failed=run(code,{channels:[channel],choices:[0,1],...options});
+   assert.ok(!failed.calls.includes('HT'));assert.match(failed.messages[0],/PerfectPalettePicker|PixelMath/);
+ }
+ assert.equal(run(code,{channels:[channel],cancel:true}).outputs.length,0);
+ const mismatch={...channel,mainView:{...channel.mainView,image:{...channel.mainView.image,width:5}}};
+ assert.equal(run(code,{channels:[mismatch],choices:[0,1]}).outputs.length,0);
+ const color={...channel,mainView:{...channel.mainView,image:{...channel.mainView.image,isColor:true}}};
+ assert.equal(run(code,{channels:[color],choices:[0,1]}).outputs.length,0);
+ const late={id:'Late',steps:[palette.steps[1],palette.steps[0]]};
+ const stopped=run(api.buildWorkspaceReplayScript(late,0,1));
+ assert.match(stopped.messages[0],/Start the selected range/);assert.ok(!stopped.calls.includes('PM'));
+ for(const changes of [{symbols:'x=1'}, {useSingleExpression:true}, {createNewImage:true},
+   {generateOutput:false}, {expression:'image("file")'}, {expression:'$T'}, {expression3:'1'}]) {
+   const bad={...pm,proc:{...pm.proc,...changes}};
+   assert.ok(api.workspaceReplayData([{id:'BadPalette',steps:[...scripts,bad]}])[0].steps[0].reason);
+ }
+ const masked={...pm,mask:{status:'recorded',name:'HistoricalMask'}};
+ assert.ok(api.workspaceReplayData([{id:'MaskedPalette',steps:[...scripts,masked]}])[0].steps[0].reason);
+ console.log('Passed: recorded PPP combination, explicit prepared-input mapping, RGB target, following stages, input preservation, dimensions/color/cancel/failure, range-start and unsupported formula checks.');
+}

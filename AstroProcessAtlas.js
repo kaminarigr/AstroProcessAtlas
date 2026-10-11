@@ -1262,6 +1262,35 @@ function isImageOriginStep(step, index) {
    return !step.redo && getProcessName(step.proc) === 'ImageIntegration' && (step.phase === 'initial' || position === 0);
 }
 
+function paletteReplaySource(group) {
+   if (group.title !== 'PerfectPalettePicker') return null;
+   var last = group.members[group.members.length-1], proc = last.proc;
+   if (getProcessName(proc) !== 'PixelMath' || proc.useSingleExpression !== false ||
+       proc.createNewImage !== false || proc.generateOutput !== true ||
+       proc.clearImageCacheAndExit === true || (proc.symbols || '').trim() ||
+       (proc.expression3 || '').trim()) return null;
+   var parsed = replayProcessSource(last.source, 'PixelMath');
+   if (!parsed) return null;
+   var inputs = [], expressions = [proc.expression, proc.expression1, proc.expression2];
+   for (var e = 0; e < expressions.length; ++e) {
+      if (typeof expressions[e] !== 'string' || !expressions[e].trim()) return null;
+      // Restrict this first implementation to the arithmetic palette formulas.
+      var text = expressions[e].replace(/\b(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?\b/g, '0');
+      if (/[^A-Za-z0-9_\s+*\/^~().-]/.test(text) || /[A-Za-z_]\w*\s*[.(]/.test(text)) return null;
+      var tokens = text.match(/[A-Za-z_]\w*/g) || [];
+      for (var t = 0; t < tokens.length; ++t) if (inputs.indexOf(tokens[t]) < 0) inputs.push(tokens[t]);
+   }
+   if (!inputs.length || inputs.length > 16) return null;
+   for (var m = 0; m < group.members.length; ++m) {
+      var mask = group.members[m].mask;
+      if (!mask || mask.status !== 'unrecorded') return null;
+      var refs = group.members[m].references || [];
+      for (var r = 0; r < refs.length; ++r)
+         if (refs[r].kind !== 'input' && refs[r].kind !== 'reference') return null;
+   }
+   return {source:parsed.source, variable:parsed.variable, inputs:inputs};
+}
+
 function workspaceReplayData(records) {
    var data = [];
    var supported = {HistogramTransformation:true, CurvesTransformation:true, RGBWorkingSpace:true,
@@ -1273,9 +1302,11 @@ function workspaceReplayData(records) {
          var group = groups[s], step = group.members[0];
          if (step.redo) continue;
          if (group.members.length > 1) {
+            var palette = paletteReplaySource(group);
             image.steps.push({title:group.title, number:step.displayNumber, substep:0,
-               tool:group.title, reason:'This process is not yet supported by the replay exporter: ' + group.title,
-               action:'process', identifier:'', source:'', variable:''});
+               tool:group.title, reason:palette ? '' : 'This process is not yet supported by the replay exporter: ' + group.title,
+               action:palette ? 'palette' : 'process', inputs:palette ? palette.inputs : [],
+               identifier:'', source:palette ? palette.source : '', variable:palette ? palette.variable : ''});
             continue;
          }
          if (isImageOriginStep(step, record.steps.indexOf(step))) continue;
@@ -1323,7 +1354,9 @@ function buildWorkspaceReplayScript(image, start, end) {
    var selected = image.steps.slice(start, end + 1), factories = [], manifest = [], identifier = '';
    for (var i = 0; i < selected.length; ++i) {
       var step = selected[i];
-      manifest.push({title:step.title, number:step.number, substep:step.substep, reason:step.reason, action:step.action});
+      manifest.push({title:step.title, number:step.number, substep:step.substep,
+         reason:step.reason || (step.action === 'palette' && i > 0 ? 'Start the selected range at PerfectPalettePicker and choose its prepared inputs.' : ''),
+         action:step.action, inputs:step.inputs || []});
       if (!step.reason && step.action === 'identifier') identifier = step.identifier;
       factories.push(step.reason || step.action === 'identifier' ? 'null' : 'function(){\n' + step.source + '\nreturn ' + step.variable + ';\n}');
    }
@@ -1366,10 +1399,13 @@ function buildWorkspaceReplayScript(image, start, end) {
       '   var label=new Label(dialog);label.text="Input for "+replayImage+" - before step "+replaySteps[0].number;',
       '   var combo=new ComboBox(dialog);for(var j=0;j<candidates.length;++j)combo.addItem(candidates[j].mainView.id);',
       '   combo.currentItem=0;',
+      '   var palette=replaySteps[0].action==="palette",bindings=[],inputNames=palette?replaySteps[0].inputs:[];',
+      '   if(palette)label.text="PerfectPalettePicker: select the prepared channel inputs for the recorded combination.";',
+      '   for(var b=0;b<inputNames.length;++b){var bl=new Label(dialog);bl.text=inputNames[b];var bc=new ComboBox(dialog);for(var c=0;c<candidates.length;++c)bc.addItem(candidates[c].mainView.id);bc.currentItem=0;for(var c=0;c<candidates.length;++c)if(candidates[c].mainView.id===inputNames[b])bc.currentItem=c;bindings.push({name:inputNames[b],label:bl,combo:bc});}',
       '   var naming=new Label(dialog);naming.text="Copy name: "+(replayIdentifier||candidates[0].mainView.id)+"_APA_replay";',
       '   naming.toolTip="A numeric suffix is added if this name already exists.";',
       '   combo.onItemSelected=function(index){if(index>=0&&index<candidates.length)naming.text="Copy name: "+(replayIdentifier||candidates[index].mainView.id)+"_APA_replay";};',
-      '   var info=new Label(dialog);info.text="Will apply "+count+" of "+replaySteps.length+" selected processes to a new copy.";',
+      '   var info=new Label(dialog);info.text="Will apply "+count+" of "+replaySteps.length+" selected processes to "+(palette?"a new RGB result.":"a new copy.");',
       '   var stop=new Label(dialog);stop.text=count<replaySteps.length?"Stops before step "+replaySteps[count].number+": "+replaySteps[count].reason:"All selected processes are supported.";',
       '   stop.wordWrapping=true;stop.setMinWidth(480);',
       '   var confirm=new CheckBox(dialog);confirm.text="I confirm the input is in the state BEFORE the first selected step.";',
@@ -1378,17 +1414,19 @@ function buildWorkspaceReplayScript(image, start, end) {
       '   var cancel=new PushButton(dialog);cancel.text="Cancel";cancel.onClick=function(){dialog.cancel();};',
       '   var buttons=new HorizontalSizer;buttons.addStretch();buttons.add(run);buttons.add(cancel);',
       '   dialog.sizer=new VerticalSizer;dialog.sizer.margin=12;dialog.sizer.spacing=8;',
-      '   dialog.sizer.add(label);dialog.sizer.add(combo);dialog.sizer.add(naming);dialog.sizer.add(info);dialog.sizer.add(stop);dialog.sizer.add(confirm);dialog.sizer.add(buttons);dialog.adjustToContents();',
+      '   dialog.sizer.add(label);dialog.sizer.add(combo);for(var b=0;b<bindings.length;++b){dialog.sizer.add(bindings[b].label);dialog.sizer.add(bindings[b].combo);}dialog.sizer.add(naming);dialog.sizer.add(info);dialog.sizer.add(stop);dialog.sizer.add(confirm);dialog.sizer.add(buttons);dialog.adjustToContents();',
+      '   if(palette){combo.visible=false;naming.text="Output name: "+(replayIdentifier||replayImage)+"_APA_replay";confirm.text="I confirm these inputs are in the prepared state used by the recorded palette combination.";dialog.adjustToContents();}',
       '   if(!dialog.execute()||!confirm.checked)return;',
       '   var input=candidates[combo.currentItem];if(!input||input.isNull)throw Error("Selected input is unavailable.");',
+      '   var mapped={};if(palette){for(var b=0;b<bindings.length;++b){var channel=candidates[bindings[b].combo.currentItem];if(!channel||channel.isNull||channel.mainView.image.isColor)throw Error("Select an available grayscale channel for "+bindings[b].name);if(b===0)input=channel;else if(channel.mainView.image.width!==input.mainView.image.width||channel.mainView.image.height!==input.mainView.image.height)throw Error("Palette inputs must have matching dimensions.");mapped["$"+bindings[b].name]=channel.mainView.id;}}',
       '   var baseId=(replayIdentifier||input.mainView.id)+"_APA_replay",id=baseId,suffix=1;',
+      '   if(palette){baseId=(replayIdentifier||replayImage)+"_APA_replay";id=baseId;}',
       '   while(!View.viewById(id).isNull)id=baseId+"_"+(suffix++);',
       '   var img=input.mainView.image;',
-      '   var output=new ImageWindow(1,1,img.numberOfChannels,img.bitsPerSample,img.isReal,img.isColor,id);',
+      '   var output=new ImageWindow(palette?img.width:1,palette?img.height:1,palette?3:img.numberOfChannels,img.bitsPerSample,img.isReal,palette?true:img.isColor,id);',
       '   output.mainView.beginProcess(UndoFlag_NoSwapFile);',
-      '   try{output.mainView.image.assign(img);}finally{output.mainView.endProcess();}',
-      '   output.rgbWorkingSpace=input.rgbWorkingSpace;',
-      '   output.mainView.stf=input.mainView.stf;',
+      '   try{if(palette)output.mainView.image.fill(0);else output.mainView.image.assign(img);}finally{output.mainView.endProcess();}',
+      '   if(!palette){output.rgbWorkingSpace=input.rgbWorkingSpace;output.mainView.stf=input.mainView.stf;}',
       '   output.show();',
       '   try {',
       '      for(var k=0;k<replaySteps.length;++k){',
@@ -1396,6 +1434,7 @@ function buildWorkspaceReplayScript(image, start, end) {
       '         if(replaySteps[k].action==="identifier"){Console.writeln("ImageIdentifier handled at creation: "+output.mainView.id);continue;}',
       '         Console.writeln("Replay "+(k+1)+"/"+replaySteps.length+": "+replaySteps[k].title);',
       '         var process=replayFactories[k]();',
+      '         if(replaySteps[k].action==="palette"){var keys=["expression","expression1","expression2"];for(var e=0;e<keys.length;++e)process[keys[e]]=process[keys[e]].replace(/(?:[0-9]+(?:[.][0-9]*)?|[.][0-9]+)(?:[eE][+-]?[0-9]+)?|[A-Za-z_][A-Za-z0-9_]*/g,function(token){return Object.prototype.hasOwnProperty.call(mapped,"$"+token)?mapped["$"+token]:token;});}',
       '         if(!process||typeof process.executeOn!=="function")throw Error("Required process is unavailable: "+replaySteps[k].title);',
       '         if(process.executeOn(output.mainView)===false)throw Error("Process failed: "+replaySteps[k].title);',
       '         processEvents();',
@@ -1412,6 +1451,7 @@ function workspaceReplayHTML(records) {
    var html = '<details class="replay-workflow"><summary>Export workflow for replay (experimental)</summary>' +
       '<p>Select an image and a consecutive range of applied processes. Run the downloaded .js in PixInsight with an input in the state BEFORE the first selected step. Replay uses a new copy and stops at the first unsupported step. Masks and historical references are not restored in this first version.</p>' +
       '<p>Copy naming: the last ImageIdentifier in the selected range, or the selected input name, followed by _APA_replay. Existing names receive a numeric suffix.</p>' +
+      '<p>PerfectPalettePicker: start the range at this step and select prepared grayscale inputs in PixInsight. Replays the recorded final combination into a new RGB image; earlier channel preparation is not reconstructed.</p>' +
       '<label>Replay image <select id="replay_image" onchange="updateReplayRange(true)">';
    for (var i = 0; i < records.length; ++i)
       html += '<option value="' + i + '" data-no-i18n>' + escapeHTML(records[i].id) + '</option>';
@@ -2178,6 +2218,9 @@ var REPORT_TRANSLATIONS = [
 ];
 
 REPORT_TRANSLATIONS = REPORT_TRANSLATIONS.concat([
+   ['PerfectPalettePicker: start the range at this step and select prepared grayscale inputs in PixInsight. Replays the recorded final combination into a new RGB image; earlier channel preparation is not reconstructed.','PerfectPalettePicker: ξεκίνα το εύρος σε αυτό το βήμα και διάλεξε προετοιμασμένες grayscale εισόδους στο PixInsight. Επαναλαμβάνει τον καταγεγραμμένο τελικό συνδυασμό σε νέα RGB εικόνα· η προηγούμενη προετοιμασία καναλιών δεν ανακατασκευάζεται.'],
+   ['Start the selected range at PerfectPalettePicker and choose its prepared inputs.','Ξεκίνα το επιλεγμένο εύρος στο PerfectPalettePicker και διάλεξε τις προετοιμασμένες εισόδους του.'],
+   ['Choose prepared inputs in PixInsight for the recorded palette combination.','Διάλεξε προετοιμασμένες εισόδους στο PixInsight για τον καταγεγραμμένο συνδυασμό παλέτας.'],
    ['Grouped component; excluded from workflow replay.','Υποβήμα ομάδας· εξαιρείται από την επανάληψη της ακολουθίας.'],
    ['Substep','Υποβήμα'],['Original history entries:','Αρχικές εγγραφές ιστορικού:'],
    ['Grouped from consecutive history entries; original records are preserved below.','Ομαδοποίηση από διαδοχικές εγγραφές ιστορικού· οι αρχικές εγγραφές διατηρούνται παρακάτω.'],['Show recorded component steps','Προβολή επιμέρους καταγεγραμμένων βημάτων'],
@@ -2256,8 +2299,8 @@ var WORKSPACE_BROWSER_SOURCE = [
    "      var namingId='';for(var ni=start;ni<=end&&ni<image.steps.length;++ni)if(image.steps[ni].action==='identifier'&&!image.steps[ni].reason)namingId=image.steps[ni].identifier;",
    "      if(list)while(list.firstChild)list.removeChild(list.firstChild);",
    "      for(var j=start;j<=end&&j<image.steps.length;++j){",
-   "         var step=image.steps[j];if(step.reason)blocked=true;if(!blocked)++ready;",
-   "         if(list){var item=document.createElement('li');item.textContent=step.number+(step.substep?'.'+step.substep:'')+' — '+step.title+': '+translated(step.reason?'STOP — '+step.reason:blocked?'Not reached until earlier blocker is resolved.':step.action==='identifier'?'Naming handled at creation: '+namingId+'_APA_replay':'Ready for replay');list.appendChild(item);}",
+   "         var step=image.steps[j],reason=step.reason||(step.action==='palette'&&j>start?'Start the selected range at PerfectPalettePicker and choose its prepared inputs.':'');if(reason)blocked=true;if(!blocked)++ready;",
+   "         if(list){var item=document.createElement('li');item.textContent=step.number+(step.substep?'.'+step.substep:'')+' — '+step.title+': '+translated(reason?'STOP — '+reason:blocked?'Not reached until earlier blocker is resolved.':step.action==='palette'?'Choose prepared inputs in PixInsight for the recorded palette combination.':step.action==='identifier'?'Naming handled at creation: '+namingId+'_APA_replay':'Ready for replay');list.appendChild(item);}",
    "      }",
    "      var status=document.getElementById('replay_status');if(status)status.textContent=translated(image.steps.length?ready+' consecutive processes can run from the selected input state.':'No applied processes to replay.');",
    "      var button=document.getElementById('replay_export');if(button)button.disabled=!ready;",

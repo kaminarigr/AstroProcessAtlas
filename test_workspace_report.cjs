@@ -922,3 +922,27 @@ console.log('Passed: arbitrary current/before/after selection, shared comparison
  assert.equal(separate.steps[0].componentOf,'','Ungrouped steps retain their copy control');
  console.log('Passed: grouped replay emits only parent blockers, omits every component including PixelMath, preserves top-level numbering and individual steps.');
 }
+
+{
+ const pm=makeProcess('PixelMath',{expression:'Ha_prepared',expression1:'(Ha_prepared+O_prepared)/2',expression2:'O_prepared',
+ expression3:'',symbols:'',useSingleExpression:false,createNewImage:false,generateOutput:true,clearImageCacheAndExit:false});
+ const rec=helper.collectWorkspaceRecord(image('PaletteReplay',[pppProcess(),pppProcess(),pm,ht]),116);
+ helper.workspaceGraph([rec]);
+ browser.workspaceReplayData=helper.workspaceReplayData([rec]);elements.replay_image.value='0';
+ browser.window.updateReplayRange(true);
+ assert.equal(elements.replay_start.children.length,2);
+ assert.match(elements.replay_readiness.children[0].textContent,/Choose prepared inputs/);
+ assert.match(elements.replay_status.textContent,/2 consecutive/);
+ browser.window.exportReplayScript();
+ assert.match(exportedBlob,/select the prepared channel inputs/);
+ new vm.Script(exportedBlob.replace(/^#.*$/gm,''));
+ browser.workspaceReplayData=[{id:'LaterPalette',steps:[browser.workspaceReplayData[0].steps[1],browser.workspaceReplayData[0].steps[0]]}];
+ browser.window.updateReplayRange(true);
+ assert.match(elements.replay_readiness.children[1].textContent,/Start the selected range/);
+ assert.match(elements.replay_status.textContent,/1 consecutive/);
+ elements.replay_start.value='1';browser.window.updateReplayRange(false);
+ assert.match(elements.replay_readiness.children[0].textContent,/Choose prepared inputs/);
+ browser.window.exportReplayScript();
+ assert.match(exportedBlob,/"action":"palette"/);
+ console.log('Passed: PPP parent readiness, range-start requirement, selectable inputs and downloadable script syntax.');
+}

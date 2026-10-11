@@ -204,3 +204,17 @@ All grouped operations, including PerfectPalettePicker, appear once in the repla
 list. Component steps (including internal PixelMath or RGBWorkingSpace) remain
 visible in the report but have no independent replay-copy control and are not
 exported. Unsupported parent tools remain blockers; execution cannot bypass them.
+
+PerfectPalettePicker replay supports its recorded final multi-channel arithmetic
+PixelMath combination as one parent operation. Start the export range at that
+step. In PixInsight select a prepared grayscale image for each historical image
+identifier displayed in the dialog; names may differ from the recorded names.
+Dimensions must match. Replay creates a new RGB image named after the report image
+(or selected ImageIdentifier) plus `_APA_replay`, then runs subsequent supported
+steps on that result. Input images remain unchanged.
+
+This repeats the captured final combination, not the original interactive script
+or its earlier channel extraction, stretching and preparation. Supply images at
+that prepared state. Missing final PixelMath, masks, single-expression mode,
+custom symbols, alpha expressions or formulas beyond the supported arithmetic
+remain blockers. Other grouped scripts and standalone PixelMath remain unsupported.

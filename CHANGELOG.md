@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Replay the recorded final PerfectPalettePicker arithmetic PixelMath combination
+  as one parent step, with explicit prepared grayscale input selection in PixInsight,
+  matching-dimension checks, new RGB output and subsequent supported steps. Require
+  this operation at the range start; missing/unsupported serialization, formulas,
+  symbols or masks remain blockers. Earlier channel preparation is not reconstructed.
+
 - Export one parent replay entry for every grouped operation, including
   PerfectPalettePicker. Exclude all component steps and their replay-copy buttons;
   unsupported parents remain explicit blockers with the report's top-level numbers.
