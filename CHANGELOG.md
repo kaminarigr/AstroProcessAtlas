@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add a standalone numerical replay-difference diagnostic for original/replay
+  checkpoints before and after a process. Report per-channel maximum/mean absolute
+  differences using unclipped, unscaled 64-bit outputs without modifying inputs.
+
 - Support serialized MultiscaleLinearTransform replay. Support DarkStructureEnhance
   as an interactive step using its installed algorithm, preserving attribution and
   GPL v3 in combined exports. Prompt for original settings because history records

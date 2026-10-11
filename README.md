@@ -68,6 +68,14 @@ the first selected process**, then confirm that starting state. The script creat
 a new image copy, preserves its RGB working space and STF, and applies the original
 serialized process parameters. It never changes the selected input.
 
+For a suspected replay discrepancy, run `tools/diagnose_replay_difference.js` in
+PixInsight with original/replay checkpoint copies before and after the process.
+It creates 64-bit `abs(original-replay)` images without rescaling/clipping and
+prints maximum/mean absolute differences per nominal channel. Input images remain
+unchanged. Auto STF makes small residuals visible but does not measure their size;
+an existing nonzero input difference can be amplified by a later process. This
+diagnostic does not establish the cause or guarantee identical tool versions.
+
 PerfectPalettePicker channel dropdowns suggest matching user-selected original
 images, or base channel names such as Sii for SII_final, ignoring case and common
 processing suffixes. Suggestions remain editable.
