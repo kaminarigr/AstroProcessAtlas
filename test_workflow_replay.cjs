@@ -61,10 +61,10 @@ assert.throws(()=>api.buildWorkspaceReplayScript(plan,2,1),/valid step range/);
 assert.throws(()=>api.buildWorkspaceReplayScript(plan,0,99),/valid step range/);
 assert.throws(()=>api.buildWorkspaceReplayScript(plan,0.5,1),/valid step range/);
 
-function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImages=false,gradientMissing=false,gradientFail=false,
+function run(script, {reportDialog=false,reportSave=false,cancel=false,confirm=true,missing=false,fail=false,noImages=false,gradientMissing=false,gradientFail=false,
   starMissing=false,starFail=false,paletteMissing=false,paletteFail=false,nbMissing=false,nbFail=false,sccMissing=false,sccFail=false,sourceChanged=false,scriptRecords=[],initialScripts=false,channels=[],choices=[],states=[],prepFail=false,
   dseCancel=false,dseOtherTarget=false,dseFail=false,mltMissing=false,invertMissing=false,pmMode=false,pmMissing=false,pmFail=false,pmNoOutput=false,pmCancel=false,pmNoSelection=false,pmChoices=[],pmOutputName,historyTarget=false,historyStep,inputColor=false,maskCancel=false,maskBlend=false,unsharpMissing=false,maskChoices=[],maskInvertChoices=[],orientations=[1],inputId='Ha_input',existingIds=['Ha_input_APA_replay']}={}) {
-  const calls=[], messages=[], outputs=[], gradientParameters=[], starParameters=[],paletteParameters=[],nbParameters=[],sccParameters=[],combos=[],maskApplications=[],unsharpParameters=[],pmParameters=[],edits=[];let checkbox,maskPrompts=0,pmPrompts=0;
+  const calls=[], messages=[], outputs=[], gradientParameters=[], starParameters=[],paletteParameters=[],nbParameters=[],sccParameters=[],combos=[],maskApplications=[],unsharpParameters=[],pmParameters=[],edits=[];let checkbox,maskPrompts=0,pmPrompts=0;const reportBoxes=[],reportButtons=[],savedReports=[];
   const input={isNull:false,rgbWorkingSpace:{gamma:2.2},mainView:{id:inputId,stf:[[1,2]],
     image:{width:2,height:1,numberOfChannels:inputColor?3:1,bitsPerSample:32,isReal:true,isColor:inputColor,pixels:[0.1,0.2]}}};
   function ImageWindow(w,h,channelCount,bits,real,color,id){
@@ -84,9 +84,9 @@ function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImage
     calls.push(this.H?'HT':'CT');if(maskBlend&&this.K){const output=outputs[outputs.length-1];view.image.pixels=view.image.pixels.map((value,i)=>{const m=output.mask&&output.maskEnabled?output.mask.mainView.image.pixels[i]:1;const weight=output.mask&&output.maskEnabled&&output.maskInverted?1-m:m;return value*(1-weight)+value*value*weight;});}else view.image.pixels[0]+=1;return !fail;};}
   const context={ImageWindow,View:{viewById:id=>({isNull:!existingIds.includes(id)})},
     Dialog:function(){this.ok=()=>{};this.cancel=()=>{};this.adjustToContents=()=>{};
-      this.execute=()=>{if(this.windowTitle==='AstroProcessAtlas - Mask orientation'){combos[combos.length-1].currentItem=orientations.shift()||0;return !maskCancel;}if(this.windowTitle==='AstroProcessAtlas - Select mask'){const choice=maskChoices[maskPrompts];if(maskInvertChoices[maskPrompts]!==undefined)checkbox.checked=maskInvertChoices[maskPrompts];++maskPrompts;if(choice!==undefined)combos[combos.length-1].currentItem=choice;return !maskCancel;}checkbox.checked=confirm;const inputs=combos.filter(c=>c.items[0]!=='Choose input state');const stateBoxes=combos.filter(c=>c.items[0]==='Choose input state');for(let i=0;i<choices.length;i++)inputs[i+1].currentItem=choices[i];stateBoxes.forEach((c,i)=>c.currentItem=states[i]===undefined?1:states[i]);return !cancel;};},
+      this.execute=()=>{if(this.windowTitle==='AstroProcessAtlas - Replay report'){messages.push(reportBoxes[0].text);if(reportSave)reportButtons.find(b=>b.text==='Save report...').onClick();return true;}if(this.windowTitle==='AstroProcessAtlas - Mask orientation'){combos[combos.length-1].currentItem=orientations.shift()||0;return !maskCancel;}if(this.windowTitle==='AstroProcessAtlas - Select mask'){const choice=maskChoices[maskPrompts];if(maskInvertChoices[maskPrompts]!==undefined)checkbox.checked=maskInvertChoices[maskPrompts];++maskPrompts;if(choice!==undefined)combos[combos.length-1].currentItem=choice;return !maskCancel;}checkbox.checked=confirm;const inputs=combos.filter(c=>c.items[0]!=='Choose input state');const stateBoxes=combos.filter(c=>c.items[0]==='Choose input state');for(let i=0;i<choices.length;i++)inputs[i+1].currentItem=choices[i];stateBoxes.forEach((c,i)=>c.currentItem=states[i]===undefined?1:states[i]);return !cancel;};},
     CheckBox:function(){checkbox=this;}, ComboBox:function(){this.items=[];this.addItem=v=>this.items.push(v);combos.push(this);},
-    Label:function(){this.setMinWidth=()=>{};},Edit:function(){edits.push(this);},PushButton:function(){},HorizontalSizer:Sizer,VerticalSizer:Sizer,
+    Label:function(){this.setMinWidth=()=>{};},Edit:function(){edits.push(this);},PushButton:function(){reportButtons.push(this);},HorizontalSizer:Sizer,VerticalSizer:Sizer,
     MessageBox:function(message){this.execute=()=>messages.push(message);},
     HistogramTransformation:Process,Console:{writeln(){}},processEvents(){},
     UndoFlag_NoSwapFile:0,StdIcon_Information:0,StdIcon_Error:1,StdButton_Ok:0};
@@ -200,11 +200,19 @@ function run(script, {cancel=false,confirm=true,missing=false,fail=false,noImage
     }
     return !starFail;
   };};
+  if(reportDialog) {
+    context.TextBox=function(){reportBoxes.push(this);this.setMinSize=()=>{};};
+    context.SaveFileDialog=function(){this.fileName='fixture-report.txt';this.execute=()=>reportSave;};
+    const readFile=context.File.readFile;
+    context.File=function(){this.createForWriting=()=>{};this.write=bytes=>savedReports.push(bytes.toString('utf8'));this.close=()=>{};};
+    context.File.readFile=readFile;
+    context.ByteArray={stringToUTF8:text=>Buffer.from(text,'utf8')};
+  }
   const expanded=script.replace(/^#include "\/fixture\/src\/scripts\/Toolbox\/SelectiveColorCorrection.js"$/gm,selectiveFixture);
   vm.runInNewContext(expanded.replace(/^#.*$/gm,''),context);
   if(!historyTarget)assert.deepEqual(input.mainView.image.pixels,[0.1,0.2],'Input pixels never change');
   assert.equal(input.mainView.id,inputId,'Input ID never changes');
-  return {calls,messages,outputs,input,gradientParameters,starParameters,paletteParameters,nbParameters,sccParameters,recordedParameters,windows:ImageWindow.windows,maskPrompts,maskApplications,unsharpParameters,pmParameters,pmPrompts,edits,combos};
+  return {calls,messages,outputs,input,gradientParameters,starParameters,paletteParameters,nbParameters,sccParameters,recordedParameters,windows:ImageWindow.windows,maskPrompts,maskApplications,unsharpParameters,pmParameters,pmPrompts,edits,combos,savedReports};
 }
 const complete=api.buildWorkspaceReplayScript(plan,0,1);
 {
@@ -226,6 +234,15 @@ const complete=api.buildWorkspaceReplayScript(plan,0,1);
  const refPlan=api.workspaceReplayData([{id:'Pixel_refs',steps:[ref]}])[0];
  assert.deepEqual(Array.from(refPlan.steps[0].inputs),['Ha','Oiii']);assert.ok(!refPlan.steps[0].reason);
  const refCode=api.buildWorkspaceReplayScript(refPlan,0,0);
+ const lateReference=api.workspaceReplayData([{id:'Late_refs',steps:[ht,ref]}])[0];
+ const cancelledBefore=run(api.buildWorkspaceReplayScript(lateReference,0,1),{pmMode:true,channels:[ha,oiii],pmCancel:true});
+ assert.equal(cancelledBefore.outputs.length,0);assert.ok(!cancelledBefore.calls.includes('HT'));
+ const currentStep=pixelStep({expression:'Current*2'});currentStep.references=[{kind:'input',name:'Current'}];
+ const currentPlan=api.workspaceReplayData([{id:'Current',steps:[ht,currentStep]}])[0];
+ const currentResult=run(api.buildWorkspaceReplayScript(currentPlan,0,1),{pmMode:true});
+ assert.match(currentResult.pmParameters[0].expression,/Ha_input_APA_replay_1\*2/);
+ assert.deepEqual(currentResult.outputs[0].mainView.image.pixels,[2.2,0.4]);
+
  result=run(refCode,{pmMode:true,channels:[ha,oiii],pmChoices:[[2,3]]});
  assert.equal(result.pmPrompts,1);assert.match(result.pmParameters[0].expression,/max\(PreparedHa, PreparedOiii\)/);
  assert.match(result.pmParameters[0].expression,/Ha_stars should not be mapped/);assert.equal(result.pmParameters[0].symbols,'k=0.25');
@@ -279,7 +296,7 @@ const complete=api.buildWorkspaceReplayScript(plan,0,1);
  const mask=prepared('PM_mask',[0.25,0.75]);
  const masked={...ref,mask:{status:'recorded',name:'PM_mask',inverted:false}};
  const maskedCode=api.buildWorkspaceReplayScript(api.workspaceReplayData([{id:'MaskedPM',steps:[masked]}])[0],0,0);
- const cancelled=run(maskedCode,{pmMode:true,channels:[mask],pmCancel:true});assert.equal(cancelled.outputs[0].mask,null);
+ const cancelled=run(maskedCode,{pmMode:true,channels:[mask],pmCancel:true});assert.equal(cancelled.outputs.length,0);
  const twice=api.workspaceReplayData([{id:'RepeatedPM',steps:[ref,ref]}])[0];
  result=run(api.buildWorkspaceReplayScript(twice,0,1),{pmMode:true,channels:[ha,oiii],pmChoices:[[2,3],[2,3]]});assert.equal(result.pmPrompts,2);
  for(const overrides of [{generateOutput:false},{clearImageCacheAndExit:true},{expression:'image("Ha")'},
@@ -302,7 +319,7 @@ const complete=api.buildWorkspaceReplayScript(plan,0,1);
  assert.deepEqual(run(code).calls.filter(c=>c==='Invert'||c==='HT'),['Invert','HT']);
  for(const options of [{invertMissing:true},{fail:true}]) {
    const stopped=run(code,options);assert.match(stopped.messages[0],/Invert/);
-   assert.match(stopped.messages[0],/Partial result retained/);assert.ok(!stopped.calls.includes('HT'));
+   if(options.invertMissing)assert.equal(stopped.outputs.length,0);else assert.match(stopped.messages[0],/Partial result retained/);assert.ok(!stopped.calls.includes('HT'));
  }
  const mask={isNull:false,mainView:{id:'Invert_mask',image:{width:2,height:1,isColor:false,pixels:[0.25,0.75]}}};
  for(const inverted of [false,true]) {
@@ -372,7 +389,7 @@ const complete=api.buildWorkspaceReplayScript(plan,0,1);
  assert.ok(!code.includes('new Script'));new vm.Script(code.replace(/^#.*$/gm,''));
  result=run(code);assert.deepEqual(result.calls.filter(c=>['HT','DSE settings','DSE','MLT'].includes(c)),['HT','DSE settings','DSE','MLT']);
  for(const options of [{dseCancel:true},{dseOtherTarget:true},{dseFail:true},{sourceChanged:true}]){
-   result=run(code,options);assert.ok(!result.calls.includes('MLT'));assert.match(result.messages[0],/Partial result retained/);
+   result=run(code,options);assert.ok(!result.calls.includes('MLT'));if(options.sourceChanged)assert.equal(result.outputs.length,0);else assert.match(result.messages[0],/Partial result retained/);
  }
  assert.ok(api.workspaceReplayData([{id:'MaskedDSE',steps:[{...ds,mask:{status:'recorded',name:'Mask',inverted:false}}]}])[0].steps[0].reason);
  assert.ok(api.workspaceReplayData([{id:'DifferentDSE',steps:[{...ds,proc:{...ds.proc,parameters:[['unknown','1']]}}]}])[0].steps[0].reason);
@@ -425,7 +442,7 @@ const complete=api.buildWorkspaceReplayScript(plan,0,1);
  const timed=api.workspaceReplayData([{id:'Timed',steps:[{...masked(false),time:'2026-10-11T10:00:00Z'}]}])[0];
  assert.equal(timed.steps[0].time,'2026-10-11T10:00:00Z');
  assert.match(api.buildWorkspaceReplayScript(timed,0,0),/2026-10-11T10:00:00Z/);
- result=run(code,{channels:[maskWindow],maskCancel:true});assert.equal(result.calls.filter(c=>c==='USM').length,0);assert.match(result.messages[0],/Mask selection cancelled.*Partial result/s);
+ result=run(code,{channels:[maskWindow],maskCancel:true});assert.equal(result.calls.filter(c=>c==='USM').length,0);assert.match(result.messages[0],/Mask selection cancelled/s);assert.equal(result.outputs.length,0);
  result=run(code,{channels:[maskWindow],fail:true});assert.equal(result.outputs[0].mask,null);assert.equal(result.calls.filter(c=>c==='USM').length,1);
  result=run(api.buildWorkspaceReplayScript(api.workspaceReplayData([{id:'USM',steps:[usm]}])[0],0,0),{unsharpMissing:true});assert.match(result.messages[0],/UnsharpMask/);
  const two=api.workspaceReplayData([{id:'Two',steps:[masked(false),{...masked(false),references:[{kind:'mask',name:'OtherMask'}],mask:{status:'recorded',name:'OtherMask',inverted:false}}]}])[0];
@@ -463,12 +480,12 @@ assert.equal(run(complete,{cancel:true}).outputs.length,0);
 assert.equal(run(complete,{confirm:false}).outputs.length,0);
 assert.match(run(complete,{noImages:true}).messages[0],/Open an image/);
 const partial=run(api.buildWorkspaceReplayScript(plan,0,3));
-assert.deepEqual(partial.calls,success.calls,'Never skip a blocked step and execute later processes');
+assert.deepEqual(partial.calls,[],'Reject a blocked range before any processing');
 assert.match(partial.messages[0],/Stopped before step 3/);
-assert.match(partial.messages[0],/Partial result retained/);
+assert.equal(partial.outputs.length,0);
 assert.equal(run(api.buildWorkspaceReplayScript(plan,2,3)).outputs.length,0,'Blocked start creates no output');
 const missing=run(complete,{missing:true});
-assert.equal(missing.calls.filter(c=>c==='HT').length,1);
+assert.equal(missing.calls.filter(c=>c==='HT').length,0);assert.equal(missing.outputs.length,0);
 assert.match(missing.messages[0],/CurvesTransformation/);
 const failed=run(complete,{fail:true});
 assert.ok(!failed.calls.includes('CT'),'Failure stops subsequent processes');
@@ -563,7 +580,7 @@ for (const stars of [false,true]) {
     const stopped=run(sxScript,options);
     assert.match(stopped.messages[0],/StarXTerminator/);
     assert.ok(!stopped.calls.includes('HT'));
-    assert.equal(stopped.outputs.length,1);
+    assert.equal(stopped.outputs.length,options.starMissing||options.nbMissing?0:1);
   }
   for(const extra of [
     {mask:{status:'unknown'}},
@@ -637,7 +654,7 @@ console.log('Passed: StarXTerminator both stars flags, optional output reference
    for(const options of [{nbMissing:true},{nbFail:true}]) {
      const stopped=run(code,options);
      assert.match(stopped.messages[0],/NarrowbandNormalization/);
-     assert.equal(stopped.outputs.length,1);
+     assert.equal(stopped.outputs.length,options.starMissing||options.nbMissing?0:1);
      assert.ok(!stopped.calls.includes('CT'));
      if(steps[0]===nb)assert.ok(!stopped.calls.includes('HT'));
    }
@@ -731,7 +748,7 @@ console.log('Passed: StarXTerminator both stars flags, optional output reference
    }
    for(const options of [{sccMissing:true},{sccFail:true}]) {
      const stopped=run(code,{scriptRecords:[proc],...options});assert.match(stopped.messages[0],/Script|SelectiveColorCorrection/);
-     assert.match(stopped.messages[0],/Partial result retained/);
+     if(options.sccMissing)assert.equal(stopped.outputs.length,0);else assert.match(stopped.messages[0],/Partial result retained/);
      assert.ok(!stopped.calls.includes('CT'));
      if(steps[0]===ws||steps[0]===scc)assert.ok(!stopped.calls.includes('HT'));
    }
@@ -763,4 +780,38 @@ console.log('Passed: StarXTerminator both stars flags, optional output reference
  const changed=run(code,{sourceChanged:true});assert.ok(!changed.calls.includes('SCC'));assert.match(changed.messages[0],/source changed/);
  assert.ok(run(code).calls.includes('SCC'),'Original history is no longer required');
  console.log('Passed: native SelectiveColorCorrection grouped/standalone/first/middle, saved settings/checksum, one parent call, continued target, missing/failing script, imported/historical masks and star-mask dependency.');
+}
+
+{
+ const laterMissing=run(complete,{missing:true,reportDialog:true,reportSave:true});
+ assert.equal(laterMissing.outputs.length,0);
+ assert.deepEqual(laterMissing.calls,[]);
+ assert.match(laterMissing.messages[0],/Preflight failed/);
+ assert.match(laterMissing.messages[0],/CurvesTransformation: Preflight failed/);
+ assert.equal(laterMissing.savedReports[0],laterMissing.messages[0]);
+ const successes=run(complete,{reportDialog:true,reportSave:true});
+ assert.match(successes.messages[0],/Completed: 2 \/ 2/);
+ assert.match(successes.messages[0],/\d+ - HistogramTransformation: Completed/);
+ assert.match(successes.messages[0],/Starting image: Ha_input/);
+ assert.equal(successes.savedReports[0],successes.messages[0]);
+ const failed=run(complete,{fail:true,reportDialog:true});
+ assert.match(failed.messages[0],/Completed: 0 \/ 2/);
+ assert.match(failed.messages[0],/HistogramTransformation: Failed/);
+ assert.match(failed.messages[0],/CurvesTransformation: Not executed/);
+ assert.match(failed.messages[0],/Partial result retained/);
+ const mask={isNull:false,mainView:{id:'Audit_mask',image:{width:2,height:1,isColor:false,pixels:[0.2,0.8]}}};
+ const masked={...ct,mask:{status:'recorded',name:'Audit_mask',inverted:true}};
+ const maskCode=api.buildWorkspaceReplayScript(api.workspaceReplayData([{id:'Audit',steps:[ht,masked]}])[0],0,1);
+ const cancelled=run(maskCode,{channels:[mask],maskCancel:true});
+ assert.equal(cancelled.outputs.length,0);assert.ok(!cancelled.calls.includes('HT'));
+ const wrongSize={...mask,mainView:{...mask.mainView,image:{...mask.mainView.image,width:9}}};
+ const invalid=run(maskCode,{channels:[wrongSize]});assert.equal(invalid.outputs.length,0);assert.ok(!invalid.calls.includes('HT'));
+ const color={...mask,mainView:{...mask.mainView,image:{...mask.mainView.image,isColor:true}}};
+ assert.equal(run(maskCode,{channels:[color]}).outputs.length,0);
+ const maskedResult=run(maskCode,{channels:[mask],reportDialog:true});
+ assert.match(maskedResult.messages[0],/mask Audit_mask -> Audit_mask; Color invert: ON/);
+ const unavailable=api.workspaceReplayData([{id:'Missing',steps:[ct,step('StarXTerminator')]}])[0];
+ const both=run(api.buildWorkspaceReplayScript(unavailable,0,1),{missing:true,starMissing:true});
+ assert.equal(both.outputs.length,0);assert.match(both.messages[0],/CurvesTransformation/);assert.match(both.messages[0],/StarXTerminator/);
+ console.log('Passed: full-range preflight, missing-process aggregation, mask selection/cancel/geometry/color checks before processing, per-step completion/failure reports and UTF-8 report saving.');
 }

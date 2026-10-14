@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Validate the full replay range before processing: process constructors, script
+  fingerprints, dependencies, palette inputs and per-step PixelMath/mask choices.
+  Check mask dimensions and color compatibility; cancelled selections and missing
+  later tools no longer leave an unnecessarily processed partial image.
+- Add a scrollable replay outcome report with step status, input/mask selections,
+  Color invert, elapsed time, retained partial output and UTF-8 text export.
+
 ## 0.2.0 — 2026-10-11
 
 - Add workflow replay export for a selected image and consecutive applied steps.

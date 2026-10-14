@@ -102,12 +102,12 @@ correct starting image. Grouped processes export one parent entry with the repor
 redo entries are excluded. Manual or possible graph links do not authorize replay.
 
 For supported native processes with a recorded mask name and inversion state,
-replay pauses before the first use and asks you to select an open mask image with
+replay asks during preflight to select an open mask image for each use with
 matching dimensions. Choose **Color invert (black/white mask values)** in the
 same dialog when the selected mask needs value inversion for this step. The
 checkbox defaults to the recorded inversion, or off when it is unspecified.
 Continue is available with either setting; there is no confirmation checkbox.
-At every masked step the picker reopens, showing the process number/title and
+During preflight the picker opens for every masked step, showing its number/title and
 available recorded timestamp. The last selected image and Color invert choice
 are preselected; recorded inversion changes adjust the default. Both can be
 changed for each step, since the same mask name does not identify a pixel version.
@@ -115,7 +115,8 @@ Inversion means a weight of 1-mask at the same pixel coordinates, not a geometri
 flip. Choices are cached by historical mask name for this replay run, and
 inversion uses PixInsight's mask inversion flag.
 Mask pixels are never changed. Masks are removed between operations. Cancellation
-stops replay and retains the partial result. The report cannot reconstruct a mask's
+during preflight stops replay without creating a copy. Execution failures retain
+the partial result. The report cannot reconstruct a mask's
 historical pixels. Download is enabled only when the entire selected range is supported;
 supported entries are green, mask prompts orange with WARNING, and blockers pink/red.
 If the mask name is recorded but its inversion is unspecified, download remains
@@ -131,7 +132,7 @@ Standalone PixelMath replay preserves the serialized expressions and processing
 settings, including single or separate channel expressions, symbols, rescaling,
 truncation and working precision. `$T` refers to the current replay result. For
 explicit image identifiers in active expressions or symbol definitions, a dialog
-opens at that step to select open images at their original processing state. It
+opens during preflight to select open images at their original processing state. It
 suggests matching IDs and reuses previous choices as defaults; each selection can
 be changed. References to the report image suggest the current replay result.
 Different image names are supported. Function names, local/symbol declarations,
@@ -223,6 +224,25 @@ operations and their real history positions remain available in the tree, detail
 summary and replay. Without that link, the output history remains visible. A later
 StarXTerminator operation is retained, as is any process node required to explain
 another selected output. The inferred link still does not establish exact historical pixels.
+
+Before any processing starts, replay constructs and validates every selected
+process, checks required script source fingerprints and star-mask dependencies,
+and collects all PixelMath reference images and per-step mask choices. Palette
+channels must be grayscale with matching dimensions. Masks must match the
+anticipated target dimensions, and color masks require a color target. If a later
+process is missing or a resource selection is cancelled, no replay copy or palette
+stretch is created. Each mask version and Color invert choice can still differ
+between steps; earlier choices are preselected. A current-result placeholder is
+available for PixelMath references to the evolving replay result.
+
+After completion or failure, a scrollable **Replay report** lists completed,
+failed/cancelled and unexecuted steps, selected starting inputs, palette preparation,
+PixelMath mappings, mask versions and Color invert, elapsed time and any retained
+partial result. **Save report...** exports the same information as UTF-8 text;
+the report is also printed in the PixInsight console. Preflight checks module and
+resource availability, not license validity, AI model execution or mathematical
+compatibility of arbitrary PixelMath expressions. DarkStructureEnhance settings
+are still chosen at its execution step because its dialog needs the replay target.
 
 Run `node test_workflow_replay.cjs` for the generator and simulated native execution
 checks, alongside the existing history/report tests. Actual PixInsight execution
