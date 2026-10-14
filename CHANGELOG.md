@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add step/group data completeness badges, separate from replay eligibility,
+  with tree indicators for recorded settings, manual inputs and missing metadata.
+- Add estimated image appearance and recorded histogram stretch indicators.
+  Render dark stages with linked display-only stretch on bounded float previews,
+  reuse the transform within each image and preserve original pixels/STF/masks.
+
 - Validate the full replay range before processing: process constructors, script
   fingerprints, dependencies, palette inputs and per-step PixelMath/mask choices.
   Check mask dimensions and color compatibility; cancelled selections and missing

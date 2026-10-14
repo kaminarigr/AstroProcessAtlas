@@ -244,6 +244,24 @@ resource availability, not license validity, AI model execution or mathematical
 compatibility of arbitrary PixelMath expressions. DarkStructureEnhance settings
 are still chosen at its execution step because its dialog needs the replay target.
 
+Each process now has a separate **Step data** badge: recorded process settings,
+manual inputs/verification needed, or incomplete recorded data. It describes
+available metadata, not replay support or proof of identical historical pixels.
+Grouped tools show the most restrictive component status. Empty script settings,
+unknown masks and historical references are explicitly distinguished.
+
+Image headers and stage previews show brightness-based appearance estimates.
+A recorded non-neutral HistogramTransformation midtones setting is separately
+identified as nonlinear stretch in the history; this does not prove the final
+pixel state. Dark images may be linear or simply dark nonlinear images. Dark
+previews receive a linked RGB/grayscale blackpoint and midtones display stretch
+on a bounded floating-point preview only. The same display transform is reused
+for dark stages of one image; different image branches may use different display
+transforms. Original pixels, STF, masks and history are unchanged. Mask thumbnails
+retain their original values. Pure-black data and unavailable statistics are
+reported without inventing content. These previews are visual aids, not numerical
+comparisons of the original data.
+
 Run `node test_workflow_replay.cjs` for the generator and simulated native execution
 checks, alongside the existing history/report tests. Actual PixInsight execution
 still requires validation with real images and installed processes.
@@ -263,6 +281,7 @@ Run the regression checks with Node.js:
 ```sh
 node test_history_report.cjs
 node test_workspace_report.cjs
+node test_preview_completeness.cjs
 ```
 
 These checks mock the PixInsight APIs and browser DOM. They do not replace testing in PixInsight and a real browser.

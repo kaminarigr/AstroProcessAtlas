@@ -73,6 +73,7 @@ authenticity. Replace all matching draft assets before publishing. Never upload 
 node test_history_report.cjs
 node test_workspace_report.cjs
 node test_workflow_replay.cjs
+node test_preview_completeness.cjs
 node tools/test_diagnose_replay_difference.cjs
 python -m unittest discover -s tools -p "test_release.py"
 python tools/build_release.py --version 0.2.0 --date 20261011 --output dist/release-0.2.0

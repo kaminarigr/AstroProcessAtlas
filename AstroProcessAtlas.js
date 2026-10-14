@@ -67,10 +67,70 @@ var ICON_ERROR = (typeof StdIcon_Error !== "undefined") ? StdIcon_Error : 4;
 var ICON_INFO = (typeof StdIcon_Information !== "undefined") ? StdIcon_Information : 2;
 var BUTTON_OK = (typeof StdButton_Ok !== "undefined") ? StdButton_Ok : 0x00000400;
 
-function createThumbnailFromView(view, outputPath, maxSize) {
+function previewAppearance(image) {
+   var info = {state:'unknown', auto:false, black:0, midtones:0.5};
+   if (!image || typeof image.sample !== 'function' || !image.width || !image.height) return info;
+   try{
+   var samples=[], channels=image.isColor?3:1, side=32;
+   for(var y=0;y<side;++y)for(var x=0;x<side;++x){
+      var value=0;
+      for(var c=0;c<channels;++c)value+=image.sample(Math.min(image.width-1,Math.floor((x+0.5)*image.width/side)),Math.min(image.height-1,Math.floor((y+0.5)*image.height/side)),c)/channels;
+      if(isFinite(value))samples.push(Math.max(0,Math.min(1,value)));
+   }
+   if(!samples.length)return info;
+   samples.sort(function(a,b){return a-b;});
+   var median=samples[Math.floor(samples.length/2)], high=samples[Math.floor(samples.length*0.9)];
+   info.state=median<0.025&&high<0.15?'dark':'visible';
+   info.median=median;
+   if(info.state==='dark'&&samples[samples.length-1]>0){
+      var deviations=[];for(var i=0;i<samples.length;++i)deviations.push(Math.abs(samples[i]-median));
+      deviations.sort(function(a,b){return a-b;});
+      info.black=Math.max(0,median-2.8*1.4826*deviations[Math.floor(deviations.length/2)]);
+      var normalized=(median||high||samples[samples.length-1]*0.1)-info.black;
+      normalized/=1-info.black;
+      // The same transform is used for RGB, preserving relative channel balance.
+      if(normalized>0&&normalized<1){info.midtones=(0.25-1)*normalized/((2*0.25-1)*normalized-0.25);info.auto=true;}
+   }
+   return info;
+   }catch(error){Console.writeln('Preview statistics unavailable: '+error.message);return {state:'unknown',auto:false};}
+}
+
+function previewAppearanceHTML(info) {
+   if(!info)return '<span class="appearance-badge">Stretch state: unknown</span>';
+   var label=info.stretchRecorded?'Nonlinear stretch recorded in history':info.state==='dark'?'Likely linear / dark (estimated)':info.state==='visible'?'Visible image — stretch state unconfirmed':'Stretch state: unknown';
+   return '<span class="appearance-badge">'+label+'</span>'+(info.auto?'<span class="appearance-badge">Auto-stretched preview only</span>':'');
+}
+
+function recordedNonlinearStretch(record,index) {
+   for(var i=0;i<record.steps.length;++i){
+      var step=record.steps[i];if(step.phase==='live'&&step.liveIndex>index)continue;
+      if(getProcessName(step.proc)!=='HistogramTransformation')continue;
+      try{var rows=step.proc.H;for(var c=0;rows&&c<Math.min(4,rows.length);++c)if(rows[c]&&rows[c].length>=5&&typeof rows[c][1]==='number'&&rows[c][1]!==0.5)return true;}catch(e){}
+   }
+   return false;
+}
+
+function createThumbnailFromView(view, outputPath, maxSize, appearance) {
+   var preview=null;
    try {
-      // Image.render() is the native PJSR bitmap API. No changes to image pixels or STF.
-      var bitmap = view.image.render();
+      var bitmap;
+      if(appearance&&appearance.auto&&typeof Image==='function'){
+         var source=view.image,scale=Math.min(1,maxSize/source.width,maxSize/source.height);
+         var width=Math.max(1,Math.round(source.width*scale)),height=Math.max(1,Math.round(source.height*scale)),channels=source.isColor?3:1;
+         preview=new Image(width,height,channels,source.colorSpace,32,1);
+         var rect=new Rect(0,0,width,height);
+         for(var c=0;c<channels;++c){
+            var values=new Float32Array(width*height);
+            for(var y=0;y<height;++y)for(var x=0;x<width;++x){
+               var value=source.sample(Math.min(source.width-1,Math.floor((x+0.5)*source.width/width)),Math.min(source.height-1,Math.floor((y+0.5)*source.height/height)),c);
+               value=Math.max(0,Math.min(1,(value-appearance.black)/(1-appearance.black)));
+               var m=appearance.midtones;
+               values[y*width+x]=value===0?0:value===1?1:(m-1)*value/((2*m-1)*value-m);
+            }
+            preview.setSamples(values,rect,c);
+         }
+         bitmap=preview.render();
+      }else bitmap=view.image.render();
       if (!bitmap || bitmap.isNull) throw new Error("Image.render() returned an empty bitmap");
       var scale = Math.min(1, maxSize / bitmap.width, maxSize / bitmap.height);
       var thumbWidth = Math.max(1, Math.round(bitmap.width * scale));
@@ -83,7 +143,7 @@ function createThumbnailFromView(view, outputPath, maxSize) {
    } catch (e) {
       Console.writeln("Thumbnail generation error: " + e.message);
       return false;
-   }
+   }finally{if(preview)try{preview.free();}catch(e){}}
 }
 
 function getProcessName(proc) {
@@ -501,6 +561,7 @@ function reportStyles() {
    html += "h1 { color: #89b4fa; border-bottom: 2px solid #313244; padding-bottom: 8px; font-size: 22px; margin-top: 0; }\n";
    html += ".meta-info { background: #1e1e2e; padding: 12px 18px; border-radius: 8px; border: 1px solid #313244; margin-bottom: 20px; font-size: 13px; color: #a6adc8; }\n";
    html += ".step-card { display: flex; background: #1e1e2e; border: 1px solid #313244; margin-bottom: 14px; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }\n";
+   html += '.appearance-badge{display:inline-block;padding:4px 8px;margin:4px;border:1px solid #45475a;border-radius:6px;font-size:11px}.completeness{padding:10px;margin:10px 0;border-left:3px solid;font-size:12px}.completeness-recorded{color:#a6e3a1}.completeness-manual{color:#fab387}.completeness-missing{color:#f38ba8}';
    html += ".thumb-box { width: 440px; min-width: 440px; background: #11111b; display: flex; align-items: center; justify-content: center; padding: 10px; border-right: 1px solid #313244; }\n";
    html += ".thumb-box img { max-width: min(400px, 100%); max-height: 400px; height: auto; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.7); }\n";
    html += '.report-footer{margin-top:40px;padding:24px 12px;border-top:1px solid #313244;text-align:center;color:#a6adc8;font-size:13px}.report-footer a{color:#89b4fa;text-decoration:none}.report-footer a:hover{text-decoration:underline}@media(max-width:1000px){.step-card{flex-direction:column}.thumb-box{width:auto;min-width:0;border-right:0;border-bottom:1px solid #313244}}';
@@ -570,7 +631,9 @@ function collectWorkspaceThumbnails(records, thumbDir, relativeDir, progress) {
    for (var r = 0; r < records.length; ++r) {
       if (progress) progress(15 + 10*r/records.length, 'Current image and masks: ' + records[r].id);
       var record = records[r], filename = record.anchor + "_current.png";
-      if (createThumbnailFromView(record.view, thumbDir + "/" + filename, 440)) {
+      record.appearance=previewAppearance(record.view.image);
+      record.appearance.stretchRecorded=recordedNonlinearStretch(record,record.historyIndex);
+      if (createThumbnailFromView(record.view, thumbDir + "/" + filename, 440, record.appearance)) {
          record.currentThumb = relativeDir + "/" + filename;generatedFiles.push(thumbDir+'/'+filename);
       }
       for (var i = 0; i < record.steps.length; ++i) {
@@ -587,14 +650,18 @@ function collectWorkspaceThumbnails(records, thumbDir, relativeDir, progress) {
    }
    for (var r = 0; r < records.length; ++r) {
       var record = records[r];
-      var states = {}, dimensions = {};
+      var states = {}, dimensions = {}, appearances={}, linkedStretch=record.appearance&&record.appearance.auto?record.appearance:null;
       var captureState = function(index, filename) {
          if (Object.prototype.hasOwnProperty.call(states, '$'+index)) return states['$'+index];
          try {
             if (record.view.historyIndex !== index) record.view.historyIndex = index;
             if (record.view.historyIndex !== index) return '';
             dimensions['$'+index] = {width:record.view.image.width,height:record.view.image.height};
-            if (createThumbnailFromView(record.view, thumbDir + '/' + filename, 1200)) {
+            var appearance=previewAppearance(record.view.image);
+            appearance.stretchRecorded=recordedNonlinearStretch(record,index);
+            if(appearance.auto){if(!linkedStretch)linkedStretch=appearance;appearance.black=linkedStretch.black;appearance.midtones=linkedStretch.midtones;}
+            appearances['$'+index]=appearance;
+            if (createThumbnailFromView(record.view, thumbDir + '/' + filename, 1200, appearance)) {
                generatedFiles.push(thumbDir+'/'+filename);
                return states['$'+index] = relativeDir + '/' + filename;
             }
@@ -607,10 +674,12 @@ function collectWorkspaceThumbnails(records, thumbDir, relativeDir, progress) {
             if (progress) progress(25 + 45*(r + i/Math.max(1,record.steps.length))/records.length, 'History previews: ' + record.id + ' — ' + (i+1) + '/' + record.steps.length);
             var step = record.steps[i];
             step.thumb = record.currentThumb;
+            step.appearance=record.appearance;
             step.thumbNote = "Current image — no pixels are available for this step.";
             step.beforeThumb = ''; step.afterThumb = '';
             if (step.phase === "initial") continue;
             step.beforeThumb = captureState(step.liveIndex-1, record.anchor + '_state_' + (step.liveIndex-1) + '.png');
+            step.beforeAppearance=appearances['$'+(step.liveIndex-1)];
             try {
                if (record.view.historyIndex !== step.liveIndex) record.view.historyIndex = step.liveIndex;
                if (record.view.historyIndex === step.liveIndex) {
@@ -618,6 +687,7 @@ function collectWorkspaceThumbnails(records, thumbDir, relativeDir, progress) {
                   var after = states['$'+step.liveIndex] || captureState(step.liveIndex, filename);
                   if (after) {
                      step.thumb = step.afterThumb = after;
+                     step.appearance=step.afterAppearance=appearances['$'+step.liveIndex];
                      step.thumbNote = "Image after step " + step.liveIndex;
                      var beforeSize=dimensions['$'+(step.liveIndex-1)],afterSize=dimensions['$'+step.liveIndex];
                      if(beforeSize&&afterSize&&(beforeSize.width!==afterSize.width||beforeSize.height!==afterSize.height)) {
@@ -1061,9 +1131,13 @@ function graphEdgePath(edge, nodes) {
 }
 
 function workspaceOverviewHTML(records, graph) {
+   var appearanceByImage={},completenessByNode={};
+   for(var r=0;r<records.length;++r){appearanceByImage['$'+records[r].id]=records[r].appearance;var groups=records[r].displayGroups||workspaceStepGroups(records[r]);for(var g=0;g<groups.length;++g)completenessByNode['$'+groups[g].anchor]=groupCompleteness(groups[g]);}
+
    var height = 170, width = Math.max(310, records.length*290+35);
    for (var i = 0; i < graph.nodes.length; ++i) height = Math.max(height, graph.nodes[i].y+100);
    var html = '<section><h2>Image and process tree</h2><p>Each column represents an image. Solid lines show its history sequence. Dashed lines connect image/mask references; the exact historical version of the source image is unknown. This is not an absolute shared timeline.</p>';
+   html+='<p>Step data indicators: green — recorded settings; orange — manual inputs or verification; pink — missing data. Recorded settings do not guarantee identical historical pixels. Stretch labels are estimates from pixel brightness.</p>';
    html+='<p>Connected images appear first; images without cross-image connections appear last. Existing order is preserved within each group. Column order does not establish when files were opened or images were created.</p>';
    html += '<div class="graph-legend" aria-label="Line legend">';
    var legendKinds = ['sequence', 'input', 'mask', 'output', 'manual', 'possible'];
@@ -1092,11 +1166,13 @@ function workspaceOverviewHTML(records, graph) {
       } else if (node.phase === 'initial') {
          subtitle = 'Inherited / initial history';
       }
+      var appearance=appearanceByImage['$'+node.image],complete=completenessByNode['$'+node.id];
+      var badge=node.header?'<text class="graph-small" x="'+(node.x+10)+'" y="'+(node.y+66)+'">'+(appearance&&appearance.stretchRecorded?'Stretch recorded':appearance&&appearance.state==='dark'?'Likely linear / dark':appearance&&appearance.state==='visible'?'Visible — stretch unconfirmed':'Stretch state: unknown')+'</text>':complete?'<g><title>'+complete.label+'</title><circle cx="'+(node.x+235)+'" cy="'+(node.y+50)+'" r="5" fill="'+(complete.level==='recorded'?'#a6e3a1':complete.level==='manual'?'#fab387':'#f38ba8')+'"/></g>':'';
       html += '<a onpointerdown="beginComparisonDrag(event,this.getAttribute(\'data-node\'))" draggable="false" data-node="' + node.id + '" ondragstart="dragComparisonStage(event,this.getAttribute(\'data-node\'))" ondragover="stageDragOver(event)" ondrop="dropComparedNodes(event,this.getAttribute(\'data-node\'))" href="#' + node.id + '" onclick="selectGraphNode(\'' + node.id + '\',event)" onfocus="focusGraphImage(\'' + node.id + '\')" onblur="clearGraphFocus()"><g data-node="' + node.id + '" onmouseenter="focusGraphImage(\'' + node.id + '\')" onmouseleave="clearGraphFocus()" draggable="false" ondragstart="dragComparisonStage(event,this.getAttribute(\'data-node\'))" ondragover="stageDragOver(event)" ondrop="dropComparedNodes(event,this.getAttribute(\'data-node\'))" class="graph-node' + (node.redo ? ' redo-node' : '') + '">' +
          '<rect x="' + node.x + '" y="' + node.y + '" width="250" height="72" rx="8"/>' +
          '<title data-no-i18n>' + escapeHTML(node.label + (node.time ? ' — ' + node.time : '')) + '</title>' +
          imageColorBadge(node) + '<text data-no-i18n x="' + (node.x+(node.header ? 36 : 10)) + '" y="' + (node.y+26) + '">' + escapeHTML(node.label.length > (node.header ? 27 : 31) ? node.label.slice(0,node.header ? 24 : 28)+'…' : node.label) + '</text>' +
-         '<text class="graph-small" x="' + (node.x+10) + '" y="' + (node.y+50) + '">' + escapeHTML(subtitle) + '</text></g></a>';
+         '<text class="graph-small" x="' + (node.x+10) + '" y="' + (node.y+50) + '">' + escapeHTML(subtitle) + '</text>'+badge+'</g></a>';
    }
    html += '</svg></div><style>.stage-pickers{display:flex;flex-wrap:wrap;gap:12px;margin:12px 0}.stage-drop{flex:1;min-width:220px;padding:12px;border:2px dashed #45475a;border-radius:8px}.stage-drop select{width:100%}.stage-drop.drag-over{border-color:#fab387;background:#313244}.stage-drop p{font-size:12px;margin:6px 0}.graph-node{touch-action:none;cursor:grab}.graph-node.is-drag-origin{opacity:.35}.graph-node.is-drop-target rect{stroke:#fab387;stroke-width:3px}.stage-drag-ghost{position:fixed;pointer-events:none;z-index:11000;opacity:.85;filter:drop-shadow(0 8px 12px #0008)}.stage-drag-ghost rect{fill:#313244;stroke:#fab387;stroke-width:2px}.stage-drag-ghost text{fill:#cdd6f4;font:13px sans-serif}.stage-drag-ghost .graph-small{fill:#a6adc8;font-size:10px}.stage-marker{pointer-events:none;fill:#fab387;font:bold 12px sans-serif!important}</style>';
    html += '<details id="stage_comparison_controls"><summary>Compare any two stages</summary><p>Select two available previews, including stages from different images. A is on the left; B is on the right. Current image previews are not historical source pixels.</p><div class="stage-pickers"><div id="stage_drop_a" class="stage-drop" ondragover="stageDragOver(event)" ondragleave="this.classList.remove(\'drag-over\')" ondrop="dropComparisonStage(event,\'a\')"><label for="stage_compare_a">A — left</label><select id="stage_compare_a" onchange="syncComparisonStages()"></select><p>Drop a tree node here</p><p id="stage_name_a" data-no-i18n></p></div><div id="stage_drop_b" class="stage-drop" ondragover="stageDragOver(event)" ondragleave="this.classList.remove(\'drag-over\')" ondrop="dropComparisonStage(event,\'b\')"><label for="stage_compare_b">B — right</label><select id="stage_compare_b" onchange="syncComparisonStages()"></select><p>Drop a tree node here</p><p id="stage_name_b" data-no-i18n></p></div></div> <button id="stage_compare_button" type="button" onclick="compareSelectedStages(this)">Compare stages</button><p id="stage_compare_status" aria-live="polite"></p></details>';
@@ -1141,10 +1217,47 @@ function comparisonHTML(step) {
       '<button type="button" onclick="openComparison(this)">Enlarge comparison</button></div>';
 }
 
+function stepCompleteness(step) {
+   var missing=[],manual=[],tool=getProcessName(step.proc);
+   if(!step.source)missing.push('Serialized parameters are unavailable.');
+   else if(!/\bvar\s+[A-Za-z_]\w*\s*=\s*new\s+[A-Za-z_]\w*/.test(step.source))missing.push('Serialized parameters are unavailable.');
+   if(!step.mask||step.mask.status==='unknown')missing.push('Historical mask state is unknown.');
+   else if(step.mask.status==='recorded'){
+      if(!step.mask.name)missing.push('Historical mask name is missing.');
+      else manual.push('The original mask pixels and their version must be supplied.');
+   }
+   var references=step.references||[];
+   for(var i=0;i<references.length;++i)if(references[i].kind==='input'||references[i].kind==='reference'){
+      manual.push('Historical input images must be supplied.');break;
+   }
+   if(step.possibleInputs&&step.possibleInputs.length)manual.push('Possible inputs are unconfirmed.');
+   if(tool==='Script'){
+      var parameters=null;
+      try{parameters=step.proc.parameters;}catch(e){}
+      if(!parameters||!parameters.length)missing.push('Script settings were not recorded.');
+      else manual.push('Script parameters are recorded; internal masks or cached state may be unavailable.');
+   }
+   var level=missing.length?'missing':manual.length?'manual':'recorded';
+   return {level:level,label:level==='missing'?'Incomplete recorded data':level==='manual'?'Manual inputs / verification needed':'Recorded process settings',
+      notes:missing.concat(manual)};
+}
+
+function completenessHTML(step) {
+   var info=stepCompleteness(step),html='<div class="completeness completeness-'+info.level+'"><b>Step data:</b> <span>'+info.label+'</span>';
+   for(var i=0;i<info.notes.length;++i)html+='<div>'+info.notes[i]+'</div>';
+   return html+'</div>';
+}
+
+function groupCompleteness(group) {
+   var result=stepCompleteness(group.members[0]),rank={recorded:0,manual:1,missing:2};
+   for(var i=1;i<group.members.length;++i){var next=stepCompleteness(group.members[i]);if(rank[next.level]>rank[result.level])result=next;}
+   return result;
+}
+
 function imageReportHTML(record, emit) {
    var groups = record.displayGroups || workspaceStepGroups(record);
    var html = '<section class="image-report" data-image="' + record.anchor + '" id="' + record.anchor + '"><h2 data-no-i18n>' + escapeHTML(record.id) + '</h2>';
-   html += '<div class="meta-info">' + (record.currentThumb ? '<img class="image-snapshot" src="' + escapeHTML(record.currentThumb) + '" alt="Current image">' : '') +
+   html += '<div class="meta-info">' + previewAppearanceHTML(record.appearance) + (record.currentThumb ? '<img class="image-snapshot" src="' + escapeHTML(record.currentThumb) + '" alt="Current image">' : '') +
       '<b>File:</b> ' + (record.filePath ? '<span data-no-i18n>' + escapeHTML(record.filePath) + '</span>' : 'No file path') + '<br><b>Total Process Steps:</b> ' + groups.length +
       (groups.length !== record.steps.length || record.cloneShared || record.starsOrigin ? ' · <b>Original history entries:</b> ' + (record.cloneFullSteps || record.starsFullSteps || record.steps).length : '') +
       ' · Current history position: ' + record.historyIndex + '<br><b>Current mask:</b> ' + record.currentMaskInfo +
@@ -1171,17 +1284,20 @@ function imageReportHTML(record, emit) {
       if (groupStart) {
          var finalMember = groupStart.members[groupStart.members.length-1];
          html += '<div class="step-group" id="' + groupStart.anchor + '"><div class="step-num">Step ' + step.displayNumber + ' of ' + groups.length + '</div><h3 data-no-i18n>' + escapeHTML(groupStart.title) + '</h3><p>Grouped from consecutive history entries; original records are preserved below.</p>' +
+            '<div class="completeness completeness-'+groupCompleteness(groupStart).level+'"><b>Step data:</b> '+groupCompleteness(groupStart).label+'</div>'+
             comparisonHTML({beforeThumb:step.beforeThumb, afterThumb:finalMember.afterThumb}) +
             '<details open><summary>Show recorded component steps (' + groupStart.members.length + ')</summary>';
       }
       html += '<div class="step-card" id="' + step.anchor + '"><div class="thumb-box">' + (step.beforeThumb && step.afterThumb ? comparisonHTML(step) : (step.thumb ?
          '<img src="' + escapeHTML(step.thumb) + '" alt="' + escapeHTML(step.thumbNote) + '">' : 'Thumbnail unavailable — see PixInsight console') +
          comparisonHTML(step)) +
-         '<div class="thumb-note">' + escapeHTML(step.thumbNote) + '<br>Without screen stretch (STF).</div></div><div class="details-box">';
+         '<div class="thumb-note">' + escapeHTML(step.thumbNote) + '<br>'+previewAppearanceHTML(step.appearance)+
+         (step.beforeThumb&&step.afterThumb?'<br>Before: '+previewAppearanceHTML(step.beforeAppearance)+'<br>After: '+previewAppearanceHTML(step.afterAppearance):'')+'</div></div><div class="details-box">';
       html += '<div class="step-num">' + (step.substepNumber ? 'Substep ' + step.displayNumber + '.' + step.substepNumber : 'Step ' + step.displayNumber + ' of ' + groups.length) + '</div><div class="step-title" data-no-i18n>' + escapeHTML(step.title) + '</div>';
       html += '<p class="thumb-note">' + (step.phase === 'initial' ? 'Initial state history — pixels for this step are unavailable.' :
          'Position ' + step.liveIndex + ' in history') + (step.redo ? ' [Redo / not applied at the current position]' : '') +
          (step.time ? ' · ' + escapeHTML(step.time) : ' · Execution time: not recorded') + '</p>';
+      html += completenessHTML(step);
       html += historyMaskHTML(step.mask, step.maskThumb);
       if (step.possibleInputs && step.possibleInputs.length) {
          html += '<p class="possible-info">Possible inputs from user-selected originals (unconfirmed): <span data-no-i18n>' + escapeHTML(step.possibleInputs.join(', ')) + '</span></p>';
@@ -2059,7 +2175,7 @@ function generateHistoryReport() {
    }
    html += '<footer class="report-footer"><a href="https://www.yoruhikari.gr/" target="_blank" rel="noopener noreferrer">© 2026 YoruHikari Astrophotography</a></footer>';
    html += '<button id="back_to_top" type="button" hidden onclick="scrollToReportTop()" aria-label="Back to top">↑ Back to top</button>';
-   html += '<div id="comparison_dialog" role="dialog" aria-modal="true" aria-label="Before / after" hidden onclick="if(event.target===this)closeComparison()"><div class="comparison-panel"><button id="comparison_close" type="button" onclick="closeComparison()">Close</button><p>Preview up to 1200 pixels; without STF. Zoom and pan are shared by both images.</p><label class="zoom-control"><span>Zoom</span><input id="comparison_zoom" type="range" min="100" max="400" value="100" oninput="zoomComparison(this.value)" onchange="zoomComparison(this.value)"></label><div id="comparison_viewport"><div id="comparison_content"></div></div></div></div>';
+   html += '<div id="comparison_dialog" role="dialog" aria-modal="true" aria-label="Before / after" hidden onclick="if(event.target===this)closeComparison()"><div class="comparison-panel"><button id="comparison_close" type="button" onclick="closeComparison()">Close</button><p>Preview up to 1200 pixels. Dark previews use a display-only auto stretch; image pixels are unchanged. Zoom and pan are shared by both images.</p><label class="zoom-control"><span>Zoom</span><input id="comparison_zoom" type="range" min="100" max="400" value="100" oninput="zoomComparison(this.value)" onchange="zoomComparison(this.value)"></label><div id="comparison_viewport"><div id="comparison_content"></div></div></div></div>';
    // Escape HTML delimiters in inline JSON: names/code must never close a script tag.
    html += '<style>.report-filters{padding:12px;border:1px solid #45475a;display:flex;gap:12px;align-items:center;flex-wrap:wrap}.report-filters input[type=checkbox]{width:auto}.is-filtered,[hidden]{display:none!important}.compare-stage{position:relative;line-height:0}.compare-stage img{display:block;width:100%;max-width:none!important;max-height:none!important}.compare-before{position:absolute;inset:0;clip-path:inset(0 50% 0 0)}.compare-label{position:absolute;top:10px;background:#111b;padding:5px;line-height:1.3;pointer-events:none}.before-label{left:8px}.after-label{right:8px}.comparison input[type=range]{width:100%;padding:0}.comparison-unavailable{font-size:12px;color:#f9e2af}#comparison_dialog{width:min(1100px,94vw);max-height:94vh;background:#181825;color:#cdd6f4;border:1px solid #89b4fa}#comparison_dialog::backdrop{background:#000b}#comparison_viewport{overflow:auto;max-height:70vh}#comparison_content{width:100%}#comparison_dialog .comparison{width:100%}#comparison_dialog .comparison>button{display:none}.edge:focus{stroke-width:4;outline:none}.provenance-legend{font-size:13px;color:#bac2de}</style>';
    html += '<style>.zoom-control{display:inline-flex;align-items:center;gap:10px;margin:8px 0}.zoom-control span{white-space:nowrap}.zoom-control input[type=range]{width:220px;max-width:55vw;margin:0;vertical-align:middle}.graph-node.is-tool-match rect,.graph-node.is-tool-match:hover rect{stroke:#fab387!important;stroke-width:3px!important}.compare-divider{position:absolute;left:50%;top:0;bottom:0;width:2px;background:#fff;box-shadow:0 0 3px #000;pointer-events:none;z-index:2}.compare-divider span{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);border-radius:50%;padding:10px;background:#181825;border:2px solid #fff;line-height:1;color:#fff}.comparison .compare-stage .compare-slider{position:absolute;inset:0;width:100%;height:100%;margin:0;padding:0;opacity:0;cursor:ew-resize;z-index:3}.compare-stage:focus-within{outline:2px solid #fab387}.compare-label{z-index:4}#comparison_dialog{position:fixed;inset:0;z-index:10000;width:auto;max-height:none;background:#000b;border:0;padding:20px;display:flex;align-items:center;justify-content:center}.comparison-panel{background:#181825;border:1px solid #89b4fa;padding:16px;width:1100px;max-width:94vw;max-height:90vh;overflow:auto}#comparison_viewport{max-height:65vh}</style>';
@@ -2091,6 +2207,26 @@ var REPORT_TRANSLATIONS = [
    ['No additional history steps were found for this clone.','Δεν βρέθηκαν επιπλέον βήματα ιστορικού για αυτόν τον κλώνο.'],
    ['Export workflow for replay','Εξαγωγή ροής για επανάληψη'],
    ['Preflight checks availability and dimensions. Licenses, AI models and manual script settings may still require checks during execution.','Ο αρχικός έλεγχος εξετάζει διαθεσιμότητα και διαστάσεις. Άδειες, AI models και χειροκίνητες ρυθμίσεις scripts μπορεί να χρειάζονται έλεγχο κατά την εκτέλεση.'],
+   ["Step data:", "Δεδομένα βήματος:"],
+   ["Incomplete recorded data", "Ελλιπή καταγεγραμμένα δεδομένα"],
+   ["Manual inputs / verification needed", "Χρειάζονται χειροκίνητες είσοδοι / επαλήθευση"],
+   ["Recorded process settings", "Καταγεγραμμένες ρυθμίσεις διεργασίας"],
+   ["Serialized parameters are unavailable.", "Οι καταγεγραμμένες παράμετροι δεν είναι διαθέσιμες."],
+   ["Historical mask name is missing.", "Λείπει το ιστορικό όνομα της μάσκας."],
+   ["The original mask pixels and their version must be supplied.", "Χρειάζονται τα αρχικά pixels και η έκδοση της μάσκας."],
+   ["Historical input images must be supplied.", "Χρειάζονται οι ιστορικές εικόνες εισόδου."],
+   ["Possible inputs are unconfirmed.", "Οι πιθανές είσοδοι δεν έχουν επιβεβαιωθεί."],
+   ["Script settings were not recorded.", "Οι ρυθμίσεις του script δεν καταγράφηκαν."],
+   ["Script parameters are recorded; internal masks or cached state may be unavailable.", "Οι παράμετροι του script καταγράφηκαν· εσωτερικές μάσκες ή αποθηκευμένη κατάσταση μπορεί να λείπουν."],
+   ["Likely linear / dark (estimated)", "Πιθανώς linear / σκοτεινή (εκτίμηση)"],
+   ["Likely linear / dark", "Πιθανώς linear / σκοτεινή"],
+   ["Visible image — stretch state unconfirmed", "Ορατή εικόνα — το stretch δεν έχει επιβεβαιωθεί"],
+   ["Visible — stretch unconfirmed", "Ορατή — stretch μη επιβεβαιωμένο"],
+   ["Stretch state: unknown", "Κατάσταση stretch: άγνωστη"],
+   ["Auto-stretched preview only", "Αυτόματο stretch μόνο στο preview"],
+   ['Nonlinear stretch recorded in history','Καταγεγραμμένο nonlinear stretch στο ιστορικό'],
+   ['Stretch recorded','Καταγεγραμμένο stretch'],
+   ['Step data indicators: green — recorded settings; orange — manual inputs or verification; pink — missing data. Recorded settings do not guarantee identical historical pixels. Stretch labels are estimates from pixel brightness.','Ενδείξεις δεδομένων: πράσινο — καταγεγραμμένες ρυθμίσεις· πορτοκαλί — χειροκίνητες είσοδοι ή επαλήθευση· ροζ — ελλιπή δεδομένα. Οι ρυθμίσεις δεν εγγυώνται ίδια ιστορικά pixels. Οι εκτιμήσεις stretch βασίζονται στη φωτεινότητα.'],
    ['Replay image','Εικόνα επανάληψης'],['First process','Πρώτη διεργασία'],['Last process','Τελευταία διεργασία'],
    ['Download PixInsight replay script','Λήψη script επανάληψης για το PixInsight'],
    ['Ready for replay','Έτοιμο για επανάληψη'],
@@ -2651,7 +2787,7 @@ REPORT_TRANSLATIONS = REPORT_TRANSLATIONS.concat([
    ['Before / after','Πριν / μετά'],['Before','Πριν'],['After','Μετά'],['Enlarge comparison','Μεγέθυνση σύγκρισης'],
    ['Before/after comparison unavailable: historical pixels are missing.','Η σύγκριση πριν/μετά δεν είναι διαθέσιμη: λείπουν ιστορικά pixels.'],
    ['Before/after comparison unavailable: image dimensions changed.','Η σύγκριση πριν/μετά δεν είναι διαθέσιμη: άλλαξαν οι διαστάσεις της εικόνας.'],
-   ['Preview up to 1200 pixels; without STF. Zoom and pan are shared by both images.','Προεπισκόπηση έως 1200 pixels, χωρίς STF. Η μεγέθυνση και η μετακίνηση είναι κοινές για τις δύο εικόνες.'],
+   ['Preview up to 1200 pixels. Dark previews use a display-only auto stretch; image pixels are unchanged. Zoom and pan are shared by both images.','Προεπισκόπηση έως 1200 pixels. Τα σκοτεινά previews έχουν αυτόματο stretch μόνο για προβολή· τα pixels δεν αλλάζουν. Η μεγέθυνση και η μετακίνηση είναι κοινές για τις δύο εικόνες.'],
    ['Zoom','Μεγέθυνση'],['Close','Κλείσιμο'],['Search','Αναζήτηση'],['Tool','Εργαλείο'],['All tools','Όλα τα εργαλεία'],
    ['Image, tool, mask or parameter','Εικόνα, εργαλείο, μάσκα ή παράμετρος'],['Steps with masks','Βήματα με μάσκα'],
    ['Applied steps only','Μόνο εφαρμοσμένα βήματα'],['Reset filters','Επαναφορά φίλτρων'],['matching steps','βήματα που ταιριάζουν'],
