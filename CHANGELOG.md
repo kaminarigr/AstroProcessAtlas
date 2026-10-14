@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+- Collapse the PixelMath expression section by default and center tree delete
+  icons. Replace browser deletion prompts with an English/Greek modal showing
+  the image, step, tool, available mask/inputs and expandable parameters/code;
+  support explicit confirmation, cancellation, Escape and keyboard focus handling.
+
+- Preserve and deduplicate embedded replay modules' PJSR includes in the chain
+  script header. Fix DarkStructureEnhance failing before its settings dialog with
+  `FrameStyle_Box is not defined` (also retain TextAlign, ColorSpace and NumericControl).
+
+- Persist a timestamped chain execution trace before/after every task and process,
+  including cleanup boundaries and caught failure stacks. Print the diagnostic
+  file path at startup and in the report so silent interruptions can be located.
+  Guard final cleanup so cleanup errors do not suppress the completion report.
+
+- Buffer GraXpert console output per stream, normalize line endings and separate
+  glued timestamped records. Indent replay log sections, label stderr and mark
+  truncated tails while preserving partial final lines on success and failure.
+
+- Clean up process-created helper image windows after chain replay steps and on
+  completion, failure or cancellation, retaining branch results and generated stars.
+  Record closed windows and cleanup failures in chain diagnostics.
+- Display the chain task plan in two columns, with one column on small screens.
+- Default new GraXpert declarations to smoothing 0.5, GPU and automatic latest
+  available AI model; retain explicitly saved values, including zero smoothing.
+
 - Discover GraXpert automatically from the installed wrapper's GraXpertPath.txt,
   resolve its bare command through PATH and check the standard Windows user
   installation before requesting an executable manually.

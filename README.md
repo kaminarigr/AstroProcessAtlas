@@ -219,7 +219,9 @@ and press **Apply external handling**:
   in PixInsight. Chain replay starts at that checkpoint and does not repeat its
   preceding branch steps. In single-image replay, start the range at this entry.
 - **Run GraXpert again:** execute background extraction through the installed
-  GraXpert CLI on the current private replay image. Set Subtraction/Division,
+  GraXpert CLI on the current private replay image. New declarations default to
+  smoothing **0.5**, **GPU** and the **latest available AI model** (blank version).
+  Explicit saved settings are preserved. Set Subtraction/Division,
   smoothing (0–1), an optional exact `n.n.n` AI model version, device preference and
   optional executable path. Leave it blank to detect the installed PixInsight
   GraXpert wrapper's saved path, resolve `graxpert` through PATH, or use the standard
