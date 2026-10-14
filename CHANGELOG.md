@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Explain opaque PixelMath `image` copies directly in reference cards and offer
+  source mapping, explicit no-op skip, GraXpert replacement or a prepared result.
+  Persist skip choices, preserve step/checkpoint numbering, warn about omitted
+  external processing and support both single and chain replay without guessing.
+
 - Collapse optional starting-image name suggestions while retaining expansion
   during edits. Link plan blockers and task references to their exact input/mask
   cards with hover/focus highlighting and click/keyboard navigation.
