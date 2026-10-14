@@ -148,11 +148,11 @@ const editorWeb={...api,workspaceReplayData:editData,document:{documentElement:{
 vm.runInNewContext(api.chainBrowserController.toString()+';chainBrowserController();',editorWeb);
 editorDOM.workflow_image.value='1';editorDOM.workflow_image.onchange();editorDOM.workflow_position.value='0';editorDOM.workflow_copy.onclick();assert.equal(editorWeb.workspaceReplayData[1].steps[0].tool,'GradientCorrection');
 editorDOM.workflow_steps.children[1].children[1].onclick();assert.equal(editorWeb.workspaceReplayData[1].steps.length,1);
-assert.equal(JSON.parse(storedState).operations.length,2);editorDOM.workflow_save.onclick();assert.match(editorDownload,/^<!DOCTYPE html>/);assert.match(editorDownload,/apa_workflow_state/);
+assert.equal(storedState,'');editorDOM.workflow_save.onclick();assert.match(editorDownload,/^<!DOCTYPE html>/);assert.match(editorDownload,/apa_workflow_state/);
 savedScript={textContent:savedBody.children.find(node=>node.id==='apa_workflow_state').textContent};assert.ok(editorDownload.indexOf('apa_workflow_state')<editorDownload.indexOf('rebuild();'));const savedPayload=JSON.parse(savedScript.textContent);assert.equal(savedPayload.operations.length,2);assert.ok(savedPayload.annotations);
 editorDOM.workflow_undo.onclick();assert.equal(editorWeb.workspaceReplayData[1].steps.length,2);
 const reopened={...editorWeb,workspaceReplayData:editData,window:{}};vm.runInNewContext(api.chainBrowserController.toString()+';chainBrowserController();',reopened);assert.equal(reopened.workspaceReplayData[1].steps.length,1);assert.equal(reopened.workspaceReplayData[1].steps[0].tool,'GradientCorrection');assert.equal(reopened.workspaceReplayData[0].steps.length,1);
-console.log('Passed: workflow copy/remove, parameter preservation, checkpoint remapping, removed-producer blocker, undo, local autosave, one-file HTML restore and JSON script-injection escaping.');
+console.log('Passed: workflow copy/remove, parameter preservation, checkpoint remapping, removed-producer blocker, undo, explicit one-file HTML restore and JSON script-injection escaping.');
 
 const executionEdits=JSON.parse(JSON.stringify(restoredEdits.data));executionEdits[3].steps[0].source=process('PixelMath','P.expression="Ha";P.expression1="Sii";P.expression2="Oiii";P.useSingleExpression=false;P.generateOutput=true;P.createNewImage=false;P.clearImageCacheAndExit=false;').source;
 const executionPlan=api.buildWorkspaceChainPlan(executionEdits,3,restoredEdits.bindings);assert.deepEqual(Array.from(executionPlan.errors),[]);
@@ -219,12 +219,12 @@ usage.accept(false);usage.context.window.resetAtlasChanges();assert.equal(usage.
 usage.copy(1);assert.equal(usage.elements.toolbar_save.disabled,false);usage.context.window.saveAtlasReport();const lastSaved=usage.saved;assert.equal(usage.elements.workflow_save.disabled,true,usage.elements.workflow_status.textContent);assert.equal(usage.elements.tree_reset.disabled,true);
 usage.copy(2);assert.equal(usage.context.workspaceReplayData[2].steps.length,2);usage.context.window.resetAtlasChanges();assert.equal(usage.context.workspaceReplayData[2].steps.length,1);assert.equal(usage.context.workspaceReplayData[1].steps.length,2);assert.equal(usage.elements.workflow_save.disabled,true);
 usage.connect();assert.equal(usage.elements.workflow_save.disabled,false);usage.context.window.resetAtlasChanges();assert.equal(usage.elements.workflow_save.disabled,true);
-usage.copy(2);const cached=editorHarness({cached:usage.stored});assert.equal(cached.elements.workflow_save.disabled,false);cached.context.window.resetAtlasChanges();assert.equal(cached.context.workspaceReplayData[1].steps.length,2);assert.equal(cached.context.workspaceReplayData[2].steps.length,1);assert.equal(cached.elements.workflow_save.disabled,true);
+usage.copy(2);const cached=editorHarness({cached:lastSaved});assert.equal(cached.elements.workflow_save.disabled,true);assert.equal(cached.context.workspaceReplayData[1].steps.length,1);assert.equal(cached.context.workspaceReplayData[2].steps.length,1);assert.equal(cached.stored,'');
 const reopenedSaved=editorHarness({embedded:lastSaved});assert.equal(reopenedSaved.context.workspaceReplayData[1].steps.length,2);assert.equal(reopenedSaved.elements.workflow_save.disabled,true);
 const tiles=api.replayLaunchHTML();assert.match(tiles,/aria-controls="replay_single_panel"/);assert.match(tiles,/aria-controls="chain_workflow"/);assert.equal((tiles.match(/<svg /g)||[]).length,2);
 const panels={replay_single_panel:{open:false},chain_workflow:{open:false}},tileButtons=[treeElement('button'),treeElement('button')];tileButtons[0].setAttribute('aria-controls','replay_single_panel');tileButtons[1].setAttribute('aria-controls','chain_workflow');const tileUI={window:{},document:{getElementById:id=>panels[id],querySelectorAll:()=>tileButtons}};
 vm.runInNewContext(api.reportBrowserScript().split('\n').find(line=>line.includes('window.toggleAtlasReplay=')),tileUI);tileUI.window.toggleAtlasReplay('chain_workflow',tileButtons[1]);assert.equal(panels.chain_workflow.open,true);assert.equal(tileButtons[1].getAttribute('aria-expanded'),'true');tileUI.window.toggleAtlasReplay('replay_single_panel',tileButtons[0]);assert.equal(panels.chain_workflow.open,false);assert.equal(panels.replay_single_panel.open,true);tileUI.window.toggleAtlasReplay('replay_single_panel',tileButtons[0]);assert.equal(panels.replay_single_panel.open,false);
-console.log('Passed: delete confirmation/cancel, clean Save gating, dirty connections/configuration, reset to last exported baseline, cache vs saved-file restoration and accessible replay tile toggles.');
+console.log('Passed: delete confirmation/cancel, clean Save gating, dirty connections/configuration, reset to last exported baseline, ignored stale browser cache vs explicit saved-file restoration and accessible replay tile toggles.');
 
 const sameFlow=JSON.parse(JSON.stringify(projectedData));for(const index of [1,2])Object.assign(sameFlow[index].steps[0],pixel('image*2'),{inputs:['image']});
 const sameFlowBindings=api.suggestChainBindings(sameFlow),sameFlowGraph=api.editedWorkspaceGraph(baseGraph,sameFlow,sameFlow,sameFlowBindings,[]);
@@ -237,3 +237,8 @@ assert.ok(historicalGraph.edges.some(edge=>edge.to==='sii_historical_reference'&
 console.log('Passed: Sii/Oiii current-input PixelMath uses only its sequence edge; external inputs, earlier historical checkpoints and mask edges remain visible.');
 
 console.log('Passed: every chain step initializes explicit mask and mapping entries, including unmasked PerfectPalettePicker and native processes.');
+
+const staleWorkflow=JSON.stringify({...editedState,operations:[{type:'remove',image:'Sii',index:0},{type:'copy',image:'Ha',index:0,to:'Sii',at:0}]});
+const freshReport=editorHarness({cached:staleWorkflow});assert.equal(freshReport.context.workspaceReplayData[1].steps[0].tool,'PixelMath');assert.equal(freshReport.elements.workflow_save.disabled,true);
+const savedReport=editorHarness({embedded:lastSaved,cached:staleWorkflow});assert.equal(savedReport.context.workspaceReplayData[1].steps[0].tool,'GradientCorrection');assert.equal(savedReport.context.workspaceReplayData[1].steps.length,2);
+console.log('Passed: a fresh report ignores cached remove-PixelMath/copy-GradientCorrection edits; only explicit saved HTML restores authored workflow changes.');

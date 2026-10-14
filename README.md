@@ -177,7 +177,8 @@ immediately above the tree toolbar. Zoom, Edit tree, Save and Reset are grouped
 there. Save stays disabled until workflow settings, steps, connections or change
 history differ from the last exported report. **Reset unsaved changes** restores
 that saved state (or the original report before the first save), after confirmation.
-Browser caching is separate from saving an HTML file. Step deletion also requires
+Freshly generated reports ignore legacy browser workflow caches. Workflow edits
+are restored only from an explicitly saved HTML file. Step deletion also requires
 confirmation.
 
 ### Edit and save a replay workflow
@@ -200,7 +201,7 @@ Edits update the tree, detailed step list, summary and replay exports. Original
 source records remain embedded for undo and the timestamped **Change history**.
 Existing previews continue to document the original processing. No new preview is fabricated
 for a copied step. Review references, masks and source checkpoints before export.
-Changes are cached in browser storage when available. **Save edited report (HTML)**
+Workflow edits are not restored from browser storage. **Save edited report (HTML)**
 downloads one self-contained report with embedded JSON for the workflow edits,
 input bindings, starting-image suggestions, target, manual connections and change
 history. **Save report (HTML)** is also available beside the tree and connection

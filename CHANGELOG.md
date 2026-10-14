@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Restore authored workflow edits only from embedded saved-HTML state. Stop
+  reading/writing legacy workflow browser caches, so freshly generated reports
+  retain their actual PixelMath/processing histories without stale modifications.
+
 - Initialize mask/mapping resources for every replay step, including unmasked
   palette steps, avoiding undefined-array-property warnings in PixInsight.
 
