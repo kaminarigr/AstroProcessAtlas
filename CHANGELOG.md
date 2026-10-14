@@ -2,6 +2,57 @@
 
 ## Unreleased
 
+- Initialize mask/mapping resources for every replay step, including unmasked
+  palette steps, avoiding undefined-array-property warnings in PixInsight.
+
+- Avoid duplicate PixelMath input edges for the immediately preceding state of
+  its own image branch; retain external, historical-checkpoint and mask links.
+
+- Place search/filter controls immediately above the tree and group Zoom, Edit,
+  Save and Reset in a responsive toolbar. Present both replay modes as icon tiles.
+- Track unsaved report changes separately from browser caching; disable Save on
+  clean state and reset edits/settings/connections to the last exported baseline.
+- Require confirmation before removing a step from either tree or editor list.
+
+- Add deletion directly on tree tiles and an Edit tree drag-copy mode with a
+  visible insertion line between destination steps; preserve comparison mode.
+- Update graph nodes/edges, detailed ordering, summary and counts with edits;
+  remap direct self-image PixelMath references and preserve explicit checkpoints.
+- Embed timestamped change history, including undo, save and manual connections,
+  in the saved HTML. Replace separate connection JSON controls with common Save
+  report (HTML), retaining original records for undo and original-only previews.
+
+- Add a replay workflow editor with step removal, parameter-preserving copies
+  between image branches, insertion position and undo. Remap dependency stages
+  and block references to a removed stars producer.
+- Apply edited workflows to replay exports while preserving original history,
+  tree and previews. Cache changes locally when browser storage is available.
+- Save one self-contained edited HTML with embedded, validated JSON for workflow
+  operations, bindings, starting inputs, target and manual connections; restore
+  it before initialization and preserve script-safe serialization.
+
+- Resolve native chain targets/palette inputs by image ID instead of JavaScript
+  wrapper identity, and detect new stars outputs by IDs.
+- Add chain diagnostics with active step metadata, input formats, checkpoint
+  routing, execution trace, elapsed time, error stack and remaining open images.
+
+- Show every original chain input in the HTML, including channels without initial
+  PixelMath references. Allow optional native starting-image ID suggestions.
+- Resolve channel aliases from recorded ImageIdentifier values and name replay
+  branches accordingly, keeping downstream bindings on generated copies.
+
+- Close palette preparation copies after use and dependency-chain checkpoints
+  after their last consumer, including cancellation/failure cleanup. Preserve
+  original inputs, branch results and failed-step partial output.
+
+- Export a reviewed dependency-chain replay with channel input mappings, explicit
+  source checkpoints, palette preparation and mask Color invert choices.
+- Rebuild verified clones and StarXTerminator stars branches automatically; retain
+  earlier checkpoints and process only dependencies of the selected final image.
+- Add safe native ProcessContainer and Convolution replay, whole-chain preflight,
+  live task progress, saved lineage and a text outcome report. Require original
+  starting images/prepared GAME masks; block unsupported or cyclic chains.
+
 - Identify GAME mask history as stretched, including clones, and preserve raw
   mask previews instead of estimating them as linear dark images.
 - Present original/replay/difference previews and a readable comparison table,

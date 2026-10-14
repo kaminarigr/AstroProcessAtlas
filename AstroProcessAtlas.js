@@ -111,6 +111,7 @@ function recordedNonlinearStretch(record,index) {
 }
 
 function recordedGameMask(record,index) {
+   if(record.replayOrigin&&record.replayOrigin.game===true)return true;
    var steps=record.cloneFullSteps||record.steps;
    for(var i=0;i<steps.length;++i){var step=steps[i];if(step.phase==='live'&&step.liveIndex>index)continue;if(/^GAME$/i.test(getProcessTitle(step.proc)))return true;}
    return false;
@@ -616,6 +617,7 @@ function collectWorkspaceRecord(window, index) {
       filePath:window.filePath || "", historyIndex:view.historyIndex, isColor:view.image.isColor,
       steps:[], error:"", initialNote:"", currentMaskInfo:currentMaskHTML(window),
       currentMaskThumbnail:null, currentMaskInverted:window.maskInverted, currentThumb:""};
+   record.replayOrigin=null;try{if(typeof view.propertyValue==='function'&&(!view.hasProperty||view.hasProperty('AstroProcessAtlas:ChainOrigin'))){var origin=JSON.parse(String(view.propertyValue('AstroProcessAtlas:ChainOrigin')));if(origin&&typeof origin.parent==='string'&&/^[A-Za-z_]\w*$/.test(origin.parent)&&typeof origin.kind==='string')record.replayOrigin=origin;}}catch(e){}
    var containers = [], initial = null;
    try { initial = view.initialProcessing; } catch (e) {}
    if (initial && typeof initial.at === "function") containers.push({container:initial, phase:"initial"});
@@ -1009,6 +1011,7 @@ function workspaceGraph(records) {
       graph.edges.push({from:from, to:records[r].anchor, kind:'input', provenance:'parameter', uncertain:true, redo:false,
          detail:'Clone relationship inferred from matching image name and common initial process parameters (' + shared.count + ' entries). Exact historical pixels are unconfirmed.'});
    }
+   for(var r=0;r<records.length;++r){var origin=records[r].replayOrigin;if(origin&&origin.parent!==records[r].id&&headerById['$'+origin.parent])graph.edges.push({from:headerById['$'+origin.parent],to:records[r].anchor,kind:'input',provenance:'recorded',uncertain:true,redo:false,detail:'Recorded replay lineage: '+origin.kind+' at checkpoint '+origin.stage});}
    for (var r = 0; r < records.length; ++r)
       for (var i = 0; i < records[r].steps.length; ++i) {
          var step = records[r].steps[i], refs = imageReferences(step, records, records[r]);
@@ -1153,13 +1156,13 @@ function graphEdgePath(edge, nodes) {
    return "M" + ax + "," + ay + " C" + (ax+bend) + "," + ay + " " + (bx-bend) + "," + by + " " + bx + "," + by;
 }
 
-function workspaceOverviewHTML(records, graph) {
+function workspaceOverviewHTML(records, graph, filtersHTML) {
    var appearanceByImage={},completenessByNode={};
    for(var r=0;r<records.length;++r){appearanceByImage['$'+records[r].id]=records[r].appearance;var groups=records[r].displayGroups||workspaceStepGroups(records[r]);for(var g=0;g<groups.length;++g)completenessByNode['$'+groups[g].anchor]=groupCompleteness(groups[g]);}
 
    var height = 170, width = Math.max(310, records.length*290+35);
    for (var i = 0; i < graph.nodes.length; ++i) height = Math.max(height, graph.nodes[i].y+100);
-   var html = '<section><h2>Image and process tree</h2><p>Each column represents an image. Solid lines show its history sequence. Dashed lines connect image/mask references; the exact historical version of the source image is unknown. This is not an absolute shared timeline.</p>';
+   var html = '<section><h2>Image and process tree</h2><p id="tree_edit_notice" hidden>Tree edits change the planned workflow. Existing previews document the original processing and are not recalculated.</p><p>Each column represents an image. Solid lines show its history sequence. Dashed lines connect image/mask references; the exact historical version of the source image is unknown. This is not an absolute shared timeline.</p>';
    html+='<p>Step data indicators: green — recorded settings; orange — manual inputs or verification; pink — missing data. Recorded settings do not guarantee identical historical pixels. Stretch labels are estimates from pixel brightness.</p>';
    html+='<p>Connected images appear first; images without cross-image connections appear last. Existing order is preserved within each group. Column order does not establish when files were opened or images were created.</p>';
    html += '<div class="graph-legend" aria-label="Line legend">';
@@ -1168,7 +1171,8 @@ function workspaceOverviewHTML(records, graph) {
    for (var l = 0; l < legendKinds.length; ++l)
       html += '<span class="legend-item"><svg width="64" height="16" viewBox="0 0 64 16" aria-hidden="true"><path class="edge edge-' + legendKinds[l] + '" d="M2,8 H60"/></svg>' + legendLabels[l] + '</span>';
    html += '</div><p>Hover highlights related images. Clicking filters the history and keeps the highlight. Click an empty area of the tree or select “All” to reset. Redo steps are not part of the current image.</p>';
-   html += '<label class="zoom-control"><span>Zoom</span><input type="range" min="30" max="150" value="100" oninput="document.getElementById(\'workspace_graph\').style.width=(' + width + '*this.value/100)+\'px\'"></label>';
+   html += filtersHTML || '';
+   html += '<div class="tree-toolbar"><label class="zoom-control"><span>Zoom</span><input type="range" min="30" max="150" value="100" oninput="document.getElementById(\'workspace_graph\').style.width=(' + width + '*this.value/100)+\'px\'"></label><label><input id="tree_edit_mode" type="checkbox">Edit tree</label><button type="button" data-save-report disabled onclick="saveAtlasReport()">Save report (HTML)</button><button id="tree_reset" type="button" disabled onclick="resetAtlasChanges()">Reset unsaved changes</button><span id="tree_dirty" aria-live="polite"></span></div>';
    html += '<details><summary>Organize tree</summary><label for="tree_node_search">Find node</label> <input id="tree_node_search" type="search" oninput="findTreeNodes()" placeholder="Image or process name"><select id="tree_node_results" aria-label="Matching tree nodes" onchange="jumpToTreeNode(this.value)"><option value="">Select a node</option></select><label for="tree_image">Image branch</label> <select id="tree_image" onchange="organizeTree()"><option value="">All images</option>';
    for(var r=0;r<records.length;++r)html+='<option data-no-i18n value="'+records[r].anchor+'">'+escapeHTML(records[r].id)+'</option>';
    html += '</select> <label><input id="tree_path_only" type="checkbox" onchange="organizeTree()">Only the path to this image</label><button type="button" onclick="toggleTreeBranch()">Collapse / expand branch</button><button type="button" onclick="resetTreeOrganization()">Expand all branches</button><p id="tree_organization_status" aria-live="polite"></p></details><aside id="connection_info" hidden aria-live="polite"><h3>Connection details</h3><p id="connection_description" data-no-i18n></p><button type="button" onclick="document.getElementById(\'connection_info\').hidden=true">Close</button></aside><style>.is-tree-hidden{display:none!important}.edge[data-from]{cursor:pointer;pointer-events:stroke;stroke-width:3}#connection_info{padding:12px;border:1px solid #89b4fa;border-radius:8px}#connection_description{white-space:pre-wrap}</style>';
@@ -1199,11 +1203,11 @@ function workspaceOverviewHTML(records, graph) {
    }
    html += '</svg></div><style>.stage-pickers{display:flex;flex-wrap:wrap;gap:12px;margin:12px 0}.stage-drop{flex:1;min-width:220px;padding:12px;border:2px dashed #45475a;border-radius:8px}.stage-drop select{width:100%}.stage-drop.drag-over{border-color:#fab387;background:#313244}.stage-drop p{font-size:12px;margin:6px 0}.graph-node{touch-action:none;cursor:grab}.graph-node.is-drag-origin{opacity:.35}.graph-node.is-drop-target rect{stroke:#fab387;stroke-width:3px}.stage-drag-ghost{position:fixed;pointer-events:none;z-index:11000;opacity:.85;filter:drop-shadow(0 8px 12px #0008)}.stage-drag-ghost rect{fill:#313244;stroke:#fab387;stroke-width:2px}.stage-drag-ghost text{fill:#cdd6f4;font:13px sans-serif}.stage-drag-ghost .graph-small{fill:#a6adc8;font-size:10px}.stage-marker{pointer-events:none;fill:#fab387;font:bold 12px sans-serif!important}</style>';
    html += '<details id="stage_comparison_controls"><summary>Compare any two stages</summary><p>Select two available previews, including stages from different images. A is on the left; B is on the right. Current image previews are not historical source pixels.</p><div class="stage-pickers"><div id="stage_drop_a" class="stage-drop" ondragover="stageDragOver(event)" ondragleave="this.classList.remove(\'drag-over\')" ondrop="dropComparisonStage(event,\'a\')"><label for="stage_compare_a">A — left</label><select id="stage_compare_a" onchange="syncComparisonStages()"></select><p>Drop a tree node here</p><p id="stage_name_a" data-no-i18n></p></div><div id="stage_drop_b" class="stage-drop" ondragover="stageDragOver(event)" ondragleave="this.classList.remove(\'drag-over\')" ondrop="dropComparisonStage(event,\'b\')"><label for="stage_compare_b">B — right</label><select id="stage_compare_b" onchange="syncComparisonStages()"></select><p>Drop a tree node here</p><p id="stage_name_b" data-no-i18n></p></div></div> <button id="stage_compare_button" type="button" onclick="compareSelectedStages(this)">Compare stages</button><p id="stage_compare_status" aria-live="polite"></p></details>';
-   html += '<details><summary>Add a connection that was not recorded in history</summary><p>Connections are saved automatically in this browser when storage is available. Export JSON to keep a portable backup; Import JSON restores connections for the same report. The HTML file is not modified.</p><label>From <select id="manual_from">';
+   html += '<details><summary>Add a connection that was not recorded in history</summary><p>Connections are included in Save report (HTML), together with tree edits and change history. Browser storage is also used when available.</p><label>From <select id="manual_from">';
    var options = '';
    for (var i = 0; i < graph.nodes.length; ++i) options += '<option value="' + graph.nodes[i].id + '" data-no-i18n>' + escapeHTML(graph.nodes[i].image + ' — ' + graph.nodes[i].label) + '</option>';
    html += options + '</select></label> <label>To <select id="manual_to">' + options + '</select></label> <input id="manual_note" placeholder="e.g. SHO created from SII/Ha/OIII">';
-   html += '<button onclick="addManualEdge()">Add</button><button onclick="exportManualEdges()">Export JSON</button><label>Import JSON <input type="file" accept=".json" onchange="importManualEdges(this)"></label><button onclick="clearManualEdges()">Clear annotations</button><p id="manual_status" aria-live="polite"></p></details>';
+   html += '<button onclick="addManualEdge()">Add</button><button data-save-report disabled onclick="saveAtlasReport()">Save report (HTML)</button><button onclick="clearManualEdges()">Clear annotations</button><p id="manual_status" aria-live="polite"></p></details>';
    if (graph.unresolved.length) {
       var rows = [];
       for (var i = 0; i < graph.unresolved.length; ++i) rows.push([graph.unresolved[i].image, graph.unresolved[i].name, graph.unresolved[i].detail]);
@@ -1281,7 +1285,7 @@ function imageReportHTML(record, emit) {
    var groups = record.displayGroups || workspaceStepGroups(record);
    var html = '<section class="image-report" data-image="' + record.anchor + '" id="' + record.anchor + '"><h2 data-no-i18n>' + escapeHTML(record.id) + '</h2>';
    html += '<div class="meta-info">' + previewAppearanceHTML(record.appearance) + (record.currentThumb ? '<img class="image-snapshot" src="' + escapeHTML(record.currentThumb) + '" alt="Current image">' : '') +
-      '<b>File:</b> ' + (record.filePath ? '<span data-no-i18n>' + escapeHTML(record.filePath) + '</span>' : 'No file path') + '<br><b>Total Process Steps:</b> ' + groups.length +
+      '<b>File:</b> ' + (record.filePath ? '<span data-no-i18n>' + escapeHTML(record.filePath) + '</span>' : 'No file path') + '<br><span id="'+record.anchor+'_process_count"><b>Total Process Steps:</b> ' + groups.length + '</span>' +
       (groups.length !== record.steps.length || record.cloneShared || record.starsOrigin ? ' · <b>Original history entries:</b> ' + (record.cloneFullSteps || record.starsFullSteps || record.steps).length : '') +
       ' · Current history position: ' + record.historyIndex + '<br><b>Current mask:</b> ' + record.currentMaskInfo +
       maskThumbnailHTML(record.currentMaskThumbnail, record.currentMaskInverted) + '</div>';
@@ -1394,6 +1398,46 @@ function replayProcessSource(source, tool) {
       rest = rest.slice(match[0].length);
    }
    return {source:source, variable:variable};
+}
+
+
+function replaySourceSkeleton(source) {
+   var code='',i=0;
+   while(i<source.length){var start=i,c=source.charAt(i),n=source.charAt(i+1);
+      if(c==='"'||c==="'"){var quote=c,closed=false;++i;while(i<source.length){c=source.charAt(i++);if(c==='\\')++i;else if(c===quote){closed=true;break;}}if(!closed)return null;code+='0'+new Array(i-start).join(' ');}
+      else if(c==='/'&&n==='/'){i+=2;while(i<source.length&&!/[\r\n]/.test(source.charAt(i)))++i;code+=new Array(i-start+1).join(' ');}
+      else if(c==='/'&&n==='*'){var end=source.indexOf('*/',i+2);if(end<0)return null;i=end+2;code+=source.slice(start,i).replace(/[^\r\n]/g,' ');}
+      else{code+=c;++i;}
+   }return code;
+}
+function replayLiteralProperty(source,variable,key) {
+   var skeleton=replaySourceSkeleton(source);if(skeleton===null)return undefined;
+   var match=new RegExp('\\b'+variable+'\\.'+key+'\\s*=\\s*').exec(skeleton);if(!match)return undefined;
+   var start=match.index+match[0].length,end=skeleton.indexOf(';',start),value=source.slice(start,end).trim();
+   if(value==='true'||value==='false'||value==='null'||/^-?[0-9.]+$/.test(value))return JSON.parse(value);
+   var text='';while(value){var token=/^"(?:[^"\\]|\\.)*"/.exec(value);if(!token)return undefined;text+=JSON.parse(token[0]);value=value.slice(token[0].length).trim();if(value.charAt(0)==='+')value=value.slice(1).trim();else if(value)return undefined;}return text;
+}
+function replayContainerSource(source) {
+   var code=replaySourceSkeleton(source);if(code===null)return null;
+   var root=/^\s*var\s+(\w+)\s*=\s*new\s+ProcessContainer\s*(?:\(\s*\))?\s*;/.exec(code);if(!root)return null;
+   var variable=root[1],cursor=root[0].length,used={},count=0;
+   var allowed={PixelMath:1,HistogramTransformation:1,CurvesTransformation:1,RGBWorkingSpace:1,SCNR:1,ColorSaturation:1,BlurXTerminator:1,NoiseXTerminator:1,GradientCorrection:1,StarXTerminator:1,NarrowbandNormalization:1,UnsharpMask:1,MultiscaleLinearTransform:1,Invert:1,Convolution:1};
+   while(/\S/.test(code.slice(cursor))){
+      var declaration=/^\s*var\s+(\w+)\s*=\s*new\s+(\w+)\s*(?:\(\s*\))?\s*;/.exec(code.slice(cursor));if(!declaration||!allowed[declaration[2]]||declaration[1]===variable||used['$'+declaration[1]])return null;
+      var child=declaration[1],tool=declaration[2];used['$'+child]=true;
+      var add=new RegExp('\\b'+variable+'\\s*\\.\\s*add\\s*\\(\\s*'+child+'\\s*\\)\\s*;','g');add.lastIndex=cursor+declaration[0].length;var match=add.exec(code);if(!match)return null;
+      var chunk=source.slice(cursor,match.index),parsed=replayProcessSource(chunk,tool);if(!parsed)return null;
+      if(tool==='PixelMath'){
+         var proc={processId:function(){return 'PixelMath';}};
+         var keys=['expression','expression1','expression2','expression3','symbols','useSingleExpression','generateOutput','clearImageCacheAndExit','createNewImage'];
+         for(var k=0;k<keys.length;++k)proc[keys[k]]=replayLiteralProperty(chunk,child,keys[k]);
+         var pixel=pixelMathReplaySource({proc:proc,source:chunk,mask:{status:'unrecorded'}});if(!pixel||pixel.inputs.length||pixel.createsImage)return null;
+      }
+      if(tool==='RGBWorkingSpace'&&replayLiteralProperty(chunk,child,'applyGlobalRGBWS')===true)return null;
+      if(tool==='StarXTerminator'&&replayLiteralProperty(chunk,child,'stars')===true)return null;
+      cursor=match.index+match[0].length;++count;
+   }
+   return count?{source:source,variable:variable}:null;
 }
 
 function isImageOriginStep(step, index) {
@@ -1577,7 +1621,7 @@ function workspaceReplayData(records) {
    var data = [];
    var supported = {HistogramTransformation:true, CurvesTransformation:true, RGBWorkingSpace:true,
       SCNR:true, ColorSaturation:true, BlurXTerminator:true, NoiseXTerminator:true, GradientCorrection:true,
-      StarXTerminator:true, NarrowbandNormalization:true, UnsharpMask:true, MultiscaleLinearTransform:true, Invert:true};
+      StarXTerminator:true, NarrowbandNormalization:true, UnsharpMask:true, MultiscaleLinearTransform:true, Invert:true, Convolution:true, ProcessContainer:true};
    for (var r = 0; r < records.length; ++r) {
       var record = records[r], image = {id:record.id, anchor:record.anchor, version:ASTROPROCESS_ATLAS_VERSION, originalInputs:[], steps:[]};
       for (var oi = 0; oi < records.length; ++oi) if (records[oi].isOriginalInput) image.originalInputs.push(records[oi].id);
@@ -1632,7 +1676,7 @@ function workspaceReplayData(records) {
          else if (tool === 'RGBWorkingSpace' && step.proc.applyGlobalRGBWS === true)
             reason = 'This step uses the global RGB working space, whose historical settings are unavailable.';
          else {
-            source = selective || dark || game || pixel || replayProcessSource(step.source, tool);
+            source = selective || dark || game || pixel || (tool==='ProcessContainer'?replayContainerSource(step.source):replayProcessSource(step.source, tool));
             if (!source) reason = 'Serialized process code is not a supported constructor and parameter assignment sequence.';
          }
          image.steps.push({title:step.title, number:step.displayNumber || s + 1,
@@ -1646,7 +1690,14 @@ function workspaceReplayData(records) {
             mask:step.mask && step.mask.status === 'recorded' ? {name:step.mask.name, inverted:typeof step.mask.inverted === 'boolean' ? step.mask.inverted : null} : null,
             source:source && tool !== 'ImageIdentifier' ? source.source : '', variable:source && tool !== 'ImageIdentifier' ? source.variable : ''});
       }
+      var activeGroups=[];for(var gi=0;gi<groups.length;++gi)if(!groups[gi].members[0].redo&&!isImageOriginStep(groups[gi].members[0],record.steps.indexOf(groups[gi].members[0])))activeGroups.push(groups[gi]);
+      for(var si=0;si<image.steps.length;++si){var group=activeGroups[si];image.steps[si].anchor=group.anchor;image.steps[si].memberAnchors=[];for(var mi=0;mi<group.members.length;++mi)image.steps[si].memberAnchors.push(group.members[mi].anchor);}
+      image.clone=record.cloneShared?{source:record.cloneShared.image,sourceAnchor:record.cloneShared.lastStep.anchor,stage:isImageOriginStep(record.cloneShared.lastStep,0)?0:null}:null;
+      image.stars=record.starsOrigin?{source:record.starsOrigin.image,sourceAnchor:record.starsOrigin.sourceStep,stage:null}:null;
       data.push(image);
+   }
+   for(var r=0;r<data.length;++r){var origin=data[r].clone||data[r].stars;if(!origin)continue;origin.stage=origin.stage===0?0:null;
+      for(var q=0;q<data.length;++q)if(data[q].id===origin.source){for(var st=0;st<data[q].steps.length;++st)if(data[q].steps[st].anchor===origin.sourceAnchor||data[q].steps[st].memberAnchors.indexOf(origin.sourceAnchor)>=0)origin.stage=st+1;}
    }
    return data;
 }
@@ -1658,7 +1709,7 @@ function buildWorkspaceReplayScript(image, start, end) {
    var selected = image.steps.slice(start, end + 1), factories = [], manifest = [], identifier = '';
    for (var i = 0; i < selected.length; ++i) {
       var step = selected[i];
-      manifest.push({title:step.title, number:step.number, substep:step.substep,
+      manifest.push({title:step.title, tool:step.tool, number:step.number, substep:step.substep,
          reason:step.reason || (step.action === 'palette' && i > 0 ? 'Start the selected range at PerfectPalettePicker and choose its prepared inputs.' : step.action === 'game' && i > 0 ? 'Start the selected range at GAME and select its completed original mask.' : ''),
          action:step.action, inputs:step.inputs || [], createsImage:!!step.createsImage, requiresTarget:!!step.requiresTarget, outputId:step.outputId||'', starRequired:!!step.starRequired, mask:step.mask || null, time:step.time || ''});
       if (!step.reason && step.action === 'identifier') identifier = step.identifier;
@@ -1690,6 +1741,7 @@ function buildWorkspaceReplayScript(image, start, end) {
       '#include <pjsr/Sizer.jsh>', '#include <pjsr/UndoFlag.jsh>',
       '#include <pjsr/StdIcon.jsh>', '#include <pjsr/StdButton.jsh>', '#include <pjsr/CryptographicHash.jsh>',
       'var replayImage = ' + JSON.stringify(image.id) + ';',
+      'var replayChainContext=null;',
       'var replayIdentifier = ' + JSON.stringify(identifier) + ';',
       'var replayOriginalInputs = ' + JSON.stringify(image.originalInputs || []) + ';',
       'var replaySteps = ' + JSON.stringify(manifest) + ';',
@@ -1707,6 +1759,7 @@ function buildWorkspaceReplayScript(image, start, end) {
       '   return result+text.slice(last);',
       '}',
       'function choosePixelMathInputs(output,step,cache) {',
+      '   if(replayChainContext){var selected=replayChainContext.inputs(step),mapped={};for(var name in selected)if(Object.prototype.hasOwnProperty.call(selected,name)){var window=selected[name];if(!window||window.isNull)throw Error("Unavailable chain input: "+name);mapped[name]=window.mainView.id;cache[name]=window;replayChoice("PixelMath "+name.substring(1)+" -> "+window.mainView.id);}return mapped;}',
       '   var mapped={},names=step.inputs||[];if(!names.length)return mapped;',
       '   var candidates=[];for(var i=0;i<ImageWindow.windows.length;++i)if(!ImageWindow.windows[i].isNull)candidates.push(ImageWindow.windows[i]);if(output&&candidates.indexOf(output)<0)candidates.push(output);',
       '   var dialog=new Dialog;dialog.windowTitle="AstroProcessAtlas - PixelMath inputs";dialog.sizer=new VerticalSizer;dialog.sizer.margin=8;dialog.sizer.spacing=6;',
@@ -1726,6 +1779,7 @@ function buildWorkspaceReplayScript(image, start, end) {
       '   if(!newId)return output;',
       '   var replacement=null;for(var i=0;i<ImageWindow.windows.length;++i)if(!ImageWindow.windows[i].isNull&&ImageWindow.windows[i].mainView.id===newId){replacement=ImageWindow.windows[i];break;}',
       '   if(!replacement)throw Error("PixelMath did not create its expected output image.");',
+      '   try{if(replayChainContext&&output.mainView.hasProperty&&output.mainView.hasProperty("AstroProcessAtlas:ChainOrigin"))replacement.mainView.setPropertyValue("AstroProcessAtlas:ChainOrigin",output.mainView.propertyValue("AstroProcessAtlas:ChainOrigin"));}catch(e){}',
       '   output.forceClose();replacement.mainView.id=resultId;replacement.show();return replacement;',
       '}',
       'function suggestPaletteInput(name,candidates) {',
@@ -1764,9 +1818,10 @@ function buildWorkspaceReplayScript(image, start, end) {
       '   Console.writeln("Mask: "+request.name+" -> "+entry.window.mainView.id+"; Mask > Invert Mask: "+(inverted?"ON (1-mask)":"OFF"));',
       '}',
       "var replayAudit={stage:\"Preflight\",current:-1,completed:[],preflightFailures:[],choices:[],started:(new Date()).getTime()};",
-      "function replayChoice(text){replayAudit.choices.push(text);}",
+      "function replayChoice(text){replayAudit.choices.push(text);if(replayChainContext&&replayChainContext.note)replayChainContext.note(text);}",
       "var replayProgress=null,replayStopRequested=false;",
       "function updateReplayProgress(index,status){",
+      '   if(replayChainContext&&replayChainContext.onProgress)replayChainContext.onProgress(index,status);',
       "   if(!replayProgress)return;",
       "   if(index>=0&&replayProgress.rows[index]){",
       "      var row=replayProgress.rows[index],color=status===\"Completed\"?0xff69d184:status===\"Failed / cancelled\"?0xffff8080:status===\"Running\"?0xfff5b96e:0xffaab4c8;",
@@ -1776,6 +1831,7 @@ function buildWorkspaceReplayScript(image, start, end) {
       "   if(typeof processEvents===\"function\")processEvents();",
       "}",
       "function openReplayProgress(){",
+      '   if(replayChainContext)return;',
       "   if(typeof TreeBox!==\"function\"||typeof TreeBoxNode!==\"function\")return;",
       "   var dialog=new Dialog;dialog.windowTitle=\"AstroProcessAtlas - Replay progress\";dialog.onClose=function(){return false;};",
       "   var label=new Label(dialog);label.wordWrapping=true;label.text=\"Preparing inputs and masks...\";",
@@ -1794,6 +1850,7 @@ function buildWorkspaceReplayScript(image, start, end) {
       "}",
       "function replaySummary(output,error){",
       '   closeReplayProgress(error);',
+      '   if(replayChainContext){replayChainContext.result=output;if(error)throw Error(replayImage+": "+error);return;}',
       "   var text=(error?\"Replay stopped: \"+error:\"Replay complete: \"+output.mainView.id)+\"\\n\\nPhase: \"+replayAudit.stage+\"\\nElapsed: \"+(((new Date()).getTime()-replayAudit.started)/1000).toFixed(1)+\" seconds\\nCompleted: \"+replayAudit.completed.length+\" / \"+replaySteps.length;",
       "   if(error&&output&&!output.isNull)text+=\"\\nPartial result retained as \"+output.mainView.id;",
       "   text+=\"\\n\\nSelected steps:\";",
@@ -1833,9 +1890,10 @@ function buildWorkspaceReplayScript(image, start, end) {
       "   if(mask.isColor&&!image.isColor)throw Error(\"A color mask cannot be used on a grayscale replay image: \"+name);",
       "}",
       "function prepareReplayResources(input,processes,palette,pixelMathCache,maskCache,firstMapping){",
+      '   if(replayChainContext){var masks=[],mappings=[];for(var i=0;i<replaySteps.length;++i){masks[i]=null;mappings[i]={};if(replaySteps[i].action==="pixelmath")mappings[i]=choosePixelMathInputs(input,replaySteps[i],pixelMathCache);if(replaySteps[i].mask){masks[i]=replayChainContext.mask(replaySteps[i].mask);if(!masks[i])throw Error("Missing chain mask.");replayChoice("Mask "+replaySteps[i].mask.name+" -> "+masks[i].window.mainView.id+"; Color invert: "+masks[i].colorInvert);}}return {masks:masks,mappings:mappings};}',
       "   var image=input.mainView.image,geometry={width:image.width,height:image.height,isColor:palette?true:image.isColor},masks=[],mappings=[];",
       "   var proxy={isNull:false,mainView:{id:replayImage+\"_APA_current_result\",image:geometry},removeMask:function(){},setMask:function(){}};",
-      "   for(var i=0;i<replaySteps.length;++i){var step=replaySteps[i],process=processes[i];replayAudit.current=i;updateReplayProgress(i,\"Loading inputs / masks\");if(replayStopRequested)throw Error(\"Replay cancelled before processing.\");",
+      "   for(var i=0;i<replaySteps.length;++i){masks[i]=null;mappings[i]={};var step=replaySteps[i],process=processes[i];replayAudit.current=i;updateReplayProgress(i,\"Loading inputs / masks\");if(replayStopRequested)throw Error(\"Replay cancelled before processing.\");",
       "      if(step.action===\"pixelmath\"){",
       "         var mapping=i===0&&firstMapping?firstMapping:choosePixelMathInputs(proxy,step,pixelMathCache);",
       "         var names=step.inputs||[];",
@@ -1887,7 +1945,8 @@ function buildWorkspaceReplayScript(image, start, end) {
       '   dialog.sizer.add(label);dialog.sizer.add(combo);for(var b=0;b<bindings.length;++b){dialog.sizer.add(bindings[b].label);dialog.sizer.add(bindings[b].combo);dialog.sizer.add(bindings[b].state);}dialog.sizer.add(naming);dialog.sizer.add(outputName);dialog.sizer.add(info);dialog.sizer.add(stop);dialog.sizer.add(confirm);dialog.sizer.add(buttons);dialog.adjustToContents();',
       '   if(palette){combo.visible=false;naming.text="Output name: "+(replayIdentifier||replayImage)+"_APA_replay";confirm.text="I confirm the selected input states match the original palette preparation.";dialog.adjustToContents();}',
       '   if(pixelOutput){naming.text="Output name:";if(pixelStart){combo.visible=false;label.text="PixelMath: set the output name. Reference images will be selected next.";confirm.text="I will select reference images at their original processing state.";info.text="Create a new PixelMath result and continue subsequent steps on it.";run.text="Create result";}dialog.adjustToContents();}',
-      '   if(!dialog.execute()||!confirm.checked)return;',
+      '   if(replayChainContext){confirm.checked=true;var wanted=replayChainContext.input;if(wanted){var idx=-1;for(var ci=0;ci<candidates.length;++ci)if(!wanted.isNull&&candidates[ci].mainView.id===wanted.mainView.id){idx=ci;break;}if(idx<0)throw Error("Chain target is unavailable: "+(wanted.isNull?"closed window":wanted.mainView.id)+"; eligible images: "+candidates.map(function(window){return window.mainView.id;}).join(", "));combo.currentItem=idx;}outputName.text=replayChainContext.baseId;for(var b=0;b<bindings.length;++b){var selected=replayChainContext.palette(bindings[b].name);var pi=-1;for(var ci=0;ci<candidates.length;++ci)if(selected.window&&!selected.window.isNull&&candidates[ci].mainView.id===selected.window.mainView.id){pi=ci;break;}if(pi<0)throw Error("Chain palette input is unavailable: "+bindings[b].name);bindings[b].combo.currentItem=pi;bindings[b].state.currentItem=selected.state;}}',
+      '   if(!replayChainContext&&(!dialog.execute()||!confirm.checked))return;',
       '   if(pixelOutput&&!/^[A-Za-z_][A-Za-z0-9_]*$/.test(outputName.text))throw Error("Enter a valid output image identifier (letters, digits and underscores; no initial digit).");',
       '   var input=candidates[combo.currentItem];if(!pixelStart&&(!input||input.isNull))throw Error("Selected input is unavailable.");',
       '   var mapped={},temporary=[],prepared={},maskCache={},pixelMathCache={},firstPixelMapping=null,output=null;',
@@ -1900,18 +1959,21 @@ function buildWorkspaceReplayScript(image, start, end) {
       "   var resources=prepareReplayResources(input,processes,palette,pixelMathCache,maskCache,firstPixelMapping);",
       "   replayAudit.stage=\"Execution\";replayAudit.current=0;",
       '   if(palette)updateReplayProgress(0,"Loading palette preparation");',
-      '   if(palette){for(var b=0;b<bindings.length;++b){var channel=candidates[bindings[b].combo.currentItem],view=channel.mainView;if(bindings[b].state.currentItem===2){var key="$"+view.id;if(prepared[key])view=prepared[key];else{var tid=view.id+"_APA_ppp_input",ti=1;while(!View.viewById(tid).isNull)tid=view.id+"_APA_ppp_input_"+(ti++);var ci=view.image,copy=new ImageWindow(ci.width,ci.height,ci.numberOfChannels,ci.bitsPerSample,ci.isReal,false,tid);temporary.push(copy);copy.mainView.beginProcess(UndoFlag_NoSwapFile);try{copy.mainView.image.assign(ci);}finally{copy.mainView.endProcess();}view=copy.mainView;var expressions=["($T-max(min($T),med($T)-2.7*sdev($T)))/(1-max(min($T),med($T)-2.7*sdev($T)))","mtf(mtf(0.25,med($T)),$T)"];for(var p=0;p<expressions.length;++p){var stretch=new PixelMath;stretch.expression=expressions[p];stretch.useSingleExpression=true;stretch.symbols="";stretch.generateOutput=true;stretch.clearImageCacheAndExit=false;stretch.cacheGeneratedImages=false;stretch.use64BitWorkingImage=true;stretch.rescale=false;stretch.truncate=true;stretch.truncateLower=0;stretch.truncateUpper=1;stretch.createNewImage=false;stretch.showNewImage=false;if(stretch.executeOn(view)===false)throw Error("PPP input stretch failed: "+channel.mainView.id);processEvents();}prepared[key]=view;}}mapped["$"+bindings[b].name]=view.id;}}',
+      '   if(palette){for(var b=0;b<bindings.length;++b){var channel=candidates[bindings[b].combo.currentItem],view=channel.mainView;if(bindings[b].state.currentItem===2){var key="$"+view.id;if(prepared[key])view=prepared[key];else{var tid=view.id+"_APA_ppp_input",ti=1;while(!View.viewById(tid).isNull)tid=view.id+"_APA_ppp_input_"+(ti++);var ci=view.image,copy=new ImageWindow(ci.width,ci.height,ci.numberOfChannels,ci.bitsPerSample,ci.isReal,false,tid);temporary.push(copy);if(replayChainContext&&replayChainContext.rememberDerived)replayChainContext.rememberDerived(copy,channel,"palette preparation");copy.mainView.beginProcess(UndoFlag_NoSwapFile);try{copy.mainView.image.assign(ci);}finally{copy.mainView.endProcess();}view=copy.mainView;var expressions=["($T-max(min($T),med($T)-2.7*sdev($T)))/(1-max(min($T),med($T)-2.7*sdev($T)))","mtf(mtf(0.25,med($T)),$T)"];for(var p=0;p<expressions.length;++p){var stretch=new PixelMath;stretch.expression=expressions[p];stretch.useSingleExpression=true;stretch.symbols="";stretch.generateOutput=true;stretch.clearImageCacheAndExit=false;stretch.cacheGeneratedImages=false;stretch.use64BitWorkingImage=true;stretch.rescale=false;stretch.truncate=true;stretch.truncateLower=0;stretch.truncateUpper=1;stretch.createNewImage=false;stretch.showNewImage=false;if(stretch.executeOn(view)===false)throw Error("PPP input stretch failed: "+channel.mainView.id);processEvents();}prepared[key]=view;}}mapped["$"+bindings[b].name]=view.id;}}',
       '   updateReplayProgress(0,"Loading replay copy");',
       '   var baseId=(replayIdentifier||input.mainView.id)+"_APA_replay",id=baseId,suffix=1;',
       '   if(palette){baseId=(replayIdentifier||replayImage)+"_APA_replay";id=baseId;}',
       '   if(pixelOutput){baseId=outputName.text;id=baseId;}',
+      '   if(replayChainContext){baseId=replayChainContext.baseId;id=baseId;}',
       '   while(!View.viewById(id).isNull)id=baseId+"_"+(suffix++);',
       '   var img=input.mainView.image;',
+      '   if(replayChainContext&&replayChainContext.inPlace){output=input;}else{',
       '   output=new ImageWindow(palette?img.width:1,palette?img.height:1,palette?3:img.numberOfChannels,img.bitsPerSample,img.isReal,palette?true:img.isColor,id);',
       '   output.mainView.beginProcess(UndoFlag_NoSwapFile);',
       '   try{if(palette)output.mainView.image.fill(0);else output.mainView.image.assign(img);}finally{output.mainView.endProcess();}',
       '   if(!palette){output.rgbWorkingSpace=input.rgbWorkingSpace;output.mainView.stf=input.mainView.stf;}',
       '   output.show();',
+      '   }',
       '      for(var k=0;k<replaySteps.length;++k){',
       '         replayAudit.current=k;if(replayStopRequested)throw Error("Replay cancelled after the completed steps.");updateReplayProgress(k,"Running");if(replayStopRequested)throw Error("Replay cancelled before this step.");',
       '         if(replaySteps[k].reason)throw Error("Stopped before step "+replaySteps[k].number+": "+replaySteps[k].reason);',
@@ -1922,7 +1984,7 @@ function buildWorkspaceReplayScript(image, start, end) {
       '         var process=processes[k];',
       '         applyReplayMask(output,replaySteps[k].mask,maskCache,replaySteps[k],resources.masks[k]);',
       '         if(replaySteps[k].action==="pixelmath"){try{output=runPixelMathReplay(process,output,replaySteps[k],pixelMathCache,resolveReplayMapping(resources.mappings[k],output));}finally{if(output&&!output.isNull)output.removeMask();}finishReplayStep(k);processEvents();continue;}',
-      '         if(replaySteps[k].action==="selective"){Parameters.set("apaSelectiveStep",k);try{runSelectiveReplay(process,output.mainView);}finally{Parameters.set("apaSelectiveStep",-1);}finishReplayStep(k);processEvents();continue;}',
+      '         if(replaySteps[k].action==="selective"){Parameters.set("apaSelectiveStep",k);if(replayChainContext)Parameters.set("apaChainNode",replayChainContext.taskIndex);try{runSelectiveReplay(process,output.mainView);}finally{Parameters.set("apaSelectiveStep",-1);if(replayChainContext)Parameters.set("apaChainNode",-1);}finishReplayStep(k);processEvents();continue;}',
       '         if(replaySteps[k].action==="dark"){runDarkStructureReplay(process,output.mainView);finishReplayStep(k);processEvents();continue;}',
       '         if(replaySteps[k].action==="palette"){var keys=["expression","expression1","expression2"];for(var e=0;e<keys.length;++e)process[keys[e]]=process[keys[e]].replace(/(?:[0-9]+(?:[.][0-9]*)?|[.][0-9]+)(?:[eE][+-]?[0-9]+)?|[A-Za-z_][A-Za-z0-9_]*/g,function(token){return Object.prototype.hasOwnProperty.call(mapped,"$"+token)?mapped["$"+token]:token;});}',
       '         if(!process||typeof process.executeOn!=="function")throw Error("Required process is unavailable: "+replaySteps[k].title);',
@@ -1931,7 +1993,7 @@ function buildWorkspaceReplayScript(image, start, end) {
       '      }',
       '      replayAudit.stage="Completed";replayAudit.current=-1;replaySummary(output,null);',
       '   }catch(error){replaySummary(output,error.message);}',
-      '   finally{closeReplayProgress(null);for(var t=0;t<temporary.length;++t)if(!temporary[t].isNull)temporary[t].forceClose();}',
+      '   finally{closeReplayProgress(null);for(var t=0;t<temporary.length;++t)if(!temporary[t].isNull&&!(replayChainContext&&replayChainContext.keepTemporary))temporary[t].forceClose();}',
       '}',
       'function runAtlasHistoryStep() {',
       '   if(!Parameters.has("apaSelectiveStep"))throw Error("This older replay history entry has no recorded step identifier. Generate a new report and replay; the full workflow will not run on this view.");',
@@ -1989,8 +2051,272 @@ function buildWorkspaceReplayScript(image, start, end) {
    return lines.join('\n') + '\n';
 }
 
+
+function chainSlotKey(id,index,role,name){return id+'#'+index+'#'+role+'#'+name;}
+function chainReferenceSlots(data){
+   var slots=[];for(var i=0;i<data.length;++i)for(var j=0;j<data[i].steps.length;++j){var step=data[i].steps[j];for(var k=0;k<(step.inputs||[]).length;++k)slots.push({key:chainSlotKey(data[i].id,j,'input',step.inputs[k]),image:data[i].id,index:j,role:'input',name:step.inputs[k],palette:step.action==='palette'});if(step.mask)slots.push({key:chainSlotKey(data[i].id,j,'mask',step.mask.name),image:data[i].id,index:j,role:'mask',name:step.mask.name,inverted:step.mask.inverted});}return slots;
+}
+function suggestChainBindings(data){
+   var result={},slots=chainReferenceSlots(data);
+   function base(value){return value.toLowerCase().replace(/(?:_(?:final|processed|linear|starless|nbn|replay)(?:_[0-9]+)?)+$/g,'');}
+   for(var i=0;i<slots.length;++i){var slot=slots[i],matches=[];
+      for(var j=0;j<data.length;++j)if(data[j].id===slot.name){matches=[data[j]];break;}
+      if(!matches.length)for(var j=0;j<data.length;++j)if(data[j].id.toLowerCase()===slot.name.toLowerCase())matches.push(data[j]);
+      if(!matches.length)for(var j=0;j<data.length;++j){var renamed=false;for(var r=0;r<data[j].steps.length;++r)if(data[j].steps[r].action==='identifier'&&data[j].steps[r].identifier&&base(data[j].steps[r].identifier)===base(slot.name))renamed=true;if(base(data[j].id)===base(slot.name)||renamed)matches.push(data[j]);}
+      var source=matches.length===1?matches[0]:null,stage=source?source.steps.length:0;
+      if(source&&source.id===slot.image)stage=slot.index;
+      if(!source&&slot.name.toLowerCase()==='image'){for(var j=0;j<data.length;++j)if(data[j].id===slot.image){source=data[j];stage=slot.index;}}
+      result[slot.key]={source:source?source.id:'',stage:stage,preparation:slot.palette?0:1,inverted:slot.inverted===true};
+   }return result;
+}
+function buildWorkspaceChainPlan(data,target,bindings){
+   var byId={},tasks=[],errors=[],warnings=[],state={},required={},snapshots={},roots=[],reachable={},targetImage=data[target];
+   if(!targetImage)throw Error('Select a target image.');
+   for(var i=0;i<data.length;++i){if(byId['$'+data[i].id]!==undefined)throw Error('Duplicate image ID.');byId['$'+data[i].id]=i;}
+   function key(id,stage){return '$'+id+'@'+stage;}
+   function edge(binding,slot,owner){
+      if(!binding||byId['$'+binding.source]===undefined||binding.stage!==Math.floor(binding.stage)||binding.stage<0||binding.stage>data[byId['$'+binding.source]].steps.length){errors.push(owner+': choose a source checkpoint for '+slot.name);return;}
+      var source=data[byId['$'+binding.source]],first=source.steps[0];if(binding.stage===0&&!source.clone&&!source.stars&&first&&(first.action==='palette'||(first.action==='pixelmath'&&first.createsImage&&!first.requiresTarget&&!first.mask&&(first.inputs||[]).length>0&&(first.inputs||[]).indexOf(source.id)<0))){errors.push(owner+': no pixel checkpoint exists before the combination in '+source.id);return;}
+      if(slot.palette&&binding.preparation!==1&&binding.preparation!==2)errors.push(owner+': choose prepared or linear input state for '+slot.name);
+      snapshots[key(binding.source,binding.stage)]=true;visit(binding.source,binding.stage);
+   }
+   function visit(id,stage){
+      var k=key(id,stage);if(state[k]===2)return;if(state[k]===1){errors.push('Dependency cycle at '+id+' checkpoint '+stage);return;}state[k]=1;
+      var index=byId['$'+id],image=data[index],task={key:k,image:index,id:id,stage:stage,stepIndex:stage-1,kind:'step'};reachable['$'+id]=true;required['$'+id]=Math.max(required['$'+id]||0,stage);
+      if(stage===0){
+         var origin=image.clone||image.stars;
+         if(origin){task.kind=image.clone?'clone':'stars';task.origin=origin;if(typeof origin.stage!=='number'||origin.stage!==Math.floor(origin.stage)||origin.stage<0||byId['$'+origin.source]===undefined||origin.stage>data[byId['$'+origin.source]].steps.length)errors.push(id+': origin checkpoint is unavailable; generate a new report.');else{snapshots[key(origin.source,origin.stage)]=true;visit(origin.source,origin.stage);}}
+         else{var first=image.steps[0];task.kind=first&&(first.action==='palette'||(first.action==='pixelmath'&&first.createsImage&&!first.requiresTarget&&!first.mask&&(first.inputs||[]).length>0&&(first.inputs||[]).indexOf(id)<0))?'virtual':'input';if(task.kind==='input')roots.push({image:index,id:id,game:!!(first&&first.action==='game')});}
+      }else{
+         visit(id,stage-1);var step=image.steps[stage-1];if(step.reason)errors.push(id+' / '+step.number+' '+step.title+': '+step.reason);
+         if((step.action==='palette'||step.action==='game')&&stage!==1)errors.push(id+': palette/GAME must begin its branch.');
+         var slots=chainReferenceSlots([image]);for(var r=0;r<slots.length;++r)if(slots[r].index===stage-1){edge(bindings[slots[r].key],slots[r],id+' / '+step.number);if(slots[r].role==='mask'&&typeof slots[r].inverted!=='boolean')warnings.push(id+' / '+step.number+': historical mask inversion is unknown; verify Color invert.');}
+      }
+      state[k]=2;tasks.push(task);
+   }
+   visit(targetImage.id,targetImage.steps.length);
+   for(var i=0;i<tasks.length;++i)if(tasks[i].kind==='stars'){var parent=data[byId['$'+tasks[i].origin.source]],step=parent.steps[tasks[i].origin.stage-1];if(!step||step.tool!=='StarXTerminator')errors.push(tasks[i].id+': stars producer checkpoint is invalid.');}
+   var replayIds={};for(var i=0;i<data.length;++i)if(reachable['$'+data[i].id]){var name=data[i].id;for(var j=0;j<(required['$'+data[i].id]||0);++j)if(data[i].steps[j].action==='identifier'&&!data[i].steps[j].reason&&/^[A-Za-z_][A-Za-z0-9_]*$/.test(data[i].steps[j].identifier))name=data[i].steps[j].identifier;replayIds['$'+data[i].id]=name+'_APA_replay';}
+   return {replayIds:replayIds,startingInputs:{},target:target,targetId:targetImage.id,tasks:tasks,roots:roots,required:required,snapshots:snapshots,reachable:reachable,bindings:bindings,errors:errors,warnings:warnings};
+}
+
+function runWorkspaceChain(plan,modules){
+   var outputs={},current={},cache={},seeds={},stars={},created=[],completed=[],choices=[],active=-1,stopRequested=false,progress=null,started=(new Date()).getTime(),diagnostics=[],failureStack="",phase="Preparing starting inputs";
+   function describe(window){if(!window||window.isNull)return "none / closed";var image=window.mainView.image;return window.mainView.id+" ["+image.width+"x"+image.height+", "+image.numberOfChannels+" channels, "+image.bitsPerSample+" bit, "+(image.isColor?"RGB":"grayscale")+"]";}
+   function stateKey(id,stage){return '$'+id+'@'+stage;}
+   function find(id){for(var i=0;i<ImageWindow.windows.length;++i)if(!ImageWindow.windows[i].isNull&&ImageWindow.windows[i].mainView.id===id)return ImageWindow.windows[i];return null;}
+   function replayId(id){return plan.replayIds&&plan.replayIds['$'+id]||id+'_APA_replay';}
+   function unique(base){var id=base,n=1;while(!View.viewById(id).isNull)id=base+'_'+n++;return id;}
+   function origin(window,parent,kind,stage){var game=kind==='GAME mask input';try{if(typeof parent.mainView.propertyValue==='function'&&(!parent.mainView.hasProperty||parent.mainView.hasProperty('AstroProcessAtlas:ChainOrigin')))game=game||JSON.parse(String(parent.mainView.propertyValue('AstroProcessAtlas:ChainOrigin'))).game===true;}catch(e){}if(typeof window.mainView.setPropertyValue==='function')window.mainView.setPropertyValue('AstroProcessAtlas:ChainOrigin',JSON.stringify({parent:parent.mainView.id,kind:kind,stage:stage,game:game}));}
+   function copy(window,id,kind,stage){var image=window.mainView.image,result=new ImageWindow(image.width,image.height,image.numberOfChannels,image.bitsPerSample,image.isReal,image.isColor,unique(id));created.push(result);try{result.mainView.beginProcess(UndoFlag_NoSwapFile);try{result.mainView.image.assign(image);}finally{result.mainView.endProcess();}result.rgbWorkingSpace=window.rgbWorkingSpace;result.mainView.stf=window.mainView.stf;origin(result,window,kind,stage);return result;}catch(e){result.forceClose();throw e;}}
+   var temporaryCheckpoints=[],lastUse={};
+   function need(id,stage,index){var key=stateKey(id,stage);lastUse[key]=Math.max(lastUse[key]===undefined?-1:lastUse[key],index);}
+   for(var index=0;index<plan.tasks.length;++index){var pending=plan.tasks[index];if(pending.stage>0){need(pending.id,pending.stage-1,index);for(var name in plan.bindings)if(Object.prototype.hasOwnProperty.call(plan.bindings,name)&&name.indexOf(pending.id+'#'+pending.stepIndex+'#')===0){var binding=plan.bindings[name];need(binding.source,binding.stage,index);}}else if(pending.origin)need(pending.origin.source,pending.origin.stage,index);}
+   function cleanCheckpoints(index,all){for(var c=temporaryCheckpoints.length-1;c>=0;--c){var entry=temporaryCheckpoints[c];if(all||lastUse[entry.key]===undefined||lastUse[entry.key]<=index){try{if(!entry.window.isNull){if(typeof entry.window.removeMaskReferences==='function')entry.window.removeMaskReferences();entry.window.forceClose();}delete cache[entry.key];temporaryCheckpoints.splice(c,1);}catch(error){Console.writeln('Temporary checkpoint cleanup failed: '+error.message);}}}}
+   function get(id,stage){var k=stateKey(id,stage),window=cache[k];if(!window||window.isNull)throw Error('Unavailable checkpoint: '+id+' / '+stage);return window;}
+   function update(index,status){if(!progress)return;var row=progress.rows[index];row.setText(1,status);if(typeof row.setTextColor==='function'){var color=status==='Completed'?0xff69d184:status==='Failed / cancelled'?0xffff8080:0xfff5b96e;row.setTextColor(0,color);row.setTextColor(1,color);}progress.label.text='Chain replay: '+completed.length+' / '+plan.tasks.length+' tasks | '+plan.tasks[index].id+' - '+status;if(typeof processEvents==='function')processEvents();}
+   function openProgress(){if(typeof TreeBox!=='function')return;var dialog=new Dialog;dialog.windowTitle='AstroProcessAtlas - Chain replay';dialog.onClose=function(){return false;};var label=new Label(dialog);var tree=new TreeBox(dialog);tree.numberOfColumns=2;tree.headerVisible=true;tree.setHeaderText(0,'Image / step');tree.setHeaderText(1,'Status');tree.setMinSize(640,400);var rows=[];for(var i=0;i<plan.tasks.length;++i){var task=plan.tasks[i],row=new TreeBoxNode(tree);row.setText(0,task.id+' - '+(task.stage?modules[task.image].titles[task.stepIndex]:task.kind));row.setText(1,'Waiting');rows.push(row);}if(typeof tree.adjustColumnWidthToContents==='function')tree.adjustColumnWidthToContents(0);var stop=new PushButton(dialog);stop.text='Stop after current step';stop.onClick=function(){stopRequested=true;stop.enabled=false;};dialog.sizer=new VerticalSizer;dialog.sizer.margin=12;dialog.sizer.spacing=8;dialog.sizer.add(label);dialog.sizer.add(tree);dialog.sizer.add(stop);dialog.adjustToContents();progress={dialog:dialog,label:label,rows:rows};dialog.show();}
+   // Validate every required branch before asking for starting images or making copies.
+   for(var m=0;m<modules.length;++m)if(modules[m])modules[m].check();
+   var windows=[];for(var i=0;i<ImageWindow.windows.length;++i)if(!ImageWindow.windows[i].isNull)windows.push(ImageWindow.windows[i]);
+   if(plan.roots.length&&!windows.length)throw Error('Open the original starting images and required prepared GAME masks.');
+   var dialog=new Dialog;dialog.windowTitle='AstroProcessAtlas - Chain starting inputs';dialog.sizer=new VerticalSizer;dialog.sizer.margin=12;dialog.sizer.spacing=8;var note=new Label(dialog);note.text='Select each starting image BEFORE its first recorded process. GAME inputs are already completed original masks. All work runs on private copies; prepared GAME geometry cannot be reconstructed.';note.wordWrapping=true;note.setMinWidth(560);dialog.sizer.add(note);var boxes=[];
+   for(var i=0;i<plan.roots.length;++i){var root=plan.roots[i],label=new Label(dialog);label.text=root.id+' -> '+replayId(root.id)+(root.game?' - completed grayscale GAME mask':' - before its first process');dialog.sizer.add(label);var box=new ComboBox(dialog);for(var j=0;j<windows.length;++j)box.addItem(windows[j].mainView.id);var explicit=plan.startingInputs&&plan.startingInputs['$'+root.id];box.currentItem=explicit?-1:0;var preferred=explicit||root.id;for(var j=0;j<windows.length;++j)if(windows[j].mainView.id.toLowerCase()===preferred.toLowerCase())box.currentItem=j;boxes.push(box);dialog.sizer.add(box);}
+   var confirm=new CheckBox(dialog);confirm.text='I confirm the starting pixels, selected checkpoints, input preparation and mask inversion match the original workflow.';confirm.checked=false;dialog.sizer.add(confirm);var run=new PushButton(dialog);run.text='Rebuild chain on copies';run.enabled=false;confirm.onCheck=function(checked){run.enabled=checked;};run.onClick=function(){dialog.ok();};var cancel=new PushButton(dialog);cancel.text='Cancel';cancel.onClick=function(){dialog.cancel();};var buttons=new HorizontalSizer;buttons.addStretch();buttons.add(run);buttons.add(cancel);dialog.sizer.add(buttons);dialog.adjustToContents();if(!dialog.execute()||!confirm.checked)return;
+   for(var i=0;i<plan.roots.length;++i){var window=windows[boxes[i].currentItem];if(!window||window.isNull)throw Error('Select an available starting input for '+plan.roots[i].id);if(plan.roots[i].game&&window.mainView.image.isColor)throw Error('GAME needs a completed grayscale mask: '+plan.roots[i].id);seeds['$'+plan.roots[i].id]=window;choices.push(plan.roots[i].id+' starting input -> '+window.mainView.id);}
+   var failure='';
+   try{
+      openProgress();
+      for(var t=0;t<plan.tasks.length;++t){active=t;var task=plan.tasks[t];if(stopRequested)throw Error('Chain replay cancelled before '+task.id+' / '+task.stage);phase='Task '+(t+1)+' / '+plan.tasks.length+' | '+task.id+' checkpoint '+task.stage;update(t,'Running');var value=null;diagnostics.push(phase);
+         if(task.stage===0){
+            if(task.kind==='input')value=seeds['$'+task.id];
+            else if(task.kind==='clone')value=copy(get(task.origin.source,task.origin.stage),replayId(task.id),'clone',task.origin.stage);
+            else if(task.kind==='stars'){value=stars[stateKey(task.origin.source,task.origin.stage)];if(!value||value.isNull)throw Error('StarXTerminator did not provide its expected stars image: '+task.id);}
+            cache[task.key]=value;if(task.kind==='clone'||task.kind==='stars'){outputs['$'+task.id]=value;current['$'+task.id]=0;}
+         }else{
+            var module=modules[task.image],step=module.steps[task.stepIndex],previous=task.stage===1?cache[stateKey(task.id,0)]:get(task.id,task.stage-1);
+            var inPlace=outputs['$'+task.id]&&current['$'+task.id]===task.stage-1,target=inPlace?outputs['$'+task.id]:previous;
+            var before=[];for(var w=0;w<ImageWindow.windows.length;++w)before.push(ImageWindow.windows[w].mainView.id);
+            var context={input:target,inPlace:!!inPlace,baseId:replayId(task.id),taskIndex:t,result:null,keepTemporary:false};
+            context.onProgress=function(index,status){phase=task.id+' / '+step.number+' '+step.title+' | '+status;update(active,status);};context.note=function(text){choices.push(task.id+' / '+task.stage+': '+text);};
+            context.rememberDerived=function(window,parent,kind){created.push(window);origin(window,parent,kind,task.stage-1);};
+            diagnostics.push('Tool: '+step.tool+'; action: '+step.action+'; step: '+step.number+' '+step.title+'; input: '+describe(target)+'; in-place: '+!!inPlace+'; planned output: '+context.baseId);
+            context.inputs=function(request){var mapped={};for(var n=0;n<(request.inputs||[]).length;++n){var name=request.inputs[n],binding=plan.bindings[chainSlotKey(task.id,task.stepIndex,'input',name)];mapped['$'+name]=get(binding.source,binding.stage);diagnostics.push('PixelMath '+name+' <- '+binding.source+' checkpoint '+binding.stage+' -> '+describe(mapped['$'+name]));}return mapped;};
+            context.palette=function(name){var binding=plan.bindings[chainSlotKey(task.id,task.stepIndex,'input',name)];var window=get(binding.source,binding.stage);diagnostics.push('Palette '+name+' <- '+binding.source+' checkpoint '+binding.stage+' -> '+describe(window)+'; preparation: '+binding.preparation);return {window:window,state:binding.preparation};};
+            context.mask=function(request){if(!request)return null;var binding=plan.bindings[chainSlotKey(task.id,task.stepIndex,'mask',request.name)];var window=get(binding.source,binding.stage);diagnostics.push('Mask '+request.name+' <- '+binding.source+' checkpoint '+binding.stage+' -> '+describe(window)+'; Color invert: '+(binding.inverted===true));return {window:window,colorInvert:binding.inverted===true};};
+            try{value=module.run(context,task.stepIndex);}catch(error){if(context.result&&!context.result.isNull)outputs['$'+task.id]=context.result;throw error;}if(!value||value.isNull)throw Error('Branch produced no result: '+task.id);
+            if(!inPlace&&previous){origin(value,previous,step.action==='game'?'GAME mask input':'branch input',task.stage-1);created.push(value);}outputs['$'+task.id]=value;current['$'+task.id]=task.stage;
+            if(step.tool==='StarXTerminator'){var found=[];for(var w=0;w<ImageWindow.windows.length;++w){var candidate=ImageWindow.windows[w];if(!candidate.isNull&&before.indexOf(candidate.mainView.id)<0&&candidate.mainView.id.indexOf(value.mainView.id+'_stars')===0)found.push(candidate);}if(found.length===1){stars[task.key]=found[0];origin(found[0],value,'stars',task.stage);}}
+            if(plan.snapshots[task.key]&&task.stage<plan.required['$'+task.id]){cache[task.key]=copy(value,'APA_checkpoint_'+task.id+'_'+task.stage,'checkpoint',task.stage);temporaryCheckpoints.push({key:task.key,window:cache[task.key]});}else cache[task.key]=value;
+         }
+         completed.push(t);update(t,'Completed');cleanCheckpoints(t,false);
+      }
+      var final=outputs['$'+plan.targetId]||copy(get(plan.targetId,0),replayId(plan.targetId),'starting input',0);final.show();
+   }catch(error){failure=error.message;failureStack=error.stack?String(error.stack):'No stack supplied by PixInsight.';if(active>=0)update(active,'Failed / cancelled');}
+   finally{cleanCheckpoints(plan.tasks.length,true);if(progress)progress.dialog.hide();}
+   var text=(failure?'Chain stopped: '+failure:'Chain complete: '+(outputs['$'+plan.targetId]?outputs['$'+plan.targetId].mainView.id:final.mainView.id))+'\nCompleted: '+completed.length+' / '+plan.tasks.length+' tasks\n\nRetained branch images:';
+   for(var id in outputs)if(Object.prototype.hasOwnProperty.call(outputs,id)&&outputs[id]&&!outputs[id].isNull){outputs[id].show();text+='\n'+id.substring(1)+' -> '+outputs[id].mainView.id;}
+   text+='\n\nDiagnostics:\nTarget: '+plan.targetId+'\nElapsed: '+(((new Date()).getTime()-started)/1000).toFixed(3)+' s\nLast phase: '+phase;
+   if(active>=0){var failed=plan.tasks[active];text+='\nActive task: '+(active+1)+' / '+plan.tasks.length+' | '+failed.id+' checkpoint '+failed.stage;if(failed.stage>0)text+='\nStep metadata: '+JSON.stringify(modules[failed.image].steps[failed.stepIndex]);}
+   text+='\n\nExecution trace:\n'+diagnostics.join('\n');if(failure)text+='\n\nError stack:\n'+failureStack;
+   text+='\n\nOpen images at completion:';var open=ImageWindow.windows;for(var w=0;w<open.length;++w)if(!open[w].isNull)text+='\n'+describe(open[w]);
+   text+='\n\nTask results:';for(var i=0;i<plan.tasks.length;++i){var task=plan.tasks[i];text+='\n'+task.id+' / '+task.stage+': '+(completed.indexOf(i)>=0?'Completed':i===active&&failure?'Failed / cancelled':'Not executed');}text+='\n\nSelected inputs and masks:\n'+choices.join('\n');
+   Console.writeln(text);
+   if(typeof TextBox==='function'){
+      var report=new Dialog;report.windowTitle='AstroProcessAtlas - Chain replay report';report.sizer=new VerticalSizer;report.sizer.margin=12;report.sizer.spacing=8;var box=new TextBox(report);box.readOnly=true;box.useRichText=false;box.text=text;box.setMinSize(700,420);report.sizer.add(box);
+      var save=new PushButton(report);save.text='Save report...';save.onClick=function(){try{var picker=new SaveFileDialog;picker.caption='Save chain replay report';picker.filters=[['Text files (*.txt)','*.txt']];picker.initialPath='AstroProcessAtlas_chain_report.txt';if(!picker.execute())return;var file=new File;try{file.createForWriting(picker.fileName);file.write(ByteArray.stringToUTF8(text));}finally{file.close();}}catch(e){new MessageBox(e.message,'AstroProcessAtlas',StdIcon_Error,StdButton_Ok).execute();}};var close=new PushButton(report);close.text='Close';close.onClick=function(){report.ok();};var buttons=new HorizontalSizer;buttons.add(save);buttons.addStretch();buttons.add(close);report.sizer.add(buttons);report.adjustToContents();report.execute();
+   }else new MessageBox(text,'AstroProcessAtlas - Chain replay report',failure?StdIcon_Error:StdIcon_Information,StdButton_Ok).execute();
+}
+
+function buildWorkspaceChainScript(data,plan){
+   if(!plan||plan.errors.length)throw Error('Resolve all chain blockers before export.');
+   var comment=String.fromCharCode(47,47)+' ',code=[comment+'AstroProcessAtlas dependency chain replay',comment+'SPDX-License-Identifier: MIT',comment+'Copyright (c) 2026 YoruHikari Astrophotography - https:'+String.fromCharCode(47,47)+'www.yoruhikari.gr/','#include <pjsr/Sizer.jsh>','#include <pjsr/UndoFlag.jsh>','#include <pjsr/StdIcon.jsh>','#include <pjsr/StdButton.jsh>','#include <pjsr/CryptographicHash.jsh>',chainSlotKey.toString(),runWorkspaceChain.toString(),'var chainPlan='+JSON.stringify(plan)+';','var chainModules=[];'];
+   for(var i=0;i<data.length;++i){var through=plan.required['$'+data[i].id]||0;if(!through)continue;
+      var body=buildWorkspaceReplayScript(data[i],0,through-1).replace(/^#include <pjsr\/[^>]+>\s*$/gm,'').replace(/^try\{if\(Parameters\.isViewTarget\)runAtlasHistoryStep\(\);else runAtlasReplay\(\);\}catch\(error\)\{[^\n]*\}\s*$/m,'');
+      code.push('chainModules['+i+']=(function(){'+body+'\nvar allSteps=replaySteps,allFactories=replayFactories;return {steps:allSteps,titles:allSteps.map(function(step){return step.number+" - "+step.title;}),check:function(){replaySteps=allSteps;replayFactories=allFactories;prepareReplayProcesses();},run:function(context,index){replaySteps=[allSteps[index]];replayFactories=[allFactories[index]];replayChainContext=context;replayAudit={stage:"Preflight",current:-1,completed:[],preflightFailures:[],choices:[],started:(new Date()).getTime()};replayStopRequested=false;runAtlasReplay();return context.result;},history:function(index){replaySteps=[allSteps[index]];replayFactories=[allFactories[index]];runAtlasHistoryStep();}};})();');
+   }
+   for(var i=0;i<data.length;++i)for(var j=0;j<(plan.required['$'+data[i].id]||0);++j)if(data[i].steps[j].action==='dark')code[1]=comment+'SPDX-License-Identifier: GPL-3.0-only';
+   code.push('try{if(Parameters.isViewTarget){if(!Parameters.has("apaChainNode"))throw Error("This chain history entry has no supported step identifier.");var index=Parameters.getInteger("apaChainNode"),task=chainPlan.tasks[index];if(!task||task.stage<1||!chainModules[task.image]||chainModules[task.image].steps[task.stepIndex].action!=="selective")throw Error("Unsupported chain history step.");chainModules[task.image].history(task.stepIndex);}else runWorkspaceChain(chainPlan,chainModules);}catch(error){new MessageBox(error.message,"AstroProcessAtlas - Chain stopped",StdIcon_Error,StdButton_Ok).execute();}');
+   return code.join('\n')+'\n';
+}
+
+
+function remapWorkflowExpression(text,mapped){var tokens=pixelMathTextTokens(text),result='',last=0;for(var i=0;i<tokens.length;++i){var token=tokens[i];if(!token.macro&&!token.call&&!token.local&&Object.prototype.hasOwnProperty.call(mapped,'$'+token.name)){result+=text.slice(last,token.start)+mapped['$'+token.name];last=token.end;}}return result+text.slice(last);}
+function editedWorkspaceGraph(original,workflow,baseline,bindings,operations){
+   var graph={nodes:[],edges:[]},old={},replay={},hidden={},live={};for(var i=0;i<original.nodes.length;++i)old['$'+original.nodes[i].id]=original.nodes[i];
+   for(var i=0;i<baseline.length;++i)for(var j=0;j<baseline[i].steps.length;++j)replay['$'+baseline[i].steps[j].anchor]=true;
+   for(var i=0;i<operations.length;++i)if(operations[i].type==='remove-node')hidden['$'+operations[i].node]=true;
+   function add(node){graph.nodes.push(node);live['$'+node.id]=node;}
+   for(var i=0;i<workflow.length;++i){var image=workflow[i],header=null,extra=[];for(var n=0;n<original.nodes.length;++n)if(original.nodes[n].image===image.id){if(original.nodes[n].header)header=JSON.parse(JSON.stringify(original.nodes[n]));else if(!replay['$'+original.nodes[n].id]&&!hidden['$'+original.nodes[n].id])extra.push(JSON.parse(JSON.stringify(original.nodes[n])));}
+      if(!header)continue;add(header);var row=0,previous=header.id;
+      var append=function(node){node.x=header.x;node.y=160+row++*105;add(node);graph.edges.push({from:previous,to:node.id,kind:'sequence',provenance:node.edited?'manual':'recorded',detail:node.edited?'Edited workflow sequence':'History sequence',redo:!!node.redo});previous=node.id;};
+      for(var n=0;n<extra.length;++n)if(!extra[n].redo){extra[n].label='Origin — '+extra[n].tool;append(extra[n]);}
+      for(var j=0;j<image.steps.length;++j){var step=image.steps[j],node=old['$'+step.anchor]?JSON.parse(JSON.stringify(old['$'+step.anchor])):{id:step.anchor,image:image.id,memberIds:[],header:false,phase:'edited',redo:false};node.id=step.anchor;node.image=image.id;node.workflowIndex=j;node.label=(j+1)+'. '+step.title;node.tool=step.tool||step.title;node.edited=!!step.edited;node.hasMask=!!step.mask;node.search=(image.id+' '+step.title+' '+step.source).toLowerCase();append(node);}
+      for(var n=0;n<extra.length;++n)if(extra[n].redo)append(extra[n]);
+   }
+   function link(edge){if(live['$'+edge.from]&&live['$'+edge.to]){for(var e=0;e<graph.edges.length;++e)if(graph.edges[e].from===edge.from&&graph.edges[e].to===edge.to&&graph.edges[e].kind===edge.kind)return;graph.edges.push(edge);}}
+   for(var e=0;e<original.edges.length;++e)if(original.edges[e].kind!=='sequence'&&!replay['$'+original.edges[e].to])link(JSON.parse(JSON.stringify(original.edges[e])));
+   function checkpoint(id,stage){for(var i=0;i<workflow.length;++i)if(workflow[i].id===id)return stage>0&&workflow[i].steps[stage-1]?workflow[i].steps[stage-1].anchor:workflow[i].anchor;return null;}
+   var slots=chainReferenceSlots(workflow);for(var i=0;i<slots.length;++i){var slot=slots[i],binding=bindings[slot.key];if(binding&&binding.source&&!(slot.role==='input'&&binding.source===slot.image&&binding.stage===slot.index))link({from:checkpoint(binding.source,binding.stage),to:checkpoint(slot.image,slot.index+1),kind:slot.role==='mask'?'mask':'input',provenance:'manual',uncertain:true,detail:'Edited workflow reference: '+slot.name+' at checkpoint '+binding.stage});}
+   for(var i=0;i<workflow.length;++i){var origin=workflow[i].clone||workflow[i].stars;if(origin&&typeof origin.stage==='number')link({from:checkpoint(origin.source,origin.stage),to:workflow[i].anchor,kind:workflow[i].stars?'output':'input',provenance:'manual',uncertain:true,detail:'Edited workflow derived branch'});}
+   return graph;
+}
+function workflowFingerprint(data){var text=JSON.stringify(data),hash=2166136261;for(var i=0;i<text.length;++i){hash^=text.charCodeAt(i);hash+=(hash<<1)+(hash<<4)+(hash<<7)+(hash<<8)+(hash<<24);}return (hash>>>0).toString(16);}
+function editReplayWorkflow(data,bindings,operation){
+   function index(id){for(var i=0;i<data.length;++i)if(data[i].id===id)return i;throw Error('Unknown workflow image: '+id);}
+   if(operation.type==='remove-node'){index(operation.image);if(typeof operation.node!=='string'||!/^[-A-Za-z0-9_]+$/.test(operation.node))throw Error('Invalid tree node.');return {data:JSON.parse(JSON.stringify(data)),bindings:JSON.parse(JSON.stringify(bindings))};}
+   var source=index(operation.image),at=operation.index;if(at!==Math.floor(at)||at<0||at>=data[source].steps.length)throw Error('Select a valid source step.');
+   var destination=operation.type==='copy'?index(operation.to):source,position=operation.type==='copy'?operation.at:at,insert=operation.type==='copy';
+   if(operation.type!=='copy'&&operation.type!=='remove')throw Error('Unknown workflow edit.');if(position!==Math.floor(position)||position<0||position>data[destination].steps.length)throw Error('Select a valid insertion position.');
+   var result=JSON.parse(JSON.stringify(data)),oldBindings=JSON.parse(JSON.stringify(bindings)),owner=result[destination].id,step=JSON.parse(JSON.stringify(data[source].steps[at]));
+   if(insert){if(data[source].id!==owner&&(step.inputs||[]).indexOf(data[source].id)>=0){var mapping={};mapping['$'+data[source].id]=owner;step.source=step.source.replace(/(\b(?:expression[0-3]?|symbols)\s*=\s*)("(?:[^"\\]|\\.)*")/g,function(all,prefix,literal){try{return prefix+JSON.stringify(remapWorkflowExpression(JSON.parse(literal),mapping));}catch(error){return all;}});step.inputs=step.inputs.map(function(name){return name===data[source].id?owner:name;});}
+      step.edited=true;step.copiedFrom={image:data[source].id,number:step.number,title:step.title};var uid='apa_edit_'+owner+'_'+position,suffix=1;var exists=function(id){for(var i=0;i<result.length;++i)for(var j=0;j<result[i].steps.length;++j)if(result[i].steps[j].anchor===id)return true;return false;};while(exists(uid))uid='apa_edit_'+owner+'_'+position+'_'+suffix++;step.anchor=uid;step.memberAnchors=[];result[destination].steps.splice(position,0,step);}else result[destination].steps.splice(position,1);
+   for(var i=0;i<result[destination].steps.length;++i)result[destination].steps[i].number=i+1;
+   result[destination].edited=true;
+   function stage(value,followEnd){if(insert)return value>position||(followEnd&&value>0&&value===position&&position===data[destination].steps.length)?value+1:value;return value>position?value-1:value;}
+   for(var i=0;i<result.length;++i){var origin=result[i].clone||result[i].stars;if(origin&&origin.source===owner&&typeof origin.stage==='number'){if(!insert&&result[i].stars&&origin.stage===position+1)origin.stage=null;else origin.stage=stage(origin.stage);}}
+   var next=suggestChainBindings(result),slots=chainReferenceSlots(data);
+   for(var i=0;i<slots.length;++i){var slot=slots[i],newIndex=slot.index;if(slot.image===owner){if(!insert&&slot.index===position)continue;if(insert&&slot.index>=position)newIndex++;if(!insert&&slot.index>position)newIndex--;}
+      var binding=oldBindings[slot.key];if(!binding)continue;binding=JSON.parse(JSON.stringify(binding));if(binding.source===owner){binding.stage=slot.image===owner&&binding.stage===slot.index?newIndex:stage(binding.stage,true);}next[chainSlotKey(slot.image,newIndex,slot.role,slot.name)]=binding;
+   }
+   return {data:result,bindings:next};
+}
+function restoreReplayWorkflow(original,state){
+   if(!state||state.version!==1||state.fingerprint!==workflowFingerprint(original)||!Array.isArray(state.operations)||state.operations.length>2000)throw Error('Saved workflow does not match this report.');
+   var data=JSON.parse(JSON.stringify(original)),bindings=suggestChainBindings(data);
+   for(var i=0;i<state.operations.length;++i){var edited=editReplayWorkflow(data,bindings,state.operations[i]);data=edited.data;bindings=edited.bindings;}
+   if(state.bindings){var slots=chainReferenceSlots(data);for(var i=0;i<slots.length;++i){var saved=state.bindings[slots[i].key];if(saved&&typeof saved.source==='string'&&typeof saved.stage==='number'&&saved.stage===Math.floor(saved.stage)&&saved.stage>=0&&(saved.preparation===0||saved.preparation===1||saved.preparation===2)&&typeof saved.inverted==='boolean')bindings[slots[i].key]={source:saved.source,stage:saved.stage,preparation:saved.preparation,inverted:saved.inverted};}}
+   var inputs={};if(state.startingInputs)for(var i=0;i<data.length;++i){var value=state.startingInputs['$'+data[i].id];if(typeof value==='string'&&value.length<=256)inputs['$'+data[i].id]=value;}
+   var target=typeof state.target==='number'&&state.target===Math.floor(state.target)&&data[state.target]?state.target:0;
+   return {data:data,bindings:bindings,startingInputs:inputs,target:target,operations:JSON.parse(JSON.stringify(state.operations))};
+}
+function workflowSnapshotKey(snapshot){function ordered(value){if(Array.isArray(value))return value.map(ordered);if(value&&typeof value==='object'){var keys=Object.keys(value).sort(),result={};for(var i=0;i<keys.length;++i)result[keys[i]]=ordered(value[keys[i]]);return result;}return value;}return JSON.stringify(ordered({operations:snapshot.operations||[],bindings:snapshot.bindings||{},startingInputs:snapshot.startingInputs||{},target:snapshot.target,annotations:snapshot.annotations||null,audit:snapshot.audit||[]}));}
+function workflowStateJSON(state){return JSON.stringify(state).replace(/</g,'\\u003c').replace(/>/g,'\\u003e').replace(/&/g,'\\u0026');}
+
+function replayLaunchHTML(){
+   return '<div class="replay-launchers"><button type="button" aria-controls="replay_single_panel" aria-expanded="false" onclick="toggleAtlasReplay(\'replay_single_panel\',this)"><svg width="36" height="36" viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 7h12M5 13h8M5 19h8M5 25h12"/><path d="M20 10l8 6-8 6z"/></svg><span>Export workflow for replay</span></button><button type="button" aria-controls="chain_workflow" aria-expanded="false" onclick="toggleAtlasReplay(\'chain_workflow\',this)"><svg width="36" height="36" viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="9" height="7" rx="2"/><rect x="21" y="3" width="9" height="7" rx="2"/><rect x="12" y="23" width="9" height="7" rx="2"/><path d="M6 10v6h20v-6M16 16v7"/></svg><span>Replay linked dependency chain</span></button></div><style>.replay-launchers{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:18px 0}.replay-launchers button{display:flex;align-items:center;gap:16px;padding:20px;background:#1e1e2e;color:#cdd6f4;border:1px solid #45475a;border-radius:10px;text-align:left;cursor:pointer;font-size:16px}.replay-launchers svg{flex-shrink:0;color:#89b4fa}.replay-launchers button:hover,.replay-launchers button[aria-expanded="true"]{border-color:#89b4fa;background:#313244}.replay-panel>summary{display:none}.replay-panel[open]{padding:16px;border:1px solid #45475a;border-radius:8px;margin-bottom:16px}.tree-toolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:12px 0}.tree-toolbar .zoom-control{margin:0}.tree-toolbar button{max-width:100%;white-space:normal}.tree-toolbar button:disabled,[data-save-report]:disabled{opacity:.45;cursor:default}#tree_dirty{font-size:12px;color:#fab387}@media(max-width:650px){.replay-launchers{grid-template-columns:1fr}}</style>';
+}
+
+function workspaceChainHTML(data){
+   var html='<details id="chain_workflow" class="replay-panel"><summary>Replay linked dependency chain</summary><h2>Replay linked dependency chain</h2><p>Rebuild the selected image from its required channel branches, clones, stars and masks. Confirm each source checkpoint; a link alone does not identify historical pixels. Only connected dependencies are replayed.</p><p>Prepared GAME masks and original starting images must be supplied. Clone masks with supported recorded steps can be rebuilt automatically. Palette preparation and unrecorded mask inversion require explicit choices.</p><label>Final target <select id="chain_target">';
+   for(var i=0;i<data.length;++i)html+='<option value="'+i+'" data-no-i18n>'+escapeHTML(data[i].id)+'</option>';
+   return html+'</select></label><details id="workflow_editor"><summary>Edit replay workflow</summary><p>Changes update the tree, detailed history and replay. Original source records are retained for undo and the change log. Copied steps keep their parameters; review references, masks and checkpoints after editing.</p><label>Workflow image <select id="workflow_image"></select></label><div id="workflow_steps"></div><label>Copy from image <select id="workflow_copy_image"></select></label> <label>Step <select id="workflow_copy_step"></select></label> <label>Insert before <select id="workflow_position"></select></label> <button id="workflow_copy" type="button">Copy step</button> <button id="workflow_undo" type="button">Undo last edit</button> <button id="workflow_save" data-save-report disabled type="button">Save edited report (HTML)</button><p id="workflow_status" aria-live="polite"></p><details><summary>Change history</summary><ol id="workflow_history"></ol></details></details><div id="chain_bindings"></div><div id="chain_plan" aria-live="polite"></div><label><input id="chain_confirm" type="checkbox">I have reviewed source checkpoints, palette preparation and mask inversion.</label><br><button id="chain_export" type="button" disabled>Download chain replay script</button></details>';
+}
+function chainBrowserController(){
+   var target=document.getElementById('chain_target'),pane=document.getElementById('chain_bindings'),summary=document.getElementById('chain_plan'),confirm=document.getElementById('chain_confirm'),button=document.getElementById('chain_export');
+   if(!target||typeof workspaceReplayData==='undefined')return;
+   var preferred=document.getElementById('final_image');if(preferred)for(var i=0;i<workspaceReplayData.length;++i)if(workspaceReplayData[i].anchor===preferred.value)target.value=String(i);
+   var original=JSON.parse(JSON.stringify(workspaceReplayData)),workflow=JSON.parse(JSON.stringify(original)),fingerprint=workflowFingerprint(original),bindings=suggestChainBindings(workflow),slots=chainReferenceSlots(workflow),plan=null,startingInputs={},operations=[],audit=[],baseGraph=typeof workspaceGraphData==='undefined'?null:JSON.parse(JSON.stringify(workspaceGraphData)),projectedGraph=null;
+   var editorImage=document.getElementById('workflow_image'),editorSteps=document.getElementById('workflow_steps'),copyImage=document.getElementById('workflow_copy_image'),copyStep=document.getElementById('workflow_copy_step'),position=document.getElementById('workflow_position'),editStatus=document.getElementById('workflow_status'),storageKey='AstroProcessAtlas_workflow_'+fingerprint;
+   function message(text){if(editStatus)editStatus.textContent=text;}
+   function state(){var annotations=typeof window.atlasManualAnnotations==='function'?window.atlasManualAnnotations():null;return {version:1,fingerprint:fingerprint,operations:operations,bindings:bindings,startingInputs:startingInputs,target:Number(target.value),annotations:annotations,audit:audit};}
+   var baselineSnapshot=JSON.parse(JSON.stringify(state())),fileBaseline=false;if(baselineSnapshot.annotations)baselineSnapshot.annotations.edges=[];
+   function isDirty(){return workflowSnapshotKey(state())!==workflowSnapshotKey(baselineSnapshot);}
+   function updateDirty(){var dirty=isDirty(),buttons=document.querySelectorAll?document.querySelectorAll('[data-save-report]'):[];for(var i=0;i<buttons.length;++i)buttons[i].disabled=!dirty;var save=document.getElementById('workflow_save');if(save)save.disabled=!dirty;var reset=document.getElementById('tree_reset');if(reset)reset.disabled=!dirty;var label=document.getElementById('tree_dirty');if(label)label.textContent=dirty?'Unsaved changes':'No unsaved changes';}
+   function persist(){updateDirty();try{if(!window.localStorage)return;var payload=state();payload.savedBaseline=baselineSnapshot;window.localStorage.setItem(storageKey,JSON.stringify(payload));message('Changes cached in this browser. Save report (HTML) to keep a portable copy.');}catch(error){message('Browser storage unavailable. Save report (HTML) to keep changes.');}finally{if(typeof window.setReportLanguage==='function')window.setReportLanguage(document.documentElement.lang);}}
+
+   try{var embedded=document.getElementById('apa_workflow_state'),saved=embedded?embedded.textContent:window.localStorage?window.localStorage.getItem(storageKey):null;if(saved){var savedState=JSON.parse(saved);if(embedded)fileBaseline=true;else if(savedState.savedBaseline){restoreReplayWorkflow(original,savedState.savedBaseline);baselineSnapshot=savedState.savedBaseline;}var restored=restoreReplayWorkflow(original,savedState);workflow=restored.data;bindings=restored.bindings;startingInputs=restored.startingInputs;operations=restored.operations;audit=Array.isArray(JSON.parse(saved).audit)?JSON.parse(saved).audit.filter(function(entry){return entry&&typeof entry.type==='string'&&typeof entry.title==='string';}).slice(-2000):[];target.value=String(restored.target);slots=chainReferenceSlots(workflow);}}catch(error){message('Restore: '+error.message);}
+   function option(select,value,text){var node=document.createElement('option');node.value=String(value);node.textContent=text;if(select.getAttribute&&select.getAttribute('data-image-options')==='true')node.setAttribute('data-no-i18n','');select.appendChild(node);}
+   function draw(){
+      workspaceReplayData=workflow;if(typeof window.updateReplayRange==='function')window.updateReplayRange(false);confirm.checked=false;plan=buildWorkspaceChainPlan(workflow,Number(target.value),bindings);plan.startingInputs=startingInputs;var scroll=pane.scrollTop;
+      while(pane.firstChild)pane.removeChild(pane.firstChild);while(summary.firstChild)summary.removeChild(summary.firstChild);
+      var roots=document.createElement('fieldset'),heading=document.createElement('legend');heading.textContent='Original starting inputs';roots.appendChild(heading);
+      var explanation=document.createElement('p');explanation.textContent='Select the actual starting images when the script runs in PixInsight. Their original names may differ. Optional IDs below suggest that selection; channel steps use the generated replay copies.';roots.appendChild(explanation);
+      for(var r=0;r<plan.roots.length;++r)(function(root){var row=document.createElement('label');row.style.display='block';var name=document.createElement('span');name.textContent=root.id+' → '+plan.replayIds['$'+root.id]+' ';name.setAttribute('data-no-i18n','');row.appendChild(name);var input=document.createElement('input');input.type='text';input.placeholder='Starting image ID in PixInsight (optional)';input.value=startingInputs['$'+root.id]||'';input.setAttribute('aria-label','Starting image for '+root.id);input.oninput=function(){startingInputs['$'+root.id]=input.value.replace(/^\s+|\s+$/g,'');confirm.checked=false;button.disabled=true;persist();};row.appendChild(input);roots.appendChild(row);})(plan.roots[r]);pane.appendChild(roots);
+      for(var i=0;i<slots.length;++i){var slot=slots[i];if(!plan.reachable['$'+slot.image]||slot.index>=(plan.required['$'+slot.image]||0))continue;
+         (function(slot){var binding=bindings[slot.key],field=document.createElement('fieldset');field.style.margin='12px 0';var legend=document.createElement('legend');legend.textContent=slot.image+' / '+workflow.filter(function(image){return image.id===slot.image;})[0].steps[slot.index].number+' — '+slot.role+': '+slot.name;legend.setAttribute('data-no-i18n','');field.appendChild(legend);
+            var source=document.createElement('select');source.setAttribute('aria-label','Source image');source.setAttribute('data-image-options','true');option(source,'','Choose source image');for(var j=0;j<workflow.length;++j)option(source,workflow[j].id,workflow[j].id);source.value=binding.source;field.appendChild(source);
+            var checkpoint=document.createElement('select');checkpoint.setAttribute('aria-label','Checkpoint');var image=null;for(var j=0;j<workflow.length;++j)if(workflow[j].id===binding.source)image=workflow[j];
+            if(image){option(checkpoint,0,image.clone?'Clone at recorded parent checkpoint':image.stars?'Generated stars image':'Before first process / supplied starting state');for(var j=0;j<image.steps.length;++j)option(checkpoint,j+1,'After '+image.steps[j].number+' — '+image.steps[j].title);checkpoint.value=String(binding.stage);}field.appendChild(checkpoint);
+            source.onchange=function(){binding.source=source.value;for(var j=0;j<workflow.length;++j)if(workflow[j].id===source.value)binding.stage=source.value===slot.image?slot.index:workflow[j].steps.length;draw();};checkpoint.onchange=function(){binding.stage=Number(checkpoint.value);draw();};
+            if(slot.palette){var preparation=document.createElement('select');preparation.setAttribute('aria-label','Input preparation');option(preparation,0,'Choose input state');option(preparation,1,'Already prepared');option(preparation,2,'Linear — stretch on a copy');preparation.value=String(binding.preparation);preparation.onchange=function(){binding.preparation=Number(preparation.value);draw();};field.appendChild(preparation);}
+            if(slot.role==='mask'){var label=document.createElement('label'),invert=document.createElement('input');invert.type='checkbox';invert.checked=binding.inverted;invert.onchange=function(){binding.inverted=invert.checked;draw();};label.appendChild(invert);label.appendChild(document.createTextNode('Color invert (mask values)'));field.appendChild(label);if(typeof slot.inverted!=='boolean'){var note=document.createElement('p');note.textContent='Historical mask inversion is unknown; verify Color invert.';field.appendChild(note);}}
+            pane.appendChild(field);
+         })(slot);
+      }
+      var intro=document.createElement('p');intro.textContent='Starting inputs: '+plan.roots.map(function(root){return root.id+(root.game?' (prepared GAME mask)':'');}).join(', ')+'. Tasks: '+plan.tasks.length;intro.setAttribute('data-no-i18n','');summary.appendChild(intro);
+      var ordered=document.createElement('ol');for(var i=0;i<plan.tasks.length;++i){var task=plan.tasks[i],item=document.createElement('li');item.textContent=task.id+' — '+(task.stage?workflow[task.image].steps[task.stepIndex].title:task.kind==='clone'?'Clone from '+task.origin.source+' checkpoint '+task.origin.stage:task.kind==='stars'?'Stars from '+task.origin.source:task.kind==='virtual'?'Channel combination':'Starting image');item.setAttribute('data-no-i18n','');ordered.appendChild(item);}summary.appendChild(ordered);
+      for(var i=0;i<plan.errors.length;++i){var error=document.createElement('p');error.style.color='#f38ba8';error.textContent=plan.errors[i];error.setAttribute('data-no-i18n','');summary.appendChild(error);}
+      var note=document.createElement('p');note.textContent='Name-based channel suggestions and inferred clone links are proposals. Confirm the selected versions; historical mask pixels are not recovered by a graph link.';summary.appendChild(note);pane.scrollTop=scroll;button.disabled=true;renderEditor();renderChangeHistory();syncTree();if(fileBaseline){baselineSnapshot=JSON.parse(JSON.stringify(state()));fileBaseline=false;}persist();
+   }
+   function fillImages(select){clear(select);for(var i=0;i<workflow.length;++i)option(select,i,workflow[i].id);}
+   function clear(select){while(select.firstChild)select.removeChild(select.firstChild);}
+   function renderCopy(){if(!copyStep)return;clear(copyStep);var source=workflow[Number(copyImage.value)]||workflow[0];for(var i=0;i<source.steps.length;++i)option(copyStep,i,source.steps[i].number+' — '+source.steps[i].title);copyStep.value='0';var action=document.getElementById('workflow_copy');action.disabled=!source.steps.length;}
+   function renderEditor(){if(!editorImage)return;var index=Number(editorImage.value)||0,image=workflow[index];if(!image)return;clear(editorSteps);clear(position);
+      for(var i=0;i<image.steps.length;++i)(function(index){var step=image.steps[index],row=document.createElement('p'),label=document.createElement('span');label.textContent=step.number+' — '+step.title+(step.copiedFrom?' [copied from '+step.copiedFrom.image+']':'');label.setAttribute('data-no-i18n','');row.appendChild(label);var remove=document.createElement('button');remove.type='button';remove.textContent='Remove step';remove.onclick=function(){edit({type:'remove',image:image.id,index:index});};row.appendChild(remove);editorSteps.appendChild(row);option(position,index,step.number+' — '+step.title);})(i);
+      option(position,image.steps.length,'End of chain');position.value=String(image.steps.length);document.getElementById('workflow_undo').disabled=!operations.length;renderCopy();
+   }
+   function edit(operation){try{if(operation.index!==undefined&&workflow.filter(function(image){return image.id===operation.image;})[0].steps[operation.index])operation.title=workflow.filter(function(image){return image.id===operation.image;})[0].steps[operation.index].title;if(operation.type==='remove'||operation.type==='remove-node'){var greek=document.documentElement&&document.documentElement.lang==='el',prompt=(greek?'Να διαγραφεί το βήμα ':'Delete step ')+(operation.title||operation.node||operation.index)+' — '+operation.image+'?';if(typeof window.confirm!=='function'||!window.confirm(prompt))return;}operation.time=(new Date()).toISOString();var next=editReplayWorkflow(workflow,bindings,operation);workflow=next.data;bindings=next.bindings;operations.push(operation);slots=chainReferenceSlots(workflow);audit.push({time:(new Date()).toISOString(),type:operation.type,image:operation.image,to:operation.to||operation.image,position:operation.at===undefined?operation.index:operation.at,title:operation.title||operation.node||operation.index});draw();}catch(error){message(error.message);}}
+   if(editorImage){fillImages(editorImage);fillImages(copyImage);editorImage.value=String(Number(target.value)||0);copyImage.value='0';editorImage.onchange=function(){renderEditor();};copyImage.onchange=renderCopy;
+      document.getElementById('workflow_copy').onclick=function(){edit({type:'copy',image:workflow[Number(copyImage.value)].id,index:Number(copyStep.value),to:workflow[Number(editorImage.value)].id,at:Number(position.value)});};
+      document.getElementById('workflow_undo').onclick=function(){if(!operations.length)return;var saved=state();saved.operations=saved.operations.slice(0,-1);delete saved.bindings;var restored=restoreReplayWorkflow(original,saved);workflow=restored.data;bindings=restored.bindings;operations=restored.operations;slots=chainReferenceSlots(workflow);audit.push({time:(new Date()).toISOString(),type:'undo',title:'Undo last edit'});draw();};
+      window.saveAtlasReport=document.getElementById('workflow_save').onclick=function(){if(!isDirty())return;try{audit.push({time:(new Date()).toISOString(),type:'save',title:'Save report (HTML)'});renderChangeHistory();var language=document.documentElement.lang;if(typeof window.setReportLanguage==='function')window.setReportLanguage('en');var root=document.documentElement.cloneNode(true);if(typeof window.setReportLanguage==='function')window.setReportLanguage(language);var body=root.querySelector('body'),old=root.querySelector('#apa_workflow_state');if(old)old.parentNode.removeChild(old);var saved=document.createElement('script');saved.id='apa_workflow_state';saved.type='application/json';saved.textContent=workflowStateJSON(state());var firstScript=root.querySelector('script');if(firstScript&&firstScript.parentNode)firstScript.parentNode.insertBefore(saved,firstScript);else body.appendChild(saved);if(typeof reportEmbeddedAssets!=='undefined'&&root.querySelectorAll){var compact={};for(var key in reportEmbeddedAssets)if(Object.prototype.hasOwnProperty.call(reportEmbeddedAssets,key))compact[reportEmbeddedAssets[key]]=key;var assets=root.querySelectorAll('[src],[href],[data-before],[data-after]'),attributes=['src','href','data-before','data-after'];for(var ai=0;ai<assets.length;++ai)for(var aj=0;aj<attributes.length;++aj){var value=assets[ai].getAttribute(attributes[aj]);if(value&&compact[value])assets[ai].setAttribute(attributes[aj],compact[value]);}}var dynamic=['chain_bindings','chain_plan','workflow_steps','workflow_history','comparison_content'];for(var i=0;i<dynamic.length;++i){var pane=root.querySelector('#'+dynamic[i]);if(pane)while(pane.firstChild)pane.removeChild(pane.firstChild);}var checked=root.querySelector('#chain_confirm');if(checked)checked.removeAttribute('checked');var blob=new Blob(['<!DOCTYPE html>\n'+root.outerHTML],{type:'text/html;charset=utf-8'}),url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download='AstroProcessAtlas_edited.html';document.body.appendChild(link);link.click();document.body.removeChild(link);setTimeout(function(){URL.revokeObjectURL(url);},1000);baselineSnapshot=JSON.parse(JSON.stringify(state()));persist();message('Edited report downloaded. Open that HTML to restore the workflow and connections.');}catch(error){message('Save: '+error.message);}};
+   }
+   function renderChangeHistory(){var history=document.getElementById('workflow_history');if(!history)return;clear(history);for(var i=0;i<audit.length;++i){var item=document.createElement('li'),entry=audit[i];item.textContent=(entry.time||'')+' — '+entry.type+' — '+(entry.image||'')+(entry.to&&entry.to!==entry.image?' → '+entry.to:'')+' — '+(entry.title||'')+(typeof entry.position==='number'?' @ '+(entry.position+1):'');item.setAttribute('data-no-i18n','');history.appendChild(item);}}
+   window.recordAtlasChange=function(type,title){audit.push({time:(new Date()).toISOString(),type:type,title:String(title).slice(0,512)});renderChangeHistory();persist();};
+   window.editAtlasTreeNode=function(id){if(!baseGraph)return;for(var i=0;i<workflow.length;++i)for(var j=0;j<workflow[i].steps.length;++j)if(workflow[i].steps[j].anchor===id){edit({type:'remove',image:workflow[i].id,index:j});return;}for(var n=0;n<baseGraph.nodes.length;++n)if(baseGraph.nodes[n].id===id&&!baseGraph.nodes[n].header){edit({type:'remove-node',image:baseGraph.nodes[n].image,node:id,title:baseGraph.nodes[n].label});return;}};
+   function syncTree(){var svg=document.getElementById('workspace_graph');if(!baseGraph||!svg||!svg.querySelectorAll)return;projectedGraph=editedWorkspaceGraph(baseGraph,workflow,original,bindings,operations);var badges={},groups=svg.querySelectorAll('a[data-node]');for(var n=0;n<groups.length;++n){var badge=groups[n].querySelector('circle');if(badge)badges['$'+groups[n].getAttribute('data-node')]=badge.cloneNode(true);}for(var i=0;i<groups.length;++i){var id=groups[i].getAttribute('data-node'),header=false;for(var n=0;n<baseGraph.nodes.length;++n)if(baseGraph.nodes[n].id===id)header=baseGraph.nodes[n].header;if(!header)groups[i].parentNode.removeChild(groups[i]);}
+      var edgeGroup=document.getElementById('graph_edges');if(edgeGroup)clear(edgeGroup);var ns='http://www.w3.org/2000/svg';function node(tag,attrs,parent){var item=document.createElementNS(ns,tag);for(var key in attrs)item.setAttribute(key,attrs[key]);if(parent)parent.appendChild(item);return item;}var lookup={},height=170;
+      for(var i=0;i<projectedGraph.nodes.length;++i){var entry=projectedGraph.nodes[i];lookup['$'+entry.id]=entry;height=Math.max(height,entry.y+110);if(entry.header)continue;(function(entry){var link=node('a',{'data-node':entry.id,href:'#'+entry.id},svg),group=node('g',{'data-node':entry.id,class:'graph-node'+(entry.redo?' redo-node':'')},link);link.onpointerdown=function(event){if(event.target.closest&&event.target.closest('.tree-delete'))return;window.beginComparisonDrag(event,entry.id);};link.onclick=function(event){window.selectGraphNode(entry.id,event);};group.onmouseenter=function(){window.focusGraphImage(entry.id);};group.onmouseleave=window.clearGraphFocus;node('rect',{x:entry.x,y:entry.y,width:250,height:72,rx:8},group);var text=node('text',{x:entry.x+10,y:entry.y+26,'data-no-i18n':''},group);text.textContent=entry.label.length>28?entry.label.slice(0,25)+'…':entry.label;var small=node('text',{x:entry.x+10,y:entry.y+50,class:'graph-small'},group);small.textContent=entry.edited?'Copied / edited step':entry.redo?'Redo — not applied':entry.phase==='initial'?'Inherited / initial history':'Processing step';if(badges['$'+entry.id]){var badge=badges['$'+entry.id];badge.setAttribute('cx',entry.x+235);badge.setAttribute('cy',entry.y+54);group.appendChild(badge);}var remove=node('g',{class:'tree-delete',role:'button',tabindex:0,'aria-label':'Remove step'},group);node('rect',{x:entry.x+225,y:entry.y+6,width:20,height:20,rx:4,style:'fill:#f38ba822;stroke:#f38ba8'},remove);var mark=node('text',{x:entry.x+230,y:entry.y+21,style:'fill:#f38ba8'},remove);mark.textContent='×';remove.onpointerdown=function(event){event.stopPropagation();};remove.onclick=function(event){event.preventDefault();event.stopPropagation();window.editAtlasTreeNode(entry.id);};remove.onkeydown=function(event){if(event.key==='Enter'||event.key===' '){event.preventDefault();window.editAtlasTreeNode(entry.id);}};})(entry);}
+      for(var e=0;e<projectedGraph.edges.length;++e){var edge=projectedGraph.edges[e],a=lookup['$'+edge.from],b=lookup['$'+edge.to];if(!a||!b||!edgeGroup)continue;var ax=a.x+125,ay=a.y+72,bx=b.x+125,by=b.y;var d='M'+ax+','+ay+' C'+ax+','+(ay+25)+' '+bx+','+(by-25)+' '+bx+','+by;if(edge.kind!=='sequence'){ax=a.x+250;ay=a.y+36;bx=b.x;by=b.y+36;var direction=1;if(a.x>b.x){ax=a.x;bx=b.x+250;direction=-1;}if(a.x===b.x)bx=b.x+250;var bend=Math.max(45,Math.abs(bx-ax)/2);d='M'+ax+','+ay+' C'+(ax+direction*bend)+','+ay+' '+(bx+(a.x===b.x?bend:-direction*bend))+','+by+' '+bx+','+by;}var path=node('path',{'data-from':edge.from,'data-to':edge.to,'data-provenance':edge.provenance,class:'edge edge-'+edge.kind,d:d,'marker-end':'url(#arrow)'},edgeGroup);(function(index,path){path.onclick=function(event){window.showConnection(event,'history',index);};})(e,path);}
+      var box=svg.getAttribute('viewBox').split(/\s+/);svg.setAttribute('viewBox','0 0 '+box[2]+' '+height);
+      var copies=document.querySelectorAll('[data-workflow-copy]');for(var c=0;c<copies.length;++c)copies[c].parentNode.removeChild(copies[c]);
+      for(var i=0;i<workflow.length;++i)for(var j=0;j<workflow[i].steps.length;++j){var step=workflow[i].steps[j],card=document.getElementById(step.anchor);if(step.edited){var section=document.getElementById(workflow[i].anchor);if(!section)continue;card=document.createElement('div');card.id=step.anchor;card.className='step-group';card.setAttribute('data-workflow-copy','');var title=document.createElement('h3');title.textContent=(j+1)+'. '+step.title+' — copied from '+step.copiedFrom.image;title.setAttribute('data-no-i18n','');card.appendChild(title);var note=document.createElement('p');note.textContent='User-added step. No historical preview is available for this new position.';card.appendChild(note);var code=document.createElement('textarea');code.readOnly=true;code.value=step.source;code.textContent=step.source;code.style.width='100%';code.rows=8;card.appendChild(code);section.appendChild(card);}else if(card){var stepNumberLabel=card.querySelector('.step-num');if(stepNumberLabel)stepNumberLabel.textContent='Step '+(j+1)+' of '+workflow[i].steps.length;}if(card){var destination=document.getElementById(workflow[i].anchor);if(destination)destination.appendChild(card);}}
+      for(var n=0;n<projectedGraph.nodes.length;++n){var entry=projectedGraph.nodes[n];if(entry.header)continue;var card=document.getElementById(entry.id),section=null;for(var r=0;r<workflow.length;++r)if(workflow[r].id===entry.image)section=document.getElementById(workflow[r].anchor);if(card&&section)section.appendChild(card);}
+      if(document.querySelectorAll){var rows=document.querySelectorAll('.processing-summary table tbody tr'),inputs={},masks={},tools={},combinations=[];for(var r=0;r<workflow.length;++r)for(var j=0;j<workflow[r].steps.length;++j){var step=workflow[r].steps[j];for(var k=0;k<(step.inputs||[]).length;++k){var binding=bindings[chainSlotKey(workflow[r].id,j,'input',step.inputs[k])];if(binding&&binding.source&&binding.source!==workflow[r].id)inputs['$'+binding.source]=binding.source;}if(step.mask){var binding=bindings[chainSlotKey(workflow[r].id,j,'mask',step.mask.name)];masks['$'+(binding&&binding.source||step.mask.name)]=binding&&binding.source||step.mask.name;}if(step.action==='palette'||step.action==='pixelmath'||/Combination$/.test(step.tool))combinations.push(workflow[r].id+' — '+step.title);}for(var n=0;n<projectedGraph.nodes.length;++n){var entry=projectedGraph.nodes[n];if(!entry.header&&!entry.redo)tools['$'+entry.tool]=(tools['$'+entry.tool]||0)+1;}var values=function(map){var result=[];for(var key in map)result.push(map[key]);return result.sort();};var names=[];for(var key in tools)names.push(key.slice(1)+' × '+tools[key]);var replacements={2:values(inputs).join(', '),3:combinations.join('\n'),4:values(masks).join(', '),5:names.sort().join(', ')};for(var index in replacements)if(rows[index]){var cells=rows[index].querySelectorAll('td');if(cells[1])cells[1].textContent=replacements[index]||'—';}}
+      var notice=document.getElementById('tree_edit_notice');if(notice)notice.hidden=!operations.length;function updateProcessCount(id,value){var box=document.getElementById(id);if(!box)return;clear(box);var label=document.createElement('b');label.textContent='Total Process Steps:';box.appendChild(label);box.appendChild(document.createTextNode(' '+value));}updateProcessCount('report_process_count',projectedGraph.nodes.filter(function(node){return !node.header;}).length);for(var i=0;i<workflow.length;++i)updateProcessCount(workflow[i].anchor+'_process_count',projectedGraph.nodes.filter(function(node){return !node.header&&node.image===workflow[i].id;}).length);if(typeof window.replaceAtlasGraph==='function')window.replaceAtlasGraph(projectedGraph);
+   }
+   var insertion=null,line=null;
+   function clearInsertion(){if(line&&line.parentNode)line.parentNode.removeChild(line);line=null;insertion=null;}
+   window.previewTreeInsertion=function(event,id){var mode=document.getElementById('tree_edit_mode');if(!mode||!mode.checked)return false;clearInsertion();var svg=document.getElementById('workspace_graph');if(!svg||!projectedGraph)return true;if(document.elementFromPoint){var hit=document.elementFromPoint(event.clientX,event.clientY);if(!hit||!hit.closest||!hit.closest('#workspace_graph'))return true;}var source=null;for(var i=0;i<workflow.length;++i)for(var j=0;j<workflow[i].steps.length;++j)if(workflow[i].steps[j].anchor===id)source={image:workflow[i].id,index:j};if(!source)return true;var point=svg.createSVGPoint();point.x=event.clientX;point.y=event.clientY;point=point.matrixTransform(svg.getScreenCTM().inverse());if(point.y<0||point.y>Number(svg.getAttribute('viewBox').split(/\s+/)[3]))return true;var destination=null;for(var i=0;i<projectedGraph.nodes.length;++i){var header=projectedGraph.nodes[i];if(header.header&&point.x>=header.x-12&&point.x<=header.x+262)destination=header;}if(!destination)return true;var image=null;for(var i=0;i<workflow.length;++i)if(workflow[i].id===destination.image)image=workflow[i];if(!image)return true;var at=image.steps.length,y=destination.y+100;for(var i=0;i<projectedGraph.nodes.length;++i){var entry=projectedGraph.nodes[i];if(entry.image!==destination.image||entry.header)continue;if(typeof entry.workflowIndex==='number'&&point.y<entry.y+36){at=entry.workflowIndex;y=entry.y-16;break;}y=entry.y+88;}insertion={type:'copy',image:source.image,index:source.index,to:destination.image,at:at};line=document.createElementNS('http://www.w3.org/2000/svg','line');line.setAttribute('class','tree-insertion-line');line.setAttribute('x1',destination.x);line.setAttribute('x2',destination.x+250);line.setAttribute('y1',y);line.setAttribute('y2',y);line.setAttribute('style','stroke:#fab387;stroke-width:5;pointer-events:none');svg.appendChild(line);return true;};
+   window.finishTreeInsertion=function(event,id){var mode=document.getElementById('tree_edit_mode');if(!mode||!mode.checked)return false;window.previewTreeInsertion(event,id);var operation=insertion;clearInsertion();if(operation)edit(operation);return true;};window.clearTreeInsertion=clearInsertion;
+   window.resetAtlasChanges=function(){if(!isDirty())return;var greek=document.documentElement&&document.documentElement.lang==='el';if(typeof window.confirm!=='function'||!window.confirm(greek?'Να απορριφθούν οι μη αποθηκευμένες αλλαγές;':'Discard changes since the last saved report?'))return;try{var restored=restoreReplayWorkflow(original,baselineSnapshot);workflow=restored.data;bindings=restored.bindings;operations=restored.operations;startingInputs=restored.startingInputs;target.value=String(restored.target);audit=JSON.parse(JSON.stringify(baselineSnapshot.audit||[]));slots=chainReferenceSlots(workflow);if(typeof window.restoreAtlasAnnotations==='function')window.restoreAtlasAnnotations(baselineSnapshot.annotations);draw();message('Restored the last saved report state.');}catch(error){message('Reset: '+error.message);}};
+   target.onchange=draw;confirm.onchange=function(){button.disabled=!confirm.checked||!plan||plan.errors.length>0;};
+   button.onclick=function(){if(!confirm.checked||!plan||plan.errors.length)return;var code=buildWorkspaceChainScript(workflow,plan),blob=new Blob([code],{type:'text/javascript;charset=utf-8'}),url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download='AstroProcessAtlas_chain_'+plan.targetId.replace(/[^A-Za-z0-9_-]/g,'_')+'.js';document.body.appendChild(link);link.click();document.body.removeChild(link);setTimeout(function(){URL.revokeObjectURL(url);},1000);};draw();
+}
+
 function workspaceReplayHTML(records) {
-   var html = '<style>#replay_readiness li{padding:8px 12px;margin:6px 0;border-left:4px solid;border-radius:4px;overflow-wrap:anywhere}#replay_readiness .replay-supported{color:#a6e3a1;background:#a6e3a112;border-color:#a6e3a1}#replay_readiness .replay-warning{color:#fab387;background:#fab38712;border-color:#fab387}#replay_readiness .replay-unsupported{color:#f38ba8;background:#f38ba812;border-color:#f38ba8}#replay_export:disabled{opacity:.45;cursor:not-allowed}</style><details class="replay-workflow"><summary>Export workflow for replay</summary>' +
+   var html = '<style>#replay_readiness li{padding:8px 12px;margin:6px 0;border-left:4px solid;border-radius:4px;overflow-wrap:anywhere}#replay_readiness .replay-supported{color:#a6e3a1;background:#a6e3a112;border-color:#a6e3a1}#replay_readiness .replay-warning{color:#fab387;background:#fab38712;border-color:#fab387}#replay_readiness .replay-unsupported{color:#f38ba8;background:#f38ba812;border-color:#f38ba8}#replay_export:disabled{opacity:.45;cursor:not-allowed}</style><details id="replay_single_panel" class="replay-workflow replay-panel"><summary>Export workflow for replay</summary><h2>Export workflow for replay</h2>' +
       '<p>Select an image and a consecutive range of applied processes. Run the downloaded .js in PixInsight with an input in the state BEFORE the first selected step. Replay checks all selected tools and asks for reference images and masks before processing a new copy. A final replay report can be saved as text; historical reference images are not restored.</p>' +
       '<p>Copy naming: the last ImageIdentifier in the selected range, or the selected input name, followed by _APA_replay. Existing names receive a numeric suffix.</p>' +
       '<p>Preflight checks availability and dimensions. Licenses, AI models and manual script settings may still require checks during execution.</p>' +
@@ -2330,22 +2656,24 @@ function generateHistoryReport() {
    var html = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>AstroProcessAtlas</title><style>' + reportStyles() +
       'h2{color:#89b4fa} .graph-scroll{overflow:auto;max-height:760px;border:1px solid #45475a;margin:14px 0} #workspace_graph{display:block;height:auto;background:#11111b} .edge{fill:none;stroke:#89b4fa;stroke-width:1.8} .edge-input,.edge-reference{stroke:#f9e2af;stroke-dasharray:6 4} .edge-mask{stroke:#f38ba8;stroke-dasharray:6 4} .edge-output{stroke:#a6e3a1;stroke-dasharray:6 4} .edge-manual{stroke:#cba6f7;stroke-dasharray:4 3} .edge-possible{stroke:#94e2d5;stroke-dasharray:2 7;stroke-width:2} .possible-info{color:#94e2d5} .redo-edge,.redo-node{opacity:.45} .graph-node rect{fill:#1e1e2e;stroke:#45475a} .graph-node:hover rect{stroke:#89b4fa} .graph-node text{fill:#cdd6f4;font:13px sans-serif} .graph-node .graph-small{fill:#a6adc8;font-size:10px} .image-snapshot{max-width:160px;max-height:160px;display:block;margin-bottom:10px} .image-report{scroll-margin-top:15px} select,input{max-width:100%;background:#1e1e2e;color:#cdd6f4;border:1px solid #45475a;padding:6px} .step-card{scroll-margin-top:15px} </style></head><body>';
    html += '<p><label>Language / Γλώσσα <select id="report_language" onchange="setReportLanguage(this.value)"><option value="en" data-no-i18n>English</option><option value="el" data-no-i18n>Ελληνικά</option></select></label></p>';
-   html += '<h1>AstroProcessAtlas</h1><div class="meta-info"><b>Images:</b> ' + records.length + ' · <b>Total Process Steps:</b> ' + total + ' · ' + escapeHTML((new Date()).toLocaleString()) +
+   html += '<h1>AstroProcessAtlas</h1><div class="meta-info"><b>Images:</b> ' + records.length + ' · <span id="report_process_count"><b>Total Process Steps:</b> ' + total + '</span> · ' + escapeHTML((new Date()).toLocaleString()) +
       '<p>Includes the selected open images and their available initial/recent history. Closed images, older mask versions and unrecorded connections cannot be recovered automatically. Image references are detected in PixelMath, ChannelCombination, LRGBCombination, ChannelExtraction, specific image ID parameters and masks. The same initial processing may appear in multiple images.</p></div>';
    html += processingSummaryHTML(records);
+   html += replayLaunchHTML();
    html += workspaceReplayHTML(records);
    var tools = [], seenTools = {};
    for (var n = 0; n < graph.nodes.length; ++n) if (!graph.nodes[n].header && !seenTools['$'+graph.nodes[n].tool]) {
       seenTools['$'+graph.nodes[n].tool] = true; tools.push(graph.nodes[n].tool);
    }
    tools.sort();
-   html += '<div class="report-filters"><label>Search <input id="report_search" type="search" placeholder="Image, tool, mask or parameter" oninput="applyReportFilters()"></label> <label>Tool <select id="tool_filter" onchange="applyReportFilters()"><option value="all">All tools</option>';
-   for (var t=0;t<tools.length;++t) html += '<option data-no-i18n value="' + escapeHTML(tools[t]) + '">' + escapeHTML(tools[t]) + '</option>';
-   html += '</select></label> <label><input id="mask_filter" type="checkbox" onchange="applyReportFilters()">Steps with masks</label> <label><input id="applied_filter" type="checkbox" onchange="applyReportFilters()">Applied steps only</label> <button onclick="resetReportFilters()">Reset filters</button><p id="filter_status" aria-live="polite"></p></div>';
+   var filtersHTML = '<div class="report-filters"><label>Search <input id="report_search" type="search" placeholder="Image, tool, mask or parameter" oninput="applyReportFilters()"></label> <label>Tool <select id="tool_filter" onchange="applyReportFilters()"><option value="all">All tools</option>';
+   for (var t=0;t<tools.length;++t) filtersHTML += '<option data-no-i18n value="' + escapeHTML(tools[t]) + '">' + escapeHTML(tools[t]) + '</option>';
+   filtersHTML += '</select></label> <label><input id="mask_filter" type="checkbox" onchange="applyReportFilters()">Steps with masks</label> <label><input id="applied_filter" type="checkbox" onchange="applyReportFilters()">Applied steps only</label> <button onclick="resetReportFilters()">Reset filters</button><p id="filter_status" aria-live="polite"></p></div>';
+   html += workspaceChainHTML(records.map(function(record){return {id:record.id};}));
    var reportProfile=reportSizeProfile(windows.reportProfileId);
    html+='<p><b>Report size:</b> <span>'+reportProfile.label+'</span> — <span>Maximum stage preview:</span> '+reportProfile.stage+' px</p>';
    html += '<p class="provenance-legend"><b>Connection origin:</b> Recorded in history · Detected from parameters · User annotation. Hover or focus a line for its origin and parameter. A recorded mask name does not identify its historical pixel version.</p>';
-   html += workspaceOverviewHTML(records, graph);
+   html += workspaceOverviewHTML(records, graph, filtersHTML);
    html += '<p><label>Show image history <select id="image_filter" onchange="showImage(this.value)"><option value="all">All</option>';
    for (var i = 0; i < records.length; ++i) html += '<option value="' + records[i].anchor + '" data-no-i18n>' + escapeHTML(records[i].id) + '</option>';
    html += '</select></label></p>';
@@ -2376,7 +2704,7 @@ function generateHistoryReport() {
    html += '<script>var workspaceGraphData=' + JSON.stringify(graph).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026') +
       ';var workspaceReplayData=' + JSON.stringify(workspaceReplayData(records)).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026') +
       ';var DARK_STRUCTURE_GPL_LICENSE=' + JSON.stringify(DARK_STRUCTURE_GPL_LICENSE).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026') +
-      ';' + pixelMathTextTokens.toString() + ';' + compareAtlasImages.toString() + ';' + previewAppearance.toString() + ';' + comparisonPreviewBitmap.toString() + ';' + comparisonIsGameMask.toString() + ';' + showAtlasComparisonResult.toString() + ';' + showAtlasComparisonDialog.toString() + ';' + buildWorkspaceReplayScript.toString() + ';' + reportBrowserScript() + '</script></body></html>';
+      ';' + pixelMathTextTokens.toString() + ';' + compareAtlasImages.toString() + ';' + previewAppearance.toString() + ';' + comparisonPreviewBitmap.toString() + ';' + comparisonIsGameMask.toString() + ';' + showAtlasComparisonResult.toString() + ';' + showAtlasComparisonDialog.toString() + ';' + buildWorkspaceReplayScript.toString() + ';' + remapWorkflowExpression.toString() + ';' + editedWorkspaceGraph.toString() + ';' + workflowFingerprint.toString() + ';' + editReplayWorkflow.toString() + ';' + restoreReplayWorkflow.toString() + ';' + workflowSnapshotKey.toString() + ';' + workflowStateJSON.toString() + ';' + chainSlotKey.toString() + ';' + chainReferenceSlots.toString() + ';' + suggestChainBindings.toString() + ';' + buildWorkspaceChainPlan.toString() + ';' + runWorkspaceChain.toString() + ';' + buildWorkspaceChainScript.toString() + ';' + reportBrowserScript() + ';' + chainBrowserController.toString() + ';chainBrowserController();</script></body></html>';
    writeReportText(file, html);
    } finally { file.close(); }
    progress.update(100, 'Report complete');
@@ -2424,6 +2752,57 @@ var REPORT_TRANSLATIONS = [
    ['Step data indicators: green — recorded settings; orange — manual inputs or verification; pink — missing data. Recorded settings do not guarantee identical historical pixels. Stretch labels are estimates from pixel brightness.','Ενδείξεις δεδομένων: πράσινο — καταγεγραμμένες ρυθμίσεις· πορτοκαλί — χειροκίνητες είσοδοι ή επαλήθευση· ροζ — ελλιπή δεδομένα. Οι ρυθμίσεις δεν εγγυώνται ίδια ιστορικά pixels. Οι εκτιμήσεις stretch βασίζονται στη φωτεινότητα.'],
    ['Report size:','Μέγεθος report:'],['Small','Μικρό'],['Normal','Κανονικό'],['Detailed','Λεπτομερές'],['Maximum stage preview:','Μέγιστη προεπισκόπηση σταδίου:'],
    ['Replay image','Εικόνα επανάληψης'],['First process','Πρώτη διεργασία'],['Last process','Τελευταία διεργασία'],
+   ["Replay linked dependency chain", "Επανάληψη συνδεδεμένης αλυσίδας"],
+   ["Rebuild the selected image from its required channel branches, clones, stars and masks. Confirm each source checkpoint; a link alone does not identify historical pixels. Only connected dependencies are replayed.", "Αναδημιουργία της επιλεγμένης εικόνας από τα κανάλια, τους κλώνους, τα stars και τις μάσκες που απαιτούνται. Επιβεβαίωσε το στάδιο κάθε εισόδου· μια σύνδεση δεν προσδιορίζει τα ιστορικά pixels. Επαναλαμβάνονται μόνο οι απαιτούμενες εξαρτήσεις."],
+   ["Prepared GAME masks and original starting images must be supplied. Clone masks with supported recorded steps can be rebuilt automatically. Palette preparation and unrecorded mask inversion require explicit choices.", "Απαιτούνται οι αρχικές εικόνες και οι έτοιμες μάσκες GAME. Οι κλώνοι μάσκας με υποστηριζόμενα βήματα αναδημιουργούνται αυτόματα. Επίλεξε ρητά την προετοιμασία των καναλιών και την αντιστροφή μάσκας."],
+   ["Final target", "Τελική εικόνα"],
+   ["I have reviewed source checkpoints, palette preparation and mask inversion.", "Έχω ελέγξει τα στάδια εισόδων, την προετοιμασία καναλιών και την αντιστροφή μάσκας."],
+   ["Download chain replay script", "Λήψη script επανάληψης αλυσίδας"],
+   ["Source image", "Εικόνα εισόδου"],
+   ["Choose source image", "Επιλογή εικόνας εισόδου"],
+   ["Checkpoint", "Στάδιο"],
+   ["Input preparation", "Προετοιμασία εισόδου"],
+   ["Clone at recorded parent checkpoint", "Κλώνος από το καταγεγραμμένο στάδιο προέλευσης"],
+   ["Generated stars image", "Παραγόμενη εικόνα stars"],
+   ["Before first process / supplied starting state", "Πριν από το πρώτο βήμα / παρεχόμενη αρχική εικόνα"],
+   ["Choose input state", "Επιλογή κατάστασης εισόδου"],
+   ["Already prepared", "Ήδη προετοιμασμένη"],
+   ["Linear — stretch on a copy", "Linear — stretch σε αντίγραφο"],
+   ["Color invert (mask values)", "Αντιστροφή χρώματος (τιμές μάσκας)"],
+   ["Historical mask inversion is unknown; verify Color invert.", "Η ιστορική αντιστροφή μάσκας είναι άγνωστη· έλεγξε την αντιστροφή χρώματος."],
+   ["Name-based channel suggestions and inferred clone links are proposals. Confirm the selected versions; historical mask pixels are not recovered by a graph link.", "Οι προτάσεις από ονόματα καναλιών και οι συνδέσεις κλώνων χρειάζονται έλεγχο. Επιβεβαίωσε τις εκδόσεις· η σύνδεση στο δέντρο δεν ανακτά τα ιστορικά pixels της μάσκας."],
+   ["Original starting inputs", "Αρχικές είσοδοι"],
+   ["Select the actual starting images when the script runs in PixInsight. Their original names may differ. Optional IDs below suggest that selection; channel steps use the generated replay copies.", "Επίλεξε τις πραγματικές αρχικές εικόνες όταν εκτελεστεί το script στο PixInsight. Τα ονόματά τους μπορεί να διαφέρουν. Τα προαιρετικά IDs προτείνουν την επιλογή· τα βήματα χρησιμοποιούν τα παραγόμενα αντίγραφα replay."],
+   ["Starting image ID in PixInsight (optional)", "ID αρχικής εικόνας στο PixInsight (προαιρετικό)"],
+   ["Edit replay workflow", "Επεξεργασία αλυσίδας replay"],
+   ["Workflow image", "Εικόνα αλυσίδας"],
+   ["Copy from image", "Αντιγραφή από εικόνα"],
+   ["Insert before", "Εισαγωγή πριν από"],
+   ["Copy step", "Αντιγραφή βήματος"],
+   ["Remove step", "Αφαίρεση βήματος"],
+   ["Undo last edit", "Αναίρεση τελευταίας αλλαγής"],
+   ["Save edited report (HTML)", "Αποθήκευση τροποποιημένου report (HTML)"],
+   ["End of chain", "Τέλος αλυσίδας"],
+   ["Changes saved in this browser. Save edited report (HTML) for a portable copy.", "Οι αλλαγές αποθηκεύτηκαν στον browser. Αποθήκευσε το τροποποιημένο report (HTML) για μεταφορά."],
+   ["Browser storage unavailable. Save edited report (HTML) to keep changes.", "Η αποθήκευση στον browser δεν είναι διαθέσιμη. Αποθήκευσε το τροποποιημένο report (HTML) για να κρατήσεις τις αλλαγές."],
+   ["Edited report downloaded. Open that HTML to restore the workflow and connections.", "Το τροποποιημένο report κατέβηκε. Άνοιξε αυτό το HTML για επαναφορά της αλυσίδας και των συνδέσεων."],
+   ["Edit tree: drag a process to copy it into a branch", "Επεξεργασία δέντρου: σύρε ένα βήμα για αντιγραφή σε αλυσίδα"],
+   ["Save report (HTML)", "Αποθήκευση report (HTML)"],
+   ["Change history", "Ιστορικό αλλαγών"],
+   ["Changes update the tree, detailed history and replay. Original source records are retained for undo and the change log. Copied steps keep their parameters; review references, masks and checkpoints after editing.", "Οι αλλαγές ενημερώνουν το δέντρο, την αναλυτική προβολή και το replay. Οι αρχικές εγγραφές διατηρούνται για αναίρεση και ιστορικότητα. Τα αντιγραμμένα βήματα κρατούν τις παραμέτρους· έλεγξε τις αναφορές, μάσκες και στάδια."],
+   ["Tree edits change the planned workflow. Existing previews document the original processing and are not recalculated.", "Οι αλλαγές στο δέντρο τροποποιούν την αλυσίδα. Τα υπάρχοντα previews τεκμηριώνουν την αρχική επεξεργασία και δεν υπολογίζονται ξανά."],
+   ["Connections are included in Save report (HTML), together with tree edits and change history. Browser storage is also used when available.", "Οι σύνδεσμοι περιλαμβάνονται στην Αποθήκευση report (HTML), μαζί με τις αλλαγές δέντρου και το ιστορικό τους. Χρησιμοποιείται και αποθήκευση στον browser όταν είναι διαθέσιμη."],
+   ["Copied / edited step", "Αντιγραμμένο / τροποποιημένο βήμα"],
+   ["User-added step. No historical preview is available for this new position.", "Βήμα που πρόσθεσε ο χρήστης. Δεν υπάρχει ιστορικό preview για αυτή τη νέα θέση."],
+   ["connections saved in this browser. Save report (HTML) for a portable copy.", "σύνδεσμοι αποθηκεύτηκαν στον browser. Αποθήκευσε το report (HTML) για μεταφορά."],
+   ["connections. Browser storage unavailable; use Save report (HTML).", "σύνδεσμοι. Η αποθήκευση στον browser δεν είναι διαθέσιμη· αποθήκευσε το report (HTML)."],
+   ["Edit tree", "Επεξεργασία δέντρου"],
+   ["Reset unsaved changes", "Επαναφορά μη αποθηκευμένων αλλαγών"],
+   ["Unsaved changes", "Μη αποθηκευμένες αλλαγές"],
+   ["No unsaved changes", "Δεν υπάρχουν μη αποθηκευμένες αλλαγές"],
+   ["Restored the last saved report state.", "Επαναφέρθηκε η τελευταία αποθηκευμένη κατάσταση του report."],
+   ["Changes cached in this browser. Save report (HTML) to keep a portable copy.", "Οι αλλαγές κρατούνται προσωρινά στον browser. Αποθήκευσε το report (HTML) για να το διατηρήσεις."],
+   ["Browser storage unavailable. Save report (HTML) to keep changes.", "Η αποθήκευση στον browser δεν είναι διαθέσιμη. Αποθήκευσε το report (HTML) για να κρατήσεις τις αλλαγές."],
    ['Download PixInsight replay script','Λήψη script επανάληψης για το PixInsight'],
    ['Ready for replay','Έτοιμο για επανάληψη'],
    ['Choose PixelMath reference images in PixInsight at their recorded processing state.','Επίλεξε τις εικόνες αναφοράς του PixelMath στο PixInsight στην καταγεγραμμένη κατάσταση επεξεργασίας τους.'],
@@ -2655,7 +3034,7 @@ var REPORT_TRANSLATIONS = [
       "Πρόσθεσε σύνδεση που δεν καταγράφηκε στο ιστορικό"
    ],
    [
-      "Connections are saved automatically in this browser when storage is available. Export JSON to keep a portable backup; Import JSON restores connections for the same report. The HTML file is not modified.",
+      "Connections are included in Save report (HTML), together with tree edits and change history. Browser storage is also used when available.",
       "Οι πρόσθετες συνδέσεις είναι δικές σου σημειώσεις στο report. Χρησιμοποίησε Export για να τις κρατήσεις και Import όταν ανοίξεις ξανά το ίδιο report."
    ],
    [
@@ -2957,11 +3336,11 @@ REPORT_TRANSLATIONS = REPORT_TRANSLATIONS.concat([
    ["Compare stages", "Σύγκριση σταδίων"],
    ["Select two different available stages.", "Επίλεξε δύο διαφορετικά διαθέσιμα στάδια."],
    ["Connection already exists.", "Η σύνδεση υπάρχει ήδη."],
-   ["connections saved in this browser. Export JSON for a portable backup.", "συνδέσεις αποθηκεύτηκαν στον browser. Εξαγωγή JSON για φορητό αντίγραφο."],
-   ["connections. Browser storage unavailable; use Export JSON to save.", "συνδέσεις. Η αποθήκευση στον browser δεν είναι διαθέσιμη· κάνε εξαγωγή JSON."],
+   ["connections saved in this browser. Save report (HTML) for a portable copy.", "συνδέσεις αποθηκεύτηκαν στον browser. Εξαγωγή JSON για φορητό αντίγραφο."],
+   ["connections. Browser storage unavailable; use Save report (HTML).", "συνδέσεις. Η αποθήκευση στον browser δεν είναι διαθέσιμη· κάνε εξαγωγή JSON."],
    ["Annotation file too large.", "Το αρχείο συνδέσεων είναι πολύ μεγάλο."],
    ["Saved connections could not be restored. Import your JSON backup.", "Δεν έγινε επαναφορά των συνδέσεων. Εισήγαγε το αντίγραφο JSON."],
-   ["Connections are saved automatically in this browser when storage is available. Export JSON to keep a portable backup; Import JSON restores connections for the same report. The HTML file is not modified.", "Οι συνδέσεις αποθηκεύονται αυτόματα στον browser όταν είναι διαθέσιμη η αποθήκευση. Κράτησε φορητό αντίγραφο με εξαγωγή JSON και επανάφερε τις συνδέσεις του ίδιου report με εισαγωγή JSON. Το HTML δεν αλλάζει."],
+   ["Connections are included in Save report (HTML), together with tree edits and change history. Browser storage is also used when available.", "Οι συνδέσεις αποθηκεύονται αυτόματα στον browser όταν είναι διαθέσιμη η αποθήκευση. Κράτησε φορητό αντίγραφο με εξαγωγή JSON και επανάφερε τις συνδέσεις του ίδιου report με εισαγωγή JSON. Το HTML δεν αλλάζει."],
    ["Select two available previews, including stages from different images. A is on the left; B is on the right. Current image previews are not historical source pixels.", "Επίλεξε δύο διαθέσιμες προεπισκοπήσεις, ακόμη και από διαφορετικές εικόνες. Α αριστερά, Β δεξιά. Οι τρέχουσες προεπισκοπήσεις δεν είναι ιστορικά pixels εισόδου."],
    ["A — left", "A — αριστερά"],
    ["B — right", "B — δεξιά"],
@@ -3198,6 +3577,7 @@ var WORKSPACE_BROWSER_SOURCE = [
    "      if(event.target.closest&&event.target.closest('[data-node], a, path[data-from]'))return;",
    "      window.showImage('all');",
    "   };",
+   "   window.toggleAtlasReplay=function(id,button){var panel=document.getElementById(id);if(!panel)return;var open=!panel.open,names=['replay_single_panel','chain_workflow'];for(var i=0;i<names.length;++i){var other=document.getElementById(names[i]);if(other)other.open=names[i]===id&&open;}var buttons=document.querySelectorAll('.replay-launchers button');for(var i=0;i<buttons.length;++i)buttons[i].setAttribute('aria-expanded',String(buttons[i].getAttribute('aria-controls')===id&&open));};",
    "   window.copyCode = function(button) {",
    "      var t=button.parentNode.querySelector('textarea'); t.focus(); t.select(); t.setSelectionRange(0,t.value.length);",
    "      function done(){button.textContent=translated('Copied');setTimeout(function(){button.textContent=translated('Copy');},1500);}",
@@ -3239,7 +3619,7 @@ var WORKSPACE_BROWSER_SOURCE = [
    "      }",
    "   };",
    "   var stageDragGhost=null,stageDragOrigin=null,stageDragTarget=null;",
-   "   function clearStageDragVisuals(){",
+   "   function clearStageDragVisuals(){if(window.clearTreeInsertion)window.clearTreeInsertion();",
    "      if(stageDragGhost&&stageDragGhost.parentNode)stageDragGhost.parentNode.removeChild(stageDragGhost);",
    "      if(stageDragOrigin)stageDragOrigin.classList.remove('is-drag-origin');",
    "      if(stageDragTarget){stageDragTarget.classList.remove('is-drop-target');stageDragTarget.classList.remove('drag-over');}",
@@ -3344,21 +3724,21 @@ var WORKSPACE_BROWSER_SOURCE = [
    "   window.addEventListener('pointermove',function(event){",
    "      if(!pointerStageDrag||event.pointerId!==pointerStageDrag.pointer)return;",
    "      if(Math.abs(event.clientX-pointerStageDrag.x)+Math.abs(event.clientY-pointerStageDrag.y)>8){",
-   "         pointerStageDrag.moved=true;event.preventDefault();moveStageDragVisuals(event);",
+   "         pointerStageDrag.moved=true;event.preventDefault();moveStageDragVisuals(event);if(window.previewTreeInsertion&&window.previewTreeInsertion(event,pointerStageDrag.id))return;",
    "         var controls=document.getElementById('stage_comparison_controls');if(controls)controls.open=true;",
    "      }",
    "   },{passive:false});",
    "   window.addEventListener('pointerup',function(event){",
    "      if(!pointerStageDrag||event.pointerId!==pointerStageDrag.pointer)return;",
    "      var drag=pointerStageDrag;pointerStageDrag=null;clearStageDragVisuals();if(!drag.moved)return;",
-   "      suppressStageClickUntil=Date.now()+400;event.preventDefault();",
+   "      suppressStageClickUntil=Date.now()+400;event.preventDefault();if(window.finishTreeInsertion&&window.finishTreeInsertion(event,drag.id))return;",
    "      var hit=document.elementFromPoint(event.clientX,event.clientY);if(!hit||!hit.closest)return;",
    "      var slot=hit.closest('.stage-drop'),target=hit.closest('#workspace_graph [data-node]');",
    "      var drop={currentTarget:slot||target,dataTransfer:{getData:function(){return drag.id;}},preventDefault:function(){},stopPropagation:function(){}};",
    "      if(slot)window.dropComparisonStage(drop,slot.id==='stage_drop_a'?'a':'b');",
    "      else if(target)window.dropComparedNodes(drop,target.getAttribute('data-node'));",
    "   });",
-   "   window.addEventListener('pointercancel',function(){pointerStageDrag=null;clearStageDragVisuals();});",
+   "   window.addEventListener('pointercancel',function(){pointerStageDrag=null;clearStageDragVisuals();if(window.clearTreeInsertion)window.clearTreeInsertion();});",
    "   window.addEventListener('click',function(event){",
    "      if(Date.now()<suppressStageClickUntil&&event.target.closest&&event.target.closest('#workspace_graph')){event.preventDefault();event.stopPropagation();}",
    "   },true);",
@@ -3477,7 +3857,7 @@ var WORKSPACE_BROWSER_SOURCE = [
    "         (function(index){path.onclick=function(event){window.showConnection(event,'manual',index);};path.onkeydown=function(event){if(event.key==='Enter'||event.key===' ')window.showConnection(event,'manual',index);};})(i);",
    "         var title=document.createElementNS(ns,'title');title.setAttribute('data-no-i18n','');title.textContent=translated('User annotation: ')+edge.detail;path.appendChild(title);group.appendChild(path);",
    "      }",
-   "      status(manual.length+' '+translated(saveAnnotations()?'connections saved in this browser. Export JSON for a portable backup.':'connections. Browser storage unavailable; use Export JSON to save.'));",
+   "      status(manual.length+' '+translated(saveAnnotations()?'connections saved in this browser. Save report (HTML) for a portable copy.':'connections. Browser storage unavailable; use Save report (HTML).'));",
    "      if(activeFocus)window.focusGraphImage(activeFocus);",
    "      window.applyReportFilters();",
    "   }",
@@ -3485,9 +3865,9 @@ var WORKSPACE_BROWSER_SOURCE = [
    "      var from=document.getElementById('manual_from').value,to=document.getElementById('manual_to').value;",
    "      if(from===to){status('Select two different nodes.');return;}",
    "      for(var i=0;i<manual.length;++i)if(manual[i].from===from&&manual[i].to===to){status('Connection already exists.');return;}",
-   "      manual.push({from:from,to:to,detail:(document.getElementById('manual_note').value||'User connection').slice(0,4000)});draw();",
+   "      manual.push({from:from,to:to,detail:(document.getElementById('manual_note').value||'User connection').slice(0,4000)});draw();if(window.recordAtlasChange)window.recordAtlasChange('connection-add',from+' → '+to);",
    "   };",
-   "   window.clearManualEdges=function(){manual=[];draw();};",
+   "   window.clearManualEdges=function(){manual=[];draw();if(window.recordAtlasChange)window.recordAtlasChange('connections-clear','Clear annotations');};",
    "   window.exportManualEdges=function(){",
    "      var identities=nodes.map(function(n){return{id:n.id,image:n.image,label:n.label};});",
    "      var blob=new Blob([JSON.stringify(annotationData(),null,2)],{type:'application/json'});",
@@ -3501,9 +3881,12 @@ var WORKSPACE_BROWSER_SOURCE = [
    "      }catch(e){status('Import: '+e.message);}};",
    "      reader.onerror=function(){status('Could not read the file.');};reader.readAsText(input.files[0]);",
    "   };",
+   "   window.replaceAtlasGraph=function(graph){workspaceGraphData=graph;nodes=graph.nodes;manual=manual.filter(function(edge){return find(edge.from)&&find(edge.to);});if(window.atlasPendingAnnotations){try{manual=validatedAnnotations(window.atlasPendingAnnotations);}catch(error){status(error.message);}window.atlasPendingAnnotations=null;}var names=['manual_from','manual_to'];for(var n=0;n<names.length;++n){var select=document.getElementById(names[n]);if(!select)continue;var selected=select.value;while(select.firstChild)select.removeChild(select.firstChild);for(var i=0;i<nodes.length;++i){var option=document.createElement('option');option.value=nodes[i].id;option.textContent=nodes[i].image+' — '+nodes[i].label;option.setAttribute('data-no-i18n','');select.appendChild(option);}select.value=selected;}collectStagePreviews();draw();window.findTreeNodes();};",
+   "   window.restoreAtlasAnnotations=function(data){window.atlasPendingAnnotations=data||{version:1,nodes:annotationIdentities,edges:[]};};",
+   "   window.atlasManualAnnotations=function(){return annotationData();};",
    "   collectStagePreviews();",
    "   window.updateReplayRange(true);",
-   "   try{var savedAnnotations=window.localStorage.getItem(annotationKey);if(savedAnnotations){manual=validatedAnnotations(JSON.parse(savedAnnotations));draw();}}catch(e){status('Saved connections could not be restored. Import your JSON backup.');}",
+   "   try{var embeddedWorkflow=document.getElementById('apa_workflow_state'),embeddedAnnotations=embeddedWorkflow?JSON.parse(embeddedWorkflow.textContent).annotations:null;if(embeddedAnnotations){window.atlasPendingAnnotations=embeddedAnnotations;}else{var savedAnnotations=window.localStorage.getItem(annotationKey);if(savedAnnotations){manual=validatedAnnotations(JSON.parse(savedAnnotations));draw();}}}catch(e){status('Saved connections could not be restored. Import your JSON backup.');}",
    "   var topButton=document.getElementById('back_to_top');",
    "   function updateTopButton(){if(topButton)topButton.hidden=(window.scrollY||window.pageYOffset||0)<500;}",
    "   window.scrollToReportTop=function(){",

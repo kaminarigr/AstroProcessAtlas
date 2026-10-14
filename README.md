@@ -172,6 +172,76 @@ full GPL v3 license. Replay exports containing it are GPL-3.0-only; AstroProcess
 itself remains MIT. No recursive native Script execution is used. Native PixInsight
 testing of this new support is still required.
 
+The two replay modes open from icon tiles above the tree. Search and filters are
+immediately above the tree toolbar. Zoom, Edit tree, Save and Reset are grouped
+there. Save stays disabled until workflow settings, steps, connections or change
+history differ from the last exported report. **Reset unsaved changes** restores
+that saved state (or the original report before the first save), after confirmation.
+Browser caching is separate from saving an HTML file. Step deletion also requires
+confirmation.
+
+### Edit and save a replay workflow
+
+Use **×** on a process tile to delete it from the tree and detailed history.
+Enable **Edit tree** to drag a tile into another branch: an insertion line shows
+the position, and dropping copies its parameters. Comparison drag-and-drop remains
+available when Edit tree is off. Self-image PixelMath references are remapped to
+the destination branch; review external references and masks.
+
+Inside **Replay linked dependency chain → Edit replay workflow**, choose an image
+and remove a step, or select a step from another image and its insertion position.
+For example, copy the recorded GradientCorrection from Ha into Sii and Oiii before
+their first processing step. Parameters and adapters are preserved. **Undo last
+edit** restores the preceding workflow; check input preparation and references
+again afterwards. Checkpoints are remapped as steps are added/removed. Removing
+a stars producer blocks a branch that still needs that stars output.
+
+Edits update the tree, detailed step list, summary and replay exports. Original
+source records remain embedded for undo and the timestamped **Change history**.
+Existing previews continue to document the original processing. No new preview is fabricated
+for a copied step. Review references, masks and source checkpoints before export.
+Changes are cached in browser storage when available. **Save edited report (HTML)**
+downloads one self-contained report with embedded JSON for the workflow edits,
+input bindings, starting-image suggestions, target, manual connections and change
+history. **Save report (HTML)** is also available beside the tree and connection
+controls; separate connection JSON export/import controls are no longer needed. Open
+that downloaded HTML to restore them; no separate JSON file is required. Saving
+creates a new download rather than overwriting the report currently open.
+
+### Replay a linked dependency chain
+
+Generate a new report, open **Replay linked dependency chain**, and select the final
+image. Review each referenced image and its checkpoint (before processing or after
+a particular step), palette input preparation and mask Color invert. Name matches
+such as `SII_final` → `Sii` are suggestions requiring review. Confirm the plan and
+download one chain script to run in PixInsight. **Original starting inputs** lists
+all required originals, including channels without an initial PixelMath input.
+Optional starting-image IDs suggest the native selection; you can choose differently
+named open images there. Recorded ImageIdentifier names suggest channel aliases
+and name the replay copies with `_APA_replay`; downstream steps use those copies.
+
+The script processes the required channel branches in dependency order, combines
+them and continues on the final image. Verified clones start at their recorded
+parent checkpoint: `Ha_clone` can be rebuilt from the processed `Ha` and used as a
+mask without selecting a separate mask file. Recognized StarXTerminator stars
+outputs are reused automatically. Earlier checkpoints are preserved when a later
+branch needs them; original input images remain unchanged. Convolution and safe
+ProcessContainer groups of supported native steps are now supported.
+
+Supply the original starting images and prepared GAME masks. GAME drawings and
+unrecorded settings cannot be recovered. Unsupported steps, missing references or
+cyclic dependencies block export. Manual links alone do not establish an exact
+historical input. The plan needs explicit source checkpoints rather than assuming
+that the current source image matches every earlier use. Full-resolution copies
+for branches/checkpoints consume memory independently of the report preview size.
+Temporary palette copies close after use; checkpoint copies close after their
+last consumer or when the chain stops. Branch results and partial output are kept.
+The chain shows live task progress and retains partial results on failure. Its
+savable outcome report includes active step metadata, selected checkpoint routing,
+image formats, execution trace, elapsed time and error stack for troubleshooting. Native
+PixInsight validation is still required; automated tests exercise the planner,
+exported script and simulated process execution.
+
 GAME is supported as a **manual prepared-mask starting point**, not automatic
 mask generation. Valid GAME Script entries with empty saved parameters show an
 orange WARNING. Start the selected replay range at GAME, open the completed
@@ -325,6 +395,7 @@ node test_history_report.cjs
 node test_workspace_report.cjs
 node test_preview_completeness.cjs
 node test_numeric_comparison.cjs
+node test_chain_replay.cjs
 ```
 
 These checks mock the PixInsight APIs and browser DOM. They do not replace testing in PixInsight and a real browser.

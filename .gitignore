@@ -17,5 +17,6 @@ Thumbs.db
 !test_workflow_replay.cjs
 !test_preview_completeness.cjs
 !test_numeric_comparison.cjs
+!test_chain_replay.cjs
 
 WORKSPACE_HISTORY_README.md
