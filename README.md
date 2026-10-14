@@ -25,7 +25,7 @@ The embedded previews are reduced to at most 640 pixels and compressed for a sma
 - Readable HistogramTransformation and CurvesTransformation parameters and supported PixelMath equivalents.
 - Historical mask information and previews of currently available masks.
 - Clickable recorded, parameter-based, manual and explicitly unconfirmed connection details.
-- Browser persistence and portable JSON export/import for manual connections.
+- Save workflow edits, input mappings and manual connections in one self-contained HTML report.
 - StarXTerminator stars-output links supported by output naming and history.
 - Processing summary, explicit original-input selection and final-image preview.
 - Copy process code with replay requirements.
@@ -42,11 +42,12 @@ The embedded previews are reduced to at most 640 pixels and compressed for a sma
 
 ## Updates
 
-Current version: **0.2.0**. The version is shown in About.
+Current version: **0.3.0**. The version is shown in About.
 
-Version 0.2.0 adds workflow replay with interactive image/mask selection, expanded
-process support and consistent grouped-step numbering. See the [changelog](CHANGELOG.md)
-for the release changes and the workflow replay section below for supported cases.
+Version 0.3.0 adds linked dependency-chain replay, direct GraXpert execution,
+editable workflows saved in one HTML file, responsive reference cards and detailed
+execution diagnostics. Ambiguous external PixelMath copies require an explicit
+source, skip or replacement choice. See the [changelog](CHANGELOG.md) for all changes.
 
 Version tags build downloadable ZIPs and draft GitHub releases automatically. Publishing a stable release deploys an **unsigned PixInsight update repository** to GitHub Pages. No CPD identity is required; users must allow unsigned repositories and scripts in PixInsight's Security preferences.
 
@@ -183,13 +184,15 @@ confirmation.
 
 ### Edit and save a replay workflow
 
-Use **×** on a process tile to delete it from the tree and detailed history.
+Use **×** on a process tile to request deletion from the tree and detailed history.
+A confirmation modal shows the image, step, tool, available mask/inputs and
+expandable parameters/code. Choose **Delete step**, or cancel with **Cancel** or Escape.
 Enable **Edit tree** to drag a tile into another branch: an insertion line shows
 the position, and dropping copies its parameters. Comparison drag-and-drop remains
 available when Edit tree is off. Self-image PixelMath references are remapped to
 the destination branch; review external references and masks.
 
-Inside **Replay linked dependency chain → Edit replay workflow**, choose an image
+Inside **Replay linked dependency chain → Optional: edit steps or configure GraXpert**, choose an image
 and remove a step, or select a step from another image and its insertion position.
 For example, copy the recorded GradientCorrection from Ha into Sii and Oiii before
 their first processing step. Parameters and adapters are preserved. **Undo last
@@ -211,7 +214,7 @@ creates a new download rather than overwriting the report currently open.
 
 ### GraXpert and prepared external results
 
-In **Edit replay workflow**, select an image and press **External / GraXpert**
+In **Optional: edit steps or configure GraXpert**, select an image and press **External / GraXpert**
 beside its recorded step (for example a bare `PixelMath: image`). Choose one mode
 and press **Apply external handling**:
 
@@ -226,7 +229,16 @@ and press **Apply external handling**:
   optional executable path. Leave it blank to detect the installed PixInsight
   GraXpert wrapper's saved path, resolve `graxpert` through PATH, or use the standard
   Windows user installation. Native preflight asks for a file only if detection fails.
+- **Skip ambiguous image copy (leave pixels unchanged):** explicitly bypass a bare
+  `PixelMath: image` copy. Keep its place in the sequence, but do not copy or process
+  pixels. The plan and replay log warn that the original external processing is
+  omitted. This option is restricted to these ambiguous identity copies.
 - **Recorded process:** restore the original saved step.
+
+For an ambiguous `PixelMath: image`, its reference card offers these choices
+directly: map a source image, skip, replace with GraXpert, or use a prepared result.
+No source means unresolved input, not automatic skipping. GraXpert replacement
+opens its configuration; apply the settings before downloading the script.
 
 These are user declarations, saved in the HTML and change log. A bare `image`
 copy does not prove GraXpert use and is no longer automatically bound to the raw
@@ -245,15 +257,34 @@ is still required.
 
 ### Replay a linked dependency chain
 
-Generate a new report, open **Replay linked dependency chain**, and select the final
-image. Review each referenced image and its checkpoint (before processing or after
-a particular step), palette input preparation and mask Color invert. Name matches
-such as `SII_final` → `Sii` are suggestions requiring review. Confirm the plan and
-download one chain script to run in PixInsight. **Original starting inputs** lists
-all required originals, including channels without an initial PixelMath input.
-Optional starting-image IDs suggest the native selection; you can choose differently
-named open images there. Recorded ImageIdentifier names suggest channel aliases
-and name the replay copies with `_APA_replay`; downstream steps use those copies.
+Generate a new report and open **Replay linked dependency chain**:
+
+1. **Choose the final image.** Select the result you want to rebuild.
+2. **Review the input images and masks.** Reference cards are grouped by the image
+   using them. Labelled icons and color accents distinguish inputs from masks.
+   Select the source image and the required processing stage for each reference;
+   palette inputs also require their preparation state. Name matches such as
+   `SII_final` → `Sii` are suggestions requiring review.
+3. **Review the plan and download.** Resolve the listed blockers, then confirm
+   source checkpoints, palette preparation and mask inversion. The download button
+   stays disabled until the plan is valid and confirmation is checked.
+
+Hover over or focus a linked blocker/task to highlight the corresponding card.
+Click it, or press Enter/Space, to jump to the setting. The task list and reference
+cards adapt their columns to the available width; mobile controls stack vertically.
+
+**Original starting inputs (optional name suggestions)** is collapsed by default.
+Only the name suggestions are optional: supply the actual starting images and
+required prepared masks when running the replay in PixInsight. You may select
+open images whose names differ. Recorded ImageIdentifier names suggest aliases
+and name replay copies with `_APA_replay`; downstream steps use those copies.
+
+Use the **Optional: edit steps or configure GraXpert** tile to alter the workflow.
+Changing **Steps in an image** synchronizes the source image/step selectors; you
+can still choose another source to copy between images. Advanced GraXpert settings
+are collapsed. Short English/Greek notifications confirm changes and copies;
+**Save edited report (HTML)** keeps them in a downloaded report. Open that saved
+HTML to restore the edits. Regenerate the report to receive new interface features.
 
 The script processes the required channel branches in dependency order, combines
 them and continues on the final image. Verified clones start at their recorded
@@ -269,11 +300,19 @@ cyclic dependencies block export. Manual links alone do not establish an exact
 historical input. The plan needs explicit source checkpoints rather than assuming
 that the current source image matches every earlier use. Full-resolution copies
 for branches/checkpoints consume memory independently of the report preview size.
-Temporary palette copies close after use; checkpoint copies close after their
+Temporary palette and process helper windows close after use; checkpoint copies close after their
 last consumer or when the chain stops. Branch results and partial output are kept.
 The chain shows live task progress and retains partial results on failure. Its
 savable outcome report includes active step metadata, selected checkpoint routing,
-image formats, execution trace, elapsed time and error stack for troubleshooting. Native
+image formats, execution trace, elapsed time and error stack for troubleshooting.
+A separate `AstroProcessAtlas_chain_trace_….txt` diagnostic file is written in the
+system temporary directory before/after each task, process and cleanup boundary.
+Its path appears at startup and in the final report. Keep this diagnostic file if
+execution stops without a final message; it is intentionally retained for diagnosis.
+GraXpert output is grouped into readable lines with stderr labels and explicit
+truncation notices. DarkStructureEnhance chain exports include the interface
+libraries needed to open its manual settings dialog.
+Native
 PixInsight validation is still required; automated tests exercise the planner,
 exported script and simulated process execution.
 
@@ -459,10 +498,10 @@ after preview; image nodes use their current snapshot. Dropdowns and A/B tree
 markers stay synchronized. Before previews can also be selected in the dropdown.
 Only available previews are offered; missing historical pixels cannot be recovered.
 
-Manual connections save automatically in browser storage when available. Export
-JSON for a portable backup, and import it alongside the same report in another
-browser. This does not rewrite the HTML. Clearing connections also clears their
-saved state. Invalid imports leave existing connections intact.
+Use **Save report (HTML)** after adding, removing or changing manual connections.
+The downloaded HTML embeds them alongside workflow edits and change history;
+open that file to restore the saved state in another browser. Separate JSON
+export/import is no longer required. Saving does not overwrite the open report.
 
 ## Connection details and large trees
 

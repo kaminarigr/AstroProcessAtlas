@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.3.0 — 2026-10-15
+
 - Explain opaque PixelMath `image` copies directly in reference cards and offer
   source mapping, explicit no-op skip, GraXpert replacement or a prepared result.
   Persist skip choices, preserve step/checkpoint numbering, warn about omitted
@@ -51,7 +53,7 @@
 - Clean up process-created helper image windows after chain replay steps and on
   completion, failure or cancellation, retaining branch results and generated stars.
   Record closed windows and cleanup failures in chain diagnostics.
-- Display the chain task plan in two columns, with one column on small screens.
+- Display the chain task plan in columns that adapt to available container width.
 - Default new GraXpert declarations to smoothing 0.5, GPU and automatic latest
   available AI model; retain explicitly saved values, including zero smoothing.
 
