@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- Collapse optional starting-image name suggestions while retaining expansion
+  during edits. Link plan blockers and task references to their exact input/mask
+  cards with hover/focus highlighting and click/keyboard navigation.
+
+- Center the chain target selector against its description, promote optional
+  workflow editing to an icon tile, align full-width starting-input rows and
+  clearly distinguish disabled chain downloads from enabled actions.
+
+- Synchronize the step source selectors when the workflow image changes while
+  keeping independent source selection available for copying between images.
+- Make chain task columns adapt to available container width. Add accessible,
+  dismissible English/Greek notifications for edits, copies and report downloads;
+  exclude transient notifications from saved HTML.
+
 - Group chain reference cards by the image using them. Add labelled input/mask
   SVG icons, matching color accents and separate step captions within each
   responsive group, with English/Greek labels.
