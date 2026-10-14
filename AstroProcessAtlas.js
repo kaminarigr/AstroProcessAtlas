@@ -97,7 +97,7 @@ function previewAppearance(image) {
 
 function previewAppearanceHTML(info) {
    if(!info)return '<span class="appearance-badge">Stretch state: unknown</span>';
-   var label=info.stretchRecorded?'Nonlinear stretch recorded in history':info.state==='dark'?'Likely linear / dark (estimated)':info.state==='visible'?'Visible image — stretch state unconfirmed':'Stretch state: unknown';
+   var label=info.gameMask?'GAME mask — stretched':info.stretchRecorded?'Nonlinear stretch recorded in history':info.state==='dark'?'Likely linear / dark (estimated)':info.state==='visible'?'Visible image — stretch state unconfirmed':'Stretch state: unknown';
    return '<span class="appearance-badge">'+label+'</span>'+(info.auto?'<span class="appearance-badge">Auto-stretched preview only</span>':'');
 }
 
@@ -108,6 +108,17 @@ function recordedNonlinearStretch(record,index) {
       try{var rows=step.proc.H;for(var c=0;rows&&c<Math.min(4,rows.length);++c)if(rows[c]&&rows[c].length>=5&&typeof rows[c][1]==='number'&&rows[c][1]!==0.5)return true;}catch(e){}
    }
    return false;
+}
+
+function recordedGameMask(record,index) {
+   var steps=record.cloneFullSteps||record.steps;
+   for(var i=0;i<steps.length;++i){var step=steps[i];if(step.phase==='live'&&step.liveIndex>index)continue;if(/^GAME$/i.test(getProcessTitle(step.proc)))return true;}
+   return false;
+}
+
+function historyPreviewAppearance(record,index) {
+   if(recordedGameMask(record,index))return {state:'mask',gameMask:true,auto:false,black:0,midtones:0.5};
+   var appearance=previewAppearance(record.view.image);appearance.stretchRecorded=recordedNonlinearStretch(record,index);return appearance;
 }
 
 function createThumbnailFromView(view, outputPath, maxSize, appearance) {
@@ -645,8 +656,7 @@ function collectWorkspaceThumbnails(records, thumbDir, relativeDir, progress, pr
    for (var r = 0; r < records.length; ++r) {
       if (progress) progress(15 + 10*r/records.length, 'Current image and masks: ' + records[r].id);
       var record = records[r], filename = record.anchor + "_current.png";
-      record.appearance=previewAppearance(record.view.image);
-      record.appearance.stretchRecorded=recordedNonlinearStretch(record,record.historyIndex);
+      record.appearance=historyPreviewAppearance(record,record.historyIndex);
       if (createThumbnailFromView(record.view, thumbDir + "/" + filename, profile.thumbnail, record.appearance)) {
          record.currentThumb = relativeDir + "/" + filename;generatedFiles.push(thumbDir+'/'+filename);
       }
@@ -671,8 +681,7 @@ function collectWorkspaceThumbnails(records, thumbDir, relativeDir, progress, pr
             if (record.view.historyIndex !== index) record.view.historyIndex = index;
             if (record.view.historyIndex !== index) return '';
             dimensions['$'+index] = {width:record.view.image.width,height:record.view.image.height};
-            var appearance=previewAppearance(record.view.image);
-            appearance.stretchRecorded=recordedNonlinearStretch(record,index);
+            var appearance=historyPreviewAppearance(record,index);
             if(appearance.auto){if(!linkedStretch)linkedStretch=appearance;appearance.black=linkedStretch.black;appearance.midtones=linkedStretch.midtones;}
             appearances['$'+index]=appearance;
             if (createThumbnailFromView(record.view, thumbDir + '/' + filename, profile.stage, appearance)) {
@@ -1181,7 +1190,7 @@ function workspaceOverviewHTML(records, graph) {
          subtitle = 'Inherited / initial history';
       }
       var appearance=appearanceByImage['$'+node.image],complete=completenessByNode['$'+node.id];
-      var badge=node.header?'<text class="graph-small" x="'+(node.x+10)+'" y="'+(node.y+66)+'">'+(appearance&&appearance.stretchRecorded?'Stretch recorded':appearance&&appearance.state==='dark'?'Likely linear / dark':appearance&&appearance.state==='visible'?'Visible — stretch unconfirmed':'Stretch state: unknown')+'</text>':complete?'<g><title>'+complete.label+'</title><circle cx="'+(node.x+235)+'" cy="'+(node.y+50)+'" r="5" fill="'+(complete.level==='recorded'?'#a6e3a1':complete.level==='manual'?'#fab387':'#f38ba8')+'"/></g>':'';
+      var badge=node.header?'<text class="graph-small" x="'+(node.x+10)+'" y="'+(node.y+66)+'">'+(appearance&&appearance.gameMask?'GAME mask — stretched':appearance&&appearance.stretchRecorded?'Stretch recorded':appearance&&appearance.state==='dark'?'Likely linear / dark':appearance&&appearance.state==='visible'?'Visible — stretch unconfirmed':'Stretch state: unknown')+'</text>':complete?'<g><title>'+complete.label+'</title><circle cx="'+(node.x+235)+'" cy="'+(node.y+50)+'" r="5" fill="'+(complete.level==='recorded'?'#a6e3a1':complete.level==='manual'?'#fab387':'#f38ba8')+'"/></g>':'';
       html += '<a onpointerdown="beginComparisonDrag(event,this.getAttribute(\'data-node\'))" draggable="false" data-node="' + node.id + '" ondragstart="dragComparisonStage(event,this.getAttribute(\'data-node\'))" ondragover="stageDragOver(event)" ondrop="dropComparedNodes(event,this.getAttribute(\'data-node\'))" href="#' + node.id + '" onclick="selectGraphNode(\'' + node.id + '\',event)" onfocus="focusGraphImage(\'' + node.id + '\')" onblur="clearGraphFocus()"><g data-node="' + node.id + '" onmouseenter="focusGraphImage(\'' + node.id + '\')" onmouseleave="clearGraphFocus()" draggable="false" ondragstart="dragComparisonStage(event,this.getAttribute(\'data-node\'))" ondragover="stageDragOver(event)" ondrop="dropComparedNodes(event,this.getAttribute(\'data-node\'))" class="graph-node' + (node.redo ? ' redo-node' : '') + '">' +
          '<rect x="' + node.x + '" y="' + node.y + '" width="250" height="72" rx="8"/>' +
          '<title data-no-i18n>' + escapeHTML(node.label + (node.time ? ' — ' + node.time : '')) + '</title>' +
@@ -1687,6 +1696,10 @@ function buildWorkspaceReplayScript(image, start, end) {
       'var replayFactories = [' + factories.join(',\n') + '];',
       pixelMathTextTokens.toString(),
       compareAtlasImages.toString(),
+      previewAppearance.toString(),
+      comparisonPreviewBitmap.toString(),
+      comparisonIsGameMask.toString(),
+      showAtlasComparisonResult.toString(),
       showAtlasComparisonDialog.toString(),
       'function remapPixelMathText(text,mapped) {',
       '   var tokens=pixelMathTextTokens(text),result="",last=0;',
@@ -1752,7 +1765,35 @@ function buildWorkspaceReplayScript(image, start, end) {
       '}',
       "var replayAudit={stage:\"Preflight\",current:-1,completed:[],preflightFailures:[],choices:[],started:(new Date()).getTime()};",
       "function replayChoice(text){replayAudit.choices.push(text);}",
+      "var replayProgress=null,replayStopRequested=false;",
+      "function updateReplayProgress(index,status){",
+      "   if(!replayProgress)return;",
+      "   if(index>=0&&replayProgress.rows[index]){",
+      "      var row=replayProgress.rows[index],color=status===\"Completed\"?0xff69d184:status===\"Failed / cancelled\"?0xffff8080:status===\"Running\"?0xfff5b96e:0xffaab4c8;",
+      "      row.setText(1,status);if(replayProgress.tree&&typeof replayProgress.tree.adjustColumnWidthToContents===\"function\")replayProgress.tree.adjustColumnWidthToContents(1);if(typeof row.setTextColor===\"function\"){row.setTextColor(0,color);row.setTextColor(1,color);}",
+      "   }",
+      "   replayProgress.label.text=replayAudit.stage+\" - \"+replayAudit.completed.length+\" / \"+replaySteps.length+\" steps completed\"+(index>=0?\" | \"+replaySteps[index].title+\": \"+status:\"\");",
+      "   if(typeof processEvents===\"function\")processEvents();",
+      "}",
+      "function openReplayProgress(){",
+      "   if(typeof TreeBox!==\"function\"||typeof TreeBoxNode!==\"function\")return;",
+      "   var dialog=new Dialog;dialog.windowTitle=\"AstroProcessAtlas - Replay progress\";dialog.onClose=function(){return false;};",
+      "   var label=new Label(dialog);label.wordWrapping=true;label.text=\"Preparing inputs and masks...\";",
+      "   var tree=new TreeBox(dialog);tree.numberOfColumns=2;tree.headerVisible=true;tree.setHeaderText(0,\"Step\");tree.setHeaderText(1,\"Status\");tree.setMinSize(600,Math.min(420,Math.max(180,replaySteps.length*25+40)));",
+      "   var rows=[];for(var i=0;i<replaySteps.length;++i){var row=new TreeBoxNode(tree);row.setText(0,replaySteps[i].number+\" - \"+replaySteps[i].title);row.setText(1,\"Waiting\");rows.push(row);}",
+      "   if(typeof tree.adjustColumnWidthToContents===\"function\")tree.adjustColumnWidthToContents(0);",
+      "   var stop=new PushButton(dialog);stop.text=\"Stop after current step\";stop.onClick=function(){replayStopRequested=true;stop.enabled=false;stop.text=\"Stopping after current step...\";};",
+      "   dialog.sizer=new VerticalSizer;dialog.sizer.margin=12;dialog.sizer.spacing=8;dialog.sizer.add(label);dialog.sizer.add(tree);dialog.sizer.add(stop);dialog.adjustToContents();",
+      "   replayProgress={dialog:dialog,label:label,rows:rows,tree:tree};dialog.show();updateReplayProgress(-1,\"\");",
+      "}",
+      "function finishReplayStep(index){replayAudit.completed.push(index);updateReplayProgress(index,\"Completed\");}",
+      "function closeReplayProgress(error){",
+      "   if(!replayProgress)return;",
+      "   if(error&&replayAudit.current>=0)updateReplayProgress(replayAudit.current,\"Failed / cancelled\");",
+      "   replayProgress.dialog.hide();replayProgress=null;",
+      "}",
       "function replaySummary(output,error){",
+      '   closeReplayProgress(error);',
       "   var text=(error?\"Replay stopped: \"+error:\"Replay complete: \"+output.mainView.id)+\"\\n\\nPhase: \"+replayAudit.stage+\"\\nElapsed: \"+(((new Date()).getTime()-replayAudit.started)/1000).toFixed(1)+\" seconds\\nCompleted: \"+replayAudit.completed.length+\" / \"+replaySteps.length;",
       "   if(error&&output&&!output.isNull)text+=\"\\nPartial result retained as \"+output.mainView.id;",
       "   text+=\"\\n\\nSelected steps:\";",
@@ -1763,7 +1804,7 @@ function buildWorkspaceReplayScript(image, start, end) {
       "   var dialog=new Dialog;dialog.windowTitle=\"AstroProcessAtlas - Replay report\";dialog.sizer=new VerticalSizer;dialog.sizer.margin=12;dialog.sizer.spacing=8;",
       "   var box=new TextBox(dialog);box.readOnly=true;box.useRichText=false;box.text=text;box.setMinSize(680,400);dialog.sizer.add(box);",
       "   var save=new PushButton(dialog);save.text=\"Save report...\";save.onClick=function(){try{var picker=new SaveFileDialog;picker.caption=\"Save replay report\";picker.filters=[[\"Text files (*.txt)\",\"*.txt\"]];picker.initialPath=\"AstroProcessAtlas_replay_report.txt\";if(!picker.execute())return;var file=new File;try{file.createForWriting(picker.fileName);file.write(ByteArray.stringToUTF8(text));}finally{file.close();}}catch(e){new MessageBox(\"Unable to save report: \"+e.message,\"AstroProcessAtlas\",StdIcon_Error,StdButton_Ok).execute();}};",
-      '   var compare=new PushButton(dialog);compare.text="Compare with original...";compare.enabled=!!(output&&!output.isNull);compare.onClick=function(){try{showAtlasComparisonDialog(output,replayImage);}catch(e){new MessageBox(e.message,"AstroProcessAtlas - Comparison",StdIcon_Error,StdButton_Ok).execute();}};',
+      '   var compare=new PushButton(dialog);compare.text="Compare with original...";compare.enabled=!!(output&&!output.isNull);compare.onClick=function(){try{showAtlasComparisonDialog(output,replayImage,error?"Replay stopped: the partial result may contain changes from the failed step. Select checkpoints deliberately.":"Original must match the state after step "+replaySteps[replaySteps.length-1].number+" - "+replaySteps[replaySteps.length-1].title+". A later final image is a different checkpoint.");}catch(e){new MessageBox(e.message,"AstroProcessAtlas - Comparison",StdIcon_Error,StdButton_Ok).execute();}};',
       "   var close=new PushButton(dialog);close.text=\"Close\";close.onClick=function(){dialog.ok();};var buttons=new HorizontalSizer;buttons.add(save);buttons.add(compare);buttons.addStretch();buttons.add(close);dialog.sizer.add(buttons);dialog.adjustToContents();dialog.execute();",
       "}",
       "function prepareReplayProcesses(){",
@@ -1794,7 +1835,7 @@ function buildWorkspaceReplayScript(image, start, end) {
       "function prepareReplayResources(input,processes,palette,pixelMathCache,maskCache,firstMapping){",
       "   var image=input.mainView.image,geometry={width:image.width,height:image.height,isColor:palette?true:image.isColor},masks=[],mappings=[];",
       "   var proxy={isNull:false,mainView:{id:replayImage+\"_APA_current_result\",image:geometry},removeMask:function(){},setMask:function(){}};",
-      "   for(var i=0;i<replaySteps.length;++i){var step=replaySteps[i],process=processes[i];replayAudit.current=i;",
+      "   for(var i=0;i<replaySteps.length;++i){var step=replaySteps[i],process=processes[i];replayAudit.current=i;updateReplayProgress(i,\"Loading inputs / masks\");if(replayStopRequested)throw Error(\"Replay cancelled before processing.\");",
       "      if(step.action===\"pixelmath\"){",
       "         var mapping=i===0&&firstMapping?firstMapping:choosePixelMathInputs(proxy,step,pixelMathCache);",
       "         var names=step.inputs||[];",
@@ -1802,6 +1843,7 @@ function buildWorkspaceReplayScript(image, start, end) {
       "         mappings[i]=mapping;",
       "      }",
       "      if(step.mask){applyReplayMask(proxy,step.mask,maskCache,step);var entry=maskCache[\"$\"+step.mask.name];validateReplayMask(entry.window,geometry,step.mask.name);masks[i]=entry;}",
+      '      updateReplayProgress(i,"Ready");',
       "      if(process&&step.action===\"pixelmath\"&&process.createNewImage){",
       "         if(process.newImageWidth>0)geometry.width=process.newImageWidth;",
       "         if(process.newImageHeight>0)geometry.height=process.newImageHeight;",
@@ -1850,13 +1892,16 @@ function buildWorkspaceReplayScript(image, start, end) {
       '   var input=candidates[combo.currentItem];if(!pixelStart&&(!input||input.isNull))throw Error("Selected input is unavailable.");',
       '   var mapped={},temporary=[],prepared={},maskCache={},pixelMathCache={},firstPixelMapping=null,output=null;',
       '   try {',
+      '   openReplayProgress();',
       '   if(pixelStart){replayAudit.current=0;firstPixelMapping=choosePixelMathInputs(null,replaySteps[0],pixelMathCache);input=pixelMathCache["$"+replaySteps[0].inputs[0]];}',
       '   if(palette){for(var b=0;b<bindings.length;++b){var channel=candidates[bindings[b].combo.currentItem];if(!channel||channel.isNull||channel.mainView.image.isColor)throw Error("Select an available grayscale channel for "+bindings[b].name);if(bindings[b].state.currentItem!==1&&bindings[b].state.currentItem!==2)throw Error("Choose the preparation state for "+bindings[b].name);if(b===0)input=channel;else if(channel.mainView.image.width!==input.mainView.image.width||channel.mainView.image.height!==input.mainView.image.height)throw Error("Palette inputs must have matching dimensions.");}}',
       "   replayChoice(\"Starting image: \"+input.mainView.id);",
       "   if(palette)for(var b=0;b<bindings.length;++b)replayChoice(\"Palette \"+bindings[b].name+\" -> \"+candidates[bindings[b].combo.currentItem].mainView.id+\"; state: \"+(bindings[b].state.currentItem===2?\"Linear - stretch on copy\":\"Already prepared\"));",
       "   var resources=prepareReplayResources(input,processes,palette,pixelMathCache,maskCache,firstPixelMapping);",
       "   replayAudit.stage=\"Execution\";replayAudit.current=0;",
+      '   if(palette)updateReplayProgress(0,"Loading palette preparation");',
       '   if(palette){for(var b=0;b<bindings.length;++b){var channel=candidates[bindings[b].combo.currentItem],view=channel.mainView;if(bindings[b].state.currentItem===2){var key="$"+view.id;if(prepared[key])view=prepared[key];else{var tid=view.id+"_APA_ppp_input",ti=1;while(!View.viewById(tid).isNull)tid=view.id+"_APA_ppp_input_"+(ti++);var ci=view.image,copy=new ImageWindow(ci.width,ci.height,ci.numberOfChannels,ci.bitsPerSample,ci.isReal,false,tid);temporary.push(copy);copy.mainView.beginProcess(UndoFlag_NoSwapFile);try{copy.mainView.image.assign(ci);}finally{copy.mainView.endProcess();}view=copy.mainView;var expressions=["($T-max(min($T),med($T)-2.7*sdev($T)))/(1-max(min($T),med($T)-2.7*sdev($T)))","mtf(mtf(0.25,med($T)),$T)"];for(var p=0;p<expressions.length;++p){var stretch=new PixelMath;stretch.expression=expressions[p];stretch.useSingleExpression=true;stretch.symbols="";stretch.generateOutput=true;stretch.clearImageCacheAndExit=false;stretch.cacheGeneratedImages=false;stretch.use64BitWorkingImage=true;stretch.rescale=false;stretch.truncate=true;stretch.truncateLower=0;stretch.truncateUpper=1;stretch.createNewImage=false;stretch.showNewImage=false;if(stretch.executeOn(view)===false)throw Error("PPP input stretch failed: "+channel.mainView.id);processEvents();}prepared[key]=view;}}mapped["$"+bindings[b].name]=view.id;}}',
+      '   updateReplayProgress(0,"Loading replay copy");',
       '   var baseId=(replayIdentifier||input.mainView.id)+"_APA_replay",id=baseId,suffix=1;',
       '   if(palette){baseId=(replayIdentifier||replayImage)+"_APA_replay";id=baseId;}',
       '   if(pixelOutput){baseId=outputName.text;id=baseId;}',
@@ -1868,25 +1913,25 @@ function buildWorkspaceReplayScript(image, start, end) {
       '   if(!palette){output.rgbWorkingSpace=input.rgbWorkingSpace;output.mainView.stf=input.mainView.stf;}',
       '   output.show();',
       '      for(var k=0;k<replaySteps.length;++k){',
-      '         replayAudit.current=k;',
+      '         replayAudit.current=k;if(replayStopRequested)throw Error("Replay cancelled after the completed steps.");updateReplayProgress(k,"Running");if(replayStopRequested)throw Error("Replay cancelled before this step.");',
       '         if(replaySteps[k].reason)throw Error("Stopped before step "+replaySteps[k].number+": "+replaySteps[k].reason);',
-      '         if(replaySteps[k].action==="identifier"){Console.writeln("ImageIdentifier handled at creation: "+output.mainView.id);replayAudit.completed.push(k);continue;}',
-      '         if(replaySteps[k].action==="game"){if(k!==0)throw Error("Start the selected range at GAME and select its completed original mask.");Console.writeln("GAME: resumed from the user-supplied completed mask "+input.mainView.id+"; mask creation was not repeated.");replayAudit.completed.push(k);continue;}',
+      '         if(replaySteps[k].action==="identifier"){Console.writeln("ImageIdentifier handled at creation: "+output.mainView.id);finishReplayStep(k);continue;}',
+      '         if(replaySteps[k].action==="game"){if(k!==0)throw Error("Start the selected range at GAME and select its completed original mask.");Console.writeln("GAME: resumed from the user-supplied completed mask "+input.mainView.id+"; mask creation was not repeated.");finishReplayStep(k);continue;}',
       '         Console.writeln("Replay "+(k+1)+"/"+replaySteps.length+": "+replaySteps[k].title);',
       '         if(replaySteps[k].starRequired&&typeof StarXTerminator!=="function")throw Error("SelectiveColorCorrection requires StarXTerminator for its star mask.");',
       '         var process=processes[k];',
       '         applyReplayMask(output,replaySteps[k].mask,maskCache,replaySteps[k],resources.masks[k]);',
-      '         if(replaySteps[k].action==="pixelmath"){try{output=runPixelMathReplay(process,output,replaySteps[k],pixelMathCache,resolveReplayMapping(resources.mappings[k],output));}finally{if(output&&!output.isNull)output.removeMask();}replayAudit.completed.push(k);processEvents();continue;}',
-      '         if(replaySteps[k].action==="selective"){Parameters.set("apaSelectiveStep",k);try{runSelectiveReplay(process,output.mainView);}finally{Parameters.set("apaSelectiveStep",-1);}replayAudit.completed.push(k);processEvents();continue;}',
-      '         if(replaySteps[k].action==="dark"){runDarkStructureReplay(process,output.mainView);replayAudit.completed.push(k);processEvents();continue;}',
+      '         if(replaySteps[k].action==="pixelmath"){try{output=runPixelMathReplay(process,output,replaySteps[k],pixelMathCache,resolveReplayMapping(resources.mappings[k],output));}finally{if(output&&!output.isNull)output.removeMask();}finishReplayStep(k);processEvents();continue;}',
+      '         if(replaySteps[k].action==="selective"){Parameters.set("apaSelectiveStep",k);try{runSelectiveReplay(process,output.mainView);}finally{Parameters.set("apaSelectiveStep",-1);}finishReplayStep(k);processEvents();continue;}',
+      '         if(replaySteps[k].action==="dark"){runDarkStructureReplay(process,output.mainView);finishReplayStep(k);processEvents();continue;}',
       '         if(replaySteps[k].action==="palette"){var keys=["expression","expression1","expression2"];for(var e=0;e<keys.length;++e)process[keys[e]]=process[keys[e]].replace(/(?:[0-9]+(?:[.][0-9]*)?|[.][0-9]+)(?:[eE][+-]?[0-9]+)?|[A-Za-z_][A-Za-z0-9_]*/g,function(token){return Object.prototype.hasOwnProperty.call(mapped,"$"+token)?mapped["$"+token]:token;});}',
       '         if(!process||typeof process.executeOn!=="function")throw Error("Required process is unavailable: "+replaySteps[k].title);',
       '         try{if(process.executeOn(output.mainView)===false)throw Error("Process failed: "+replaySteps[k].title);}finally{output.removeMask();}',
-      '         replayAudit.completed.push(k);processEvents();',
+      '         finishReplayStep(k);processEvents();',
       '      }',
       '      replayAudit.stage="Completed";replayAudit.current=-1;replaySummary(output,null);',
       '   }catch(error){replaySummary(output,error.message);}',
-      '   finally{for(var t=0;t<temporary.length;++t)if(!temporary[t].isNull)temporary[t].forceClose();}',
+      '   finally{closeReplayProgress(null);for(var t=0;t<temporary.length;++t)if(!temporary[t].isNull)temporary[t].forceClose();}',
       '}',
       'function runAtlasHistoryStep() {',
       '   if(!Parameters.has("apaSelectiveStep"))throw Error("This older replay history entry has no recorded step identifier. Generate a new report and replay; the full workflow will not run on this view.");',
@@ -1908,9 +1953,9 @@ function buildWorkspaceReplayScript(image, start, end) {
          '   var digest=(new CryptographicHash(CryptographicHash_SHA256)).hash(File.readFile(template.filePath)).toHex();',
          '   if(digest.toLowerCase()!==template.sourceDigest.toLowerCase())throw Error("DarkStructureEnhance source changed. Generate a new report and export.");',
          darkLibrary,
-         '   var replayDialog=new DarkMaskLayersDialog();',
+         '   updateReplayProgress(replayAudit.current,"Loading settings");var replayDialog=new DarkMaskLayersDialog();',
          '   if(!replayDialog.execute())throw Error("DarkStructureEnhance settings cancelled.");',
-         '   replayChoice("DarkStructureEnhance: manual settings confirmed in PixInsight.");',
+         '   replayChoice("DarkStructureEnhance: manual settings confirmed in PixInsight.");updateReplayProgress(replayAudit.current,"Running");',
          '   if(!data.targetView||data.targetView.isNull||(data.targetView.fullId||data.targetView.id)!==(target.fullId||target.id))throw Error("DarkStructureEnhance must target the replay copy. Select it in the settings dialog.");data.targetView=target;',
          '   var makeDarkMask=typeof doMask==="function"?doMask:null,ownedMasks=[];',
          '   if(makeDarkMask)doMask=function(settings){var mask=makeDarkMask(settings);ownedMasks.push(mask);return mask;};',
@@ -2088,12 +2133,67 @@ function compareAtlasImages(original, replay, label) {
    }
 }
 
-function showAtlasComparisonDialog(preferredReplay,originalId) {
+function comparisonPreviewBitmap(image,appearance,gain) {
+   var preview=null;
+   try{
+      var scale=Math.min(1,280/image.width,180/image.height),width=Math.max(1,Math.round(image.width*scale)),height=Math.max(1,Math.round(image.height*scale)),channels=image.isColor?3:1;
+      preview=new Image(width,height,channels,image.colorSpace,32,1);
+      var xs=[],ys=[];for(var x=0;x<width;++x)xs.push(Math.min(image.width-1,Math.floor((x+0.5)*image.width/width)));for(var y=0;y<height;++y)ys.push(Math.min(image.height-1,Math.floor((y+0.5)*image.height/height)));
+      var bulk=typeof image.getSamples==='function'&&image.width<=1048576,row=bulk?new Float32Array(image.width):null;
+      for(var c=0;c<channels;++c){var values=new Float32Array(width*height);
+         for(var y=0;y<height;++y){if(bulk)image.getSamples(row,new Rect(0,ys[y],image.width,ys[y]+1),c);
+            for(var x=0;x<width;++x){var value=bulk?row[xs[x]]:image.sample(xs[x],ys[y],c);value*=gain;
+               if(appearance&&appearance.auto){value=(value-appearance.black)/(1-appearance.black);value=Math.max(0,Math.min(1,value));var m=appearance.midtones;value=value===0?0:value===1?1:(m-1)*value/((2*m-1)*value-m);}
+               values[y*width+x]=isFinite(value)?Math.max(0,Math.min(1,value)):0;
+            }
+         }
+         preview.setSamples(values,new Rect(0,0,width,height),c);
+      }
+      return preview.render();
+   }finally{if(preview)preview.free();}
+}
+
+function comparisonIsGameMask(window) {
+   try{
+      var view=window.mainView,groups=[];try{groups.push({container:view.initialProcessing,limit:Infinity});}catch(e){}try{groups.push({container:view.processing,limit:view.historyIndex});}catch(e){}
+      for(var g=0;g<groups.length;++g){var container=groups[g].container;if(!container||typeof container.at!=='function')continue;var count=Math.min(container.length,groups[g].limit);for(var i=0;i<count;++i){var process=container.at(i);if(process&&/(?:^|[\\/])GAME[.]js$/i.test(process.filePath||''))return true;}}
+   }catch(e){}
+   return false;
+}
+
+function showAtlasComparisonResult(original,replay,result,stageHint) {
+   var identical=result.max===0,headline=identical?'Identical nominal-channel pixels':'Differences detected';
+   var text=original.mainView.id+' versus '+replay.mainView.id+'\n'+headline;
+   for(var c=0;c<result.rows.length;++c)text+='\n'+result.rows[c].channel+': max abs = '+result.rows[c].max.toExponential(12)+'; mean abs = '+result.rows[c].mean.toExponential(12);
+   if(typeof TreeBox!=='function'||typeof TreeBoxNode!=='function'){new MessageBox(text,'AstroProcessAtlas - Comparison result',StdIcon_Information,StdButton_Ok).execute();return;}
+   var dialog=new Dialog;dialog.windowTitle='AstroProcessAtlas - Comparison result';dialog.sizer=new VerticalSizer;dialog.sizer.margin=16;dialog.sizer.spacing=10;
+   var title=new Label(dialog);title.text=headline;title.styleSheet='font-size:18px;font-weight:bold;color:'+(identical?'#43a047':'#df9c36');dialog.sizer.add(title);
+   var average=0;for(var c=0;c<result.rows.length;++c)average+=result.rows[c].mean/result.rows.length;var summary=new Label(dialog);summary.text='Average absolute deviation: '+(average*100).toPrecision(5)+' % full scale | Peak: '+(result.max*100).toPrecision(5)+' % full scale';dialog.sizer.add(summary);
+   if(stageHint){var hint=new Label(dialog);hint.text=stageHint;hint.wordWrapping=true;dialog.sizer.add(hint);}
+   var names=new Label(dialog);names.text='Original: '+original.mainView.id+' | Replay: '+replay.mainView.id;names.wordWrapping=true;dialog.sizer.add(names);
+   var format=new Label(dialog);format.text=original.mainView.image.width+' x '+original.mainView.image.height+' pixels | '+original.mainView.image.bitsPerSample+' bit / '+replay.mainView.image.bitsPerSample+' bit';dialog.sizer.add(format);
+   if(typeof Control==='function'&&typeof Graphics==='function'&&typeof Image==='function'){
+      var gameMask=comparisonIsGameMask(original)||comparisonIsGameMask(replay),appearance=gameMask?{auto:false}:previewAppearance(original.mainView.image);if(!gameMask&&!appearance.auto)appearance=previewAppearance(replay.mainView.image);
+      var cards=new HorizontalSizer;cards.spacing=12;var images=[original.mainView.image,replay.mainView.image,result.difference.mainView.image],gain=result.max>0?1/result.max:1;
+      for(var i=0;i<images.length;++i){var column=new VerticalSizer;column.spacing=6;var caption=new Label(dialog);caption.text=i===0?'Original':i===1?'Replay':'Absolute difference (display x'+gain.toPrecision(4)+')';column.add(caption);var control=new Control(dialog);control.setFixedSize(280,180);control.bitmap=null;
+         try{control.bitmap=comparisonPreviewBitmap(images[i],i<2?appearance:null,i===2?gain:1);}catch(e){Console.writeln('Comparison preview unavailable: '+e.message);}
+         control.onPaint=function(){var g=new Graphics(this);g.fillRect(0,0,this.width,this.height,new Brush(0xff11111b));if(this.bitmap&&!this.bitmap.isNull)g.drawBitmap(Math.floor((this.width-this.bitmap.width)/2),Math.floor((this.height-this.bitmap.height)/2),this.bitmap);g.end();};column.add(control);cards.add(column);
+      }
+      dialog.sizer.add(cards);var display=new Label(dialog);display.text='Original and replay share the same display transform. Difference brightness is amplified for visibility; measurements and image pixels are unchanged.';display.wordWrapping=true;dialog.sizer.add(display);
+   }
+   var table=new TreeBox(dialog);table.numberOfColumns=5;table.headerVisible=true;var headings=['Channel','Average deviation (% full scale)','Peak deviation (% full scale)','Mean absolute (exact)','Max absolute (exact)'];for(var i=0;i<headings.length;++i)table.setHeaderText(i,headings[i]);table.setMinSize(870,130);
+   for(var c=0;c<result.rows.length;++c){var values=result.rows[c],row=new TreeBoxNode(table);row.setText(0,values.channel);row.setText(1,(values.mean*100).toPrecision(5)+' %');row.setText(2,(values.max*100).toPrecision(5)+' %');row.setText(3,values.mean.toExponential(12));row.setText(4,values.max.toExponential(12));if(typeof row.setTextColor==='function')row.setTextColor(0,values.max===0?0xff43a047:0xffdf9c36);}
+   if(typeof table.adjustColumnWidthToContents==='function')for(var c=0;c<5;++c)table.adjustColumnWidthToContents(c);dialog.sizer.add(table);
+   var note=new Label(dialog);note.text='Percentages refer to the normalized unit range (0-1), not a similarity score. Compare the same processing stage with matching inputs and masks. Difference image: '+result.difference.mainView.id;note.wordWrapping=true;dialog.sizer.add(note);
+   var show=new PushButton(dialog);show.text='Show difference image';show.onClick=function(){result.difference.show();};var close=new PushButton(dialog);close.text='Close';close.onClick=function(){dialog.ok();};var buttons=new HorizontalSizer;buttons.add(show);buttons.addStretch();buttons.add(close);dialog.sizer.add(buttons);dialog.adjustToContents();dialog.execute();
+}
+
+function showAtlasComparisonDialog(preferredReplay,originalId,stageHint) {
    var windows=[];for(var i=0;i<ImageWindow.windows.length;++i)if(!ImageWindow.windows[i].isNull)windows.push(ImageWindow.windows[i]);
    if(preferredReplay&&!preferredReplay.isNull&&windows.indexOf(preferredReplay)<0)windows.push(preferredReplay);
    if(windows.length<2)throw Error('Open an original image and its replay result before comparing.');
    var dialog=new Dialog;dialog.windowTitle='AstroProcessAtlas - Numerical comparison';
-   var label=new Label(dialog);label.text='Compare matching original and replay stages. Creates a 64-bit absolute difference image and reports maximum and mean absolute differences per nominal channel. Input pixels and STF are unchanged.';label.wordWrapping=true;label.setMinWidth(540);
+   var label=new Label(dialog);label.text='Compare matching original and replay stages. Creates a 64-bit absolute difference image and reports maximum and mean absolute differences per nominal channel. Input pixels and STF are unchanged.';label.wordWrapping=true;label.setMinWidth(540);if(stageHint)label.text+=' '+stageHint;
    var original=new ComboBox(dialog),replay=new ComboBox(dialog),replayIndex=1;
    for(var i=0;i<windows.length;++i){original.addItem(windows[i].mainView.id);replay.addItem(windows[i].mainView.id);if(windows[i]===preferredReplay||(!preferredReplay&&/_APA_replay(?:_[0-9]+)?$/.test(windows[i].mainView.id)))replayIndex=i;}
    original.currentItem=0;replay.currentItem=replayIndex;
@@ -2102,17 +2202,15 @@ function showAtlasComparisonDialog(preferredReplay,originalId) {
    var aLabel=new Label(dialog);aLabel.text='Original';var bLabel=new Label(dialog);bLabel.text='Replay';
    var status=new Label(dialog);status.wordWrapping=true;
    var run=new PushButton(dialog);run.text='Compare';run.onClick=function(){dialog.ok();};
-   var update=function(){var a=windows[original.currentItem],b=windows[replay.currentItem];run.enabled=!!(a&&b&&a!==b&&!a.isNull&&!b.isNull&&a.mainView.image.width===b.mainView.image.width&&a.mainView.image.height===b.mainView.image.height&&a.mainView.image.isColor===b.mainView.image.isColor);status.text=run.enabled?'Apply auto STF to the difference image to reveal small residuals; STF does not change the numerical measurements.':'Select different images with matching dimensions and color mode.';};
+   var update=function(){var a=windows[original.currentItem],b=windows[replay.currentItem];run.enabled=!!(a&&b&&a!==b&&!a.isNull&&!b.isNull&&a.mainView.image.width===b.mainView.image.width&&a.mainView.image.height===b.mainView.image.height&&a.mainView.image.isColor===b.mainView.image.isColor);status.text=run.enabled?'Results show both images, an amplified difference preview and per-channel measurements. Select the same processing stage.':'Select different images with matching dimensions and color mode.';};
    original.onItemSelected=update;replay.onItemSelected=update;update();
    var cancel=new PushButton(dialog);cancel.text='Cancel';cancel.onClick=function(){dialog.cancel();};var buttons=new HorizontalSizer;buttons.addStretch();buttons.add(run);buttons.add(cancel);
    dialog.sizer=new VerticalSizer;dialog.sizer.margin=12;dialog.sizer.spacing=8;dialog.sizer.add(label);dialog.sizer.add(aLabel);dialog.sizer.add(original);dialog.sizer.add(bLabel);dialog.sizer.add(replay);dialog.sizer.add(status);dialog.sizer.add(buttons);dialog.adjustToContents();
    if(!dialog.execute())return;
    if(typeof Console.show==='function')Console.show();
    var a=windows[original.currentItem],b=windows[replay.currentItem],result=compareAtlasImages(a,b,'Replay');
-   var text=a.mainView.id+' versus '+b.mainView.id+'\nInput formats: '+a.mainView.image.bitsPerSample+' bit / '+b.mainView.image.bitsPerSample+' bit';
-   for(var c=0;c<result.rows.length;++c)text+='\n'+result.rows[c].channel+': max abs = '+result.rows[c].max.toExponential(12)+'; mean abs = '+result.rows[c].mean.toExponential(12);
-   text+='\n\n'+(result.max===0?'Identical nominal-channel pixels.':'Different nominal-channel pixels.')+'\nDifference image: '+result.difference.mainView.id+'\nAuto STF is for display only.';
-   new MessageBox(text,'AstroProcessAtlas - Comparison result',StdIcon_Information,StdButton_Ok).execute();
+   if(result.max>0){var white=Math.max(1e-12,Math.min(1,result.max));result.difference.mainView.stf=[[0.5,0,white,0,1],[0.5,0,white,0,1],[0.5,0,white,0,1],[0.5,0,1,0,1]];}
+   showAtlasComparisonResult(a,b,result,stageHint);
 }
 
 function showAboutDialog() {
@@ -2278,7 +2376,7 @@ function generateHistoryReport() {
    html += '<script>var workspaceGraphData=' + JSON.stringify(graph).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026') +
       ';var workspaceReplayData=' + JSON.stringify(workspaceReplayData(records)).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026') +
       ';var DARK_STRUCTURE_GPL_LICENSE=' + JSON.stringify(DARK_STRUCTURE_GPL_LICENSE).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026') +
-      ';' + pixelMathTextTokens.toString() + ';' + compareAtlasImages.toString() + ';' + showAtlasComparisonDialog.toString() + ';' + buildWorkspaceReplayScript.toString() + ';' + reportBrowserScript() + '</script></body></html>';
+      ';' + pixelMathTextTokens.toString() + ';' + compareAtlasImages.toString() + ';' + previewAppearance.toString() + ';' + comparisonPreviewBitmap.toString() + ';' + comparisonIsGameMask.toString() + ';' + showAtlasComparisonResult.toString() + ';' + showAtlasComparisonDialog.toString() + ';' + buildWorkspaceReplayScript.toString() + ';' + reportBrowserScript() + '</script></body></html>';
    writeReportText(file, html);
    } finally { file.close(); }
    progress.update(100, 'Report complete');
@@ -2322,6 +2420,7 @@ var REPORT_TRANSLATIONS = [
    ["Auto-stretched preview only", "Αυτόματο stretch μόνο στο preview"],
    ['Nonlinear stretch recorded in history','Καταγεγραμμένο nonlinear stretch στο ιστορικό'],
    ['Stretch recorded','Καταγεγραμμένο stretch'],
+   ['GAME mask — stretched','Μάσκα GAME — stretched'],
    ['Step data indicators: green — recorded settings; orange — manual inputs or verification; pink — missing data. Recorded settings do not guarantee identical historical pixels. Stretch labels are estimates from pixel brightness.','Ενδείξεις δεδομένων: πράσινο — καταγεγραμμένες ρυθμίσεις· πορτοκαλί — χειροκίνητες είσοδοι ή επαλήθευση· ροζ — ελλιπή δεδομένα. Οι ρυθμίσεις δεν εγγυώνται ίδια ιστορικά pixels. Οι εκτιμήσεις stretch βασίζονται στη φωτεινότητα.'],
    ['Report size:','Μέγεθος report:'],['Small','Μικρό'],['Normal','Κανονικό'],['Detailed','Λεπτομερές'],['Maximum stage preview:','Μέγιστη προεπισκόπηση σταδίου:'],
    ['Replay image','Εικόνα επανάληψης'],['First process','Πρώτη διεργασία'],['Last process','Τελευταία διεργασία'],

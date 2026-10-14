@@ -61,10 +61,10 @@ assert.throws(()=>api.buildWorkspaceReplayScript(plan,2,1),/valid step range/);
 assert.throws(()=>api.buildWorkspaceReplayScript(plan,0,99),/valid step range/);
 assert.throws(()=>api.buildWorkspaceReplayScript(plan,0.5,1),/valid step range/);
 
-function run(script, {reportDialog=false,reportSave=false,cancel=false,confirm=true,missing=false,fail=false,noImages=false,gradientMissing=false,gradientFail=false,
+function run(script, {progress=false,stopAfterFirst=false,reportDialog=false,reportSave=false,cancel=false,confirm=true,missing=false,fail=false,noImages=false,gradientMissing=false,gradientFail=false,
   starMissing=false,starFail=false,paletteMissing=false,paletteFail=false,nbMissing=false,nbFail=false,sccMissing=false,sccFail=false,sourceChanged=false,scriptRecords=[],initialScripts=false,channels=[],choices=[],states=[],prepFail=false,
   dseCancel=false,dseOtherTarget=false,dseFail=false,mltMissing=false,invertMissing=false,pmMode=false,pmMissing=false,pmFail=false,pmNoOutput=false,pmCancel=false,pmNoSelection=false,pmChoices=[],pmOutputName,historyTarget=false,historyStep,inputColor=false,maskCancel=false,maskBlend=false,unsharpMissing=false,maskChoices=[],maskInvertChoices=[],orientations=[1],inputId='Ha_input',existingIds=['Ha_input_APA_replay']}={}) {
-  const calls=[], messages=[], outputs=[], gradientParameters=[], starParameters=[],paletteParameters=[],nbParameters=[],sccParameters=[],combos=[],maskApplications=[],unsharpParameters=[],pmParameters=[],edits=[];let checkbox,maskPrompts=0,pmPrompts=0;const reportBoxes=[],reportButtons=[],savedReports=[];
+  const calls=[], messages=[], outputs=[], gradientParameters=[], starParameters=[],paletteParameters=[],nbParameters=[],sccParameters=[],combos=[],maskApplications=[],unsharpParameters=[],pmParameters=[],edits=[];let checkbox,maskPrompts=0,pmPrompts=0;const reportBoxes=[],reportButtons=[],savedReports=[],progressRows=[],progressStates=[];let progressShown=false,progressHidden=false;
   const input={isNull:false,rgbWorkingSpace:{gamma:2.2},mainView:{id:inputId,stf:[[1,2]],
     image:{width:2,height:1,numberOfChannels:inputColor?3:1,bitsPerSample:32,isReal:true,isColor:inputColor,pixels:[0.1,0.2]}}};
   function ImageWindow(w,h,channelCount,bits,real,color,id){
@@ -208,11 +208,18 @@ function run(script, {reportDialog=false,reportSave=false,cancel=false,confirm=t
     context.File.readFile=readFile;
     context.ByteArray={stringToUTF8:text=>Buffer.from(text,'utf8')};
   }
+  if(progress) {
+    const BaseProgressDialog=context.Dialog;
+    context.Dialog=function(){BaseProgressDialog.call(this);this.show=()=>{if(this.windowTitle==='AstroProcessAtlas - Replay progress')progressShown=true;};this.hide=()=>{if(this.windowTitle==='AstroProcessAtlas - Replay progress')progressHidden=true;};};
+    context.TreeBox=function(){this.setHeaderText=()=>{};this.setMinSize=()=>{};};
+    context.TreeBoxNode=function(){this.text=[];this.colors=[];progressRows.push(this);this.setText=(column,text)=>{this.text[column]=text;if(column===1)progressStates.push(progressRows.map(row=>row.text[1]));};this.setTextColor=(column,color)=>{this.colors[column]=color;};};
+    context.processEvents=()=>{if(stopAfterFirst&&progressRows[0]&&progressRows[0].text[1]==='Completed'){const stop=reportButtons.find(button=>button.text==='Stop after current step');if(stop)stop.onClick();}};
+  }
   const expanded=script.replace(/^#include "\/fixture\/src\/scripts\/Toolbox\/SelectiveColorCorrection.js"$/gm,selectiveFixture);
   vm.runInNewContext(expanded.replace(/^#.*$/gm,''),context);
   if(!historyTarget)assert.deepEqual(input.mainView.image.pixels,[0.1,0.2],'Input pixels never change');
   assert.equal(input.mainView.id,inputId,'Input ID never changes');
-  return {calls,messages,outputs,input,gradientParameters,starParameters,paletteParameters,nbParameters,sccParameters,recordedParameters,windows:ImageWindow.windows,maskPrompts,maskApplications,unsharpParameters,pmParameters,pmPrompts,edits,combos,savedReports};
+  return {calls,messages,outputs,input,gradientParameters,starParameters,paletteParameters,nbParameters,sccParameters,recordedParameters,windows:ImageWindow.windows,maskPrompts,maskApplications,unsharpParameters,pmParameters,pmPrompts,edits,combos,savedReports,progressRows,progressStates,progressShown,progressHidden};
 }
 const complete=api.buildWorkspaceReplayScript(plan,0,1);
 {
@@ -814,4 +821,20 @@ console.log('Passed: StarXTerminator both stars flags, optional output reference
  const both=run(api.buildWorkspaceReplayScript(unavailable,0,1),{missing:true,starMissing:true});
  assert.equal(both.outputs.length,0);assert.match(both.messages[0],/CurvesTransformation/);assert.match(both.messages[0],/StarXTerminator/);
  console.log('Passed: full-range preflight, missing-process aggregation, mask selection/cancel/geometry/color checks before processing, per-step completion/failure reports and UTF-8 report saving.');
+}
+
+{
+ const live=run(complete,{progress:true});
+ assert.equal(live.progressShown,true);assert.equal(live.progressHidden,true);
+ assert.deepEqual(live.progressRows.map(row=>row.text[1]),['Completed','Completed']);
+ assert.equal(live.progressRows[0].colors[1],0xff69d184);
+ assert.ok(live.progressStates.some(status=>status[0]==='Running'&&status[1]==='Ready'));
+ assert.ok(live.progressStates.some(status=>status[0]==='Completed'&&status[1]==='Running'));
+ const failed=run(complete,{progress:true,fail:true});
+ assert.equal(failed.progressRows[0].text[1],'Failed / cancelled');assert.equal(failed.progressHidden,true);
+ const stopped=run(complete,{progress:true,stopAfterFirst:true});
+ assert.ok(stopped.calls.includes('HT'));assert.ok(!stopped.calls.includes('CT'));
+ assert.match(stopped.messages[0],/Replay cancelled/);assert.match(stopped.messages[0],/Completed: 1 \/ 2/);
+ assert.equal(stopped.progressHidden,true);
+ console.log('Passed: live replay step loading/running/completion states, green success, red failure, stop between processes and progress cleanup.');
 }

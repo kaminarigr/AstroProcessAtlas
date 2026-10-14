@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Identify GAME mask history as stretched, including clones, and preserve raw
+  mask previews instead of estimating them as linear dark images.
+- Present original/replay/difference previews and a readable comparison table,
+  with percent-of-unit-range deviations and exact statistics. Amplify only the
+  difference display and preserve original image pixels/STF.
+- Add a live replay task list with loading/running states, green completion,
+  failure state, active-tool header and stop-after-current-step support.
+
 - Integrate numerical original/replay comparison in the main PixInsight dialog
   and replay outcome report, with 64-bit absolute difference images and per-channel
   maximum/mean statistics, preserving input images and display state.

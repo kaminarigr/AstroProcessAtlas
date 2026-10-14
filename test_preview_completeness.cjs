@@ -77,3 +77,15 @@ api.createThumbnailFromView({image:wide},'fallback.png',480,gain);
 const fallback=previews.at(-1).channels[0].slice(0,480);
 for(let x=0;x<bulk.length;++x)assert.ok(Math.abs(bulk[x]-fallback[x])<1e-6);
 console.log('Passed: three report sizes and bulk-row stretch matches per-pixel preview sampling with bounded memory.');
+
+const game={...native,proc:{processId:()=> 'Script',filePath:'$PXI_SRCDIR/scripts/GAME.js'},phase:'initial'};
+const gameRecord={...record,steps:[game,...record.steps]};
+const maskAppearance=api.historyPreviewAppearance(gameRecord,2);
+assert.equal(maskAppearance.gameMask,true);assert.equal(maskAppearance.auto,false);
+assert.match(api.previewAppearanceHTML(maskAppearance),/GAME mask — stretched/);
+assert.ok(!api.previewAppearanceHTML(maskAppearance).includes('linear / dark'));
+const liveGame={...game,phase:'live',liveIndex:1};
+assert.equal(api.recordedGameMask({steps:[liveGame]},0),false);
+assert.equal(api.recordedGameMask({steps:[liveGame]},1),true);
+assert.equal(api.recordedGameMask({steps:[],cloneFullSteps:[game]},0),true);
+console.log('Passed: GAME masks and clones are treated as stretched, with no automatic mask-value stretch or fabricated linear state.');

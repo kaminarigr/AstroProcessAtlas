@@ -269,6 +269,23 @@ unchanged. Auto STF on the difference image can reveal small residuals; it does
 not affect the numbers. A zero maximum means identical nominal-channel pixels
 for the selected pair, not verification of every earlier workflow stage.
 
+During replay a modeless **Replay progress** window lists every selected step.
+Statuses move through Waiting, Loading inputs/masks, Ready, Running and Completed;
+completed entries become green and failed/cancelled entries red. The header shows
+the active tool and completed count. **Stop after current step** prevents the next
+operation from starting and retains the partial result. Native processes may block
+the event loop while running; the panel marks the active operation before execution
+and does not invent internal percentages or an ETA.
+
+Numerical comparison results now include original/replay thumbnails using the same
+display transform, an amplified absolute-difference preview, and a channel table
+with average/peak deviations as percentages of the normalized unit range alongside
+the exact values. These percentages are not similarity scores. The newly created
+difference image receives a display STF when appropriate; original pixels and STF
+are unchanged. GAME-created masks are explicitly shown as **GAME mask — stretched**,
+including inherited clone history, and are excluded from automatic linear-preview
+stretching. This applies to report previews and identified GAME mask comparisons.
+
 Each process now has a separate **Step data** badge: recorded process settings,
 manual inputs/verification needed, or incomplete recorded data. It describes
 available metadata, not replay support or proof of identical historical pixels.
