@@ -286,6 +286,10 @@ are collapsed. Short English/Greek notifications confirm changes and copies;
 **Save edited report (HTML)** keeps them in a downloaded report. Open that saved
 HTML to restore the edits. Regenerate the report to receive new interface features.
 
+Initial **ImageIntegration** and **FastIntegration** entries describe the origin
+of an already integrated starting image and are excluded from replay. They are
+not rerun from the original exposure files.
+
 The script processes the required channel branches in dependency order, combines
 them and continues on the final image. Verified clones start at their recorded
 parent checkpoint: `Ha_clone` can be rebuilt from the processed `Ha` and used as a

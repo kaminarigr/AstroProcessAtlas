@@ -4,6 +4,11 @@
 
 ## 0.3.0 — 2026-10-15
 
+- Treat initial FastIntegration history as integrated-image origin metadata, like
+  ImageIntegration, without exporting it as a replay process.
+- Restore explicit tree-to-detail navigation: clear conflicting filters, reveal
+  hidden/collapsed parent sections and scroll to the selected process details.
+
 - Explain opaque PixelMath `image` copies directly in reference cards and offer
   source mapping, explicit no-op skip, GraXpert replacement or a prepared result.
   Persist skip choices, preserve step/checkpoint numbering, warn about omitted

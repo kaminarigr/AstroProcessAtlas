@@ -27,6 +27,7 @@ assert.ok(!api.replayStepHTML(integrated,origin).includes('Copy step for replay'
 assert.equal(api.workspaceReplayData([{id:'OriginOnly',steps:[origin]}])[0].steps.length,0);
 assert.ok(api.workspaceReplayData([{id:'Later',steps:[{...origin,phase:'live',historyEntryIndex:5}]}])[0].steps[0].reason,
   'A later integration cannot be silently skipped as initial metadata');
+const fastOrigin=step('FastIntegration','P.targets=[[true,"light.xisf"]];',{phase:'initial',historyEntryIndex:0});const fastRecord={id:'FastIntegrated',steps:[fastOrigin,ht]};assert.equal(api.workspaceReplayData([fastRecord])[0].steps.length,1);assert.match(api.replayStepHTML(fastRecord,fastOrigin),/Image origin metadata/);assert.ok(api.workspaceReplayData([{id:'LaterFast',steps:[{...fastOrigin,phase:'live',historyEntryIndex:5}]}])[0].steps[0].reason);assert.ok(api.workspaceReplayData([{id:'RedoFast',steps:[{...fastOrigin,redo:true}]}])[0].steps.length===0);
 assert.equal(plan.steps.length,4,'Exclude redo without omitting blockers');
 assert.equal(plan.steps[0].reason,'');
 assert.equal(plan.steps[1].reason,'');

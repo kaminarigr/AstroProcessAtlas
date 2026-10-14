@@ -1081,3 +1081,6 @@ console.log('Passed: arbitrary current/before/after selection, shared comparison
  new vm.Script(exported.replace(/^#.*$/gm,''));
  console.log('Passed: PixelMath reference warnings, EN/EL text, ready no-reference step, unsupported syntax blocker, download and isolated browser builder dependencies.');
 }
+
+let revealedStep=false;const hiddenGroup={hidden:true,tagName:'DETAILS',open:false,parentNode:sections[0]};elements.image_0_step_0={hidden:true,parentNode:hiddenGroup,scrollIntoView:()=>revealedStep=true};elements.report_search.value='SHO';elements.tool_filter.value='NonMatchingTool';elements.mask_filter.checked=true;elements.applied_filter.checked=true;browser.window.selectGraphNode('image_0_step_0',{stopPropagation(){},preventDefault(){}});assert.equal(elements.image_filter.value,'image_0');assert.equal(elements.report_search.value,'');assert.equal(elements.tool_filter.value,'all');assert.equal(elements.mask_filter.checked,false);assert.equal(elements.image_0_step_0.hidden,false);assert.equal(hiddenGroup.hidden,false);assert.equal(hiddenGroup.open,true);assert.equal(revealedStep,true);assert.equal(sections[0].hidden,false);
+console.log('Passed: selecting a tree step clears conflicting filters, reveals its detail and collapsed ancestors, synchronizes the image selector and explicitly scrolls to the detail.');

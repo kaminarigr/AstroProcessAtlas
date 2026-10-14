@@ -1442,7 +1442,7 @@ function replayContainerSource(source) {
 
 function isImageOriginStep(step, index) {
    var position = typeof step.historyEntryIndex === 'number' ? step.historyEntryIndex : index;
-   return !step.redo && getProcessName(step.proc) === 'ImageIntegration' && (step.phase === 'initial' || position === 0);
+   return !step.redo && /^(ImageIntegration|FastIntegration)$/.test(getProcessName(step.proc)) && (step.phase === 'initial' || position === 0);
 }
 
 function paletteReplaySource(group) {
@@ -3707,10 +3707,12 @@ var WORKSPACE_BROWSER_SOURCE = [
    "   };",
    "   window.selectGraphNode = function(id,event) {",
    "      var node=find(id);if(!node)return;",
-   "      if(event)event.stopPropagation();",
+   "      if(event){event.stopPropagation();if(event.preventDefault)event.preventDefault();}",
+   "      if((!node.header&&!matchesFilter(node))||(searchedImage()&&searchedImage().image!==node.image)){var search=document.getElementById('report_search'),tool=document.getElementById('tool_filter'),mask=document.getElementById('mask_filter'),applied=document.getElementById('applied_filter');if(search)search.value='';if(tool)tool.value='all';if(mask)mask.checked=false;if(applied)applied.checked=false;}searchSelectedImage=null;",
    "      for(var i=0;i<nodes.length;++i)if(nodes[i].header&&nodes[i].image===node.image){",
    "         window.showImage(nodes[i].id);selectedNode=id;paintGraphFocus(id);break;",
    "      }",
+   "      var detail=document.getElementById(id);if(!detail){var members=node.memberIds||[];for(var m=0;m<members.length&&!detail;++m)detail=document.getElementById(members[m]);}if(detail){var parent=detail;while(parent){parent.hidden=false;if(String(parent.tagName||'').toLowerCase()==='details')parent.open=true;if(parent.classList&&parent.classList.contains('image-report'))break;parent=parent.parentElement||parent.parentNode;}if(typeof detail.scrollIntoView==='function')detail.scrollIntoView({block:'start',behavior:'smooth'});}",
    "   };",
    "   window.graphBackgroundClick = function(event) {",
    "      if(event.target.closest&&event.target.closest('[data-node], a, path[data-from]'))return;",
