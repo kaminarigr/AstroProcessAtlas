@@ -42,7 +42,10 @@ The embedded previews are reduced to at most 640 pixels and compressed for a sma
 
 ## Updates
 
-Current version: **0.3.0**. The version is shown in About.
+Current version: **0.3.1**. The version is shown in About.
+
+Version 0.3.1 fixes initial FastIntegration replay handling and restores tree-step
+navigation to visible details.
 
 Version 0.3.0 adds linked dependency-chain replay, direct GraXpert execution,
 editable workflows saved in one HTML file, responsive reference cards and detailed
