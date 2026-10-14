@@ -244,6 +244,31 @@ resource availability, not license validity, AI model execution or mathematical
 compatibility of arbitrary PixelMath expressions. DarkStructureEnhance settings
 are still chosen at its execution step because its dialog needs the replay target.
 
+Choose **Small / Normal / Detailed** in the PixInsight export dialog. All profiles
+retain every history entry, parameter, connection and replay option; only preview
+resolution changes. Maximum long-edge sizes are:
+
+| Profile | Current image | Historical stages | Masks |
+| --- | ---: | ---: | ---: |
+| Small | 240 px | 480 px | 140 px |
+| Normal (default) | 440 px | 800 px | 220 px |
+| Detailed | 600 px | 1200 px | 300 px |
+
+Small reports need less preview work and storage. Detailed keeps larger stage
+previews for inspection. Float preview stretching now reads native image rows in
+bulk instead of making a native call for each output pixel. Memory remains bounded
+by the selected preview size and one source row; original data is unchanged.
+
+Use **Compare original / replay...** in the initial PixInsight dialog, or
+**Compare with original...** in a new replay's outcome report. Select matching
+original/replay checkpoints with equal dimensions and color mode. The comparison
+creates a collision-free 64-bit image containing `abs(original-replay)` without
+rescaling or clipping, and displays maximum and mean absolute differences for
+R/G/B or Gray. It also prints results to the console. Inputs, masks and STF remain
+unchanged. Auto STF on the difference image can reveal small residuals; it does
+not affect the numbers. A zero maximum means identical nominal-channel pixels
+for the selected pair, not verification of every earlier workflow stage.
+
 Each process now has a separate **Step data** badge: recorded process settings,
 manual inputs/verification needed, or incomplete recorded data. It describes
 available metadata, not replay support or proof of identical historical pixels.
@@ -282,6 +307,7 @@ Run the regression checks with Node.js:
 node test_history_report.cjs
 node test_workspace_report.cjs
 node test_preview_completeness.cjs
+node test_numeric_comparison.cjs
 ```
 
 These checks mock the PixInsight APIs and browser DOM. They do not replace testing in PixInsight and a real browser.

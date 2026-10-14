@@ -26,6 +26,7 @@ jobs:
       - run: node test_workspace_report.cjs
       - run: node test_workflow_replay.cjs
       - run: node test_preview_completeness.cjs
+      - run: node test_numeric_comparison.cjs
       - run: python -m unittest discover -s tools -p "test_release.py"
       - name: Package release
         env:

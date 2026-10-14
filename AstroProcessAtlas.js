@@ -119,13 +119,20 @@ function createThumbnailFromView(view, outputPath, maxSize, appearance) {
          var width=Math.max(1,Math.round(source.width*scale)),height=Math.max(1,Math.round(source.height*scale)),channels=source.isColor?3:1;
          preview=new Image(width,height,channels,source.colorSpace,32,1);
          var rect=new Rect(0,0,width,height);
+         var xs=[],ys=[];
+         for(var x=0;x<width;++x)xs.push(Math.min(source.width-1,Math.floor((x+0.5)*source.width/width)));
+         for(var y=0;y<height;++y)ys.push(Math.min(source.height-1,Math.floor((y+0.5)*source.height/height)));
+         var bulk=typeof source.getSamples==='function'&&source.width<=1048576,row=bulk?new Float32Array(source.width):null;
          for(var c=0;c<channels;++c){
             var values=new Float32Array(width*height);
-            for(var y=0;y<height;++y)for(var x=0;x<width;++x){
-               var value=source.sample(Math.min(source.width-1,Math.floor((x+0.5)*source.width/width)),Math.min(source.height-1,Math.floor((y+0.5)*source.height/height)),c);
-               value=Math.max(0,Math.min(1,(value-appearance.black)/(1-appearance.black)));
-               var m=appearance.midtones;
-               values[y*width+x]=value===0?0:value===1?1:(m-1)*value/((2*m-1)*value-m);
+            for(var y=0;y<height;++y){
+               if(bulk)source.getSamples(row,new Rect(0,ys[y],source.width,ys[y]+1),c);
+               for(var x=0;x<width;++x){
+                  var value=bulk?row[xs[x]]:source.sample(xs[x],ys[y],c);
+                  value=Math.max(0,Math.min(1,(value-appearance.black)/(1-appearance.black)));
+                  var m=appearance.midtones;
+                  values[y*width+x]=value===0?0:value===1?1:(m-1)*value/((2*m-1)*value-m);
+               }
             }
             preview.setSamples(values,rect,c);
          }
@@ -225,7 +232,7 @@ function readHistoryMasks(processing, count) {
    return result;
 }
 
-function exportMaskThumbnail(name, thumbDir, relativeDir, cache, view) {
+function exportMaskThumbnail(name, thumbDir, relativeDir, cache, view, maxSize) {
    // Capture before navigating the target history. One PNG per available mask view.
    for (var i = 0; i < cache.length; ++i)
       if (cache[i].name === name) return cache[i];
@@ -235,7 +242,7 @@ function exportMaskThumbnail(name, thumbDir, relativeDir, cache, view) {
       if (!view) view = View.viewById(name);
       if (!view || view.isNull) return thumbnail;
       var filename = "mask_" + cache.length + ".png";
-      if (createThumbnailFromView(view, thumbDir + "/" + filename, 220)) {
+      if (createThumbnailFromView(view, thumbDir + "/" + filename, maxSize || 220)) {
          thumbnail.src = relativeDir + "/" + filename;
          thumbnail.reason = "";
       } else thumbnail.reason = "Mask thumbnail creation failed — see the PixInsight console.";
@@ -625,7 +632,14 @@ function collectWorkspaceRecord(window, index) {
    return record;
 }
 
-function collectWorkspaceThumbnails(records, thumbDir, relativeDir, progress) {
+function reportSizeProfile(name) {
+   if(name==='small')return {id:'small',label:'Small',thumbnail:240,stage:480,mask:140};
+   if(name==='detailed')return {id:'detailed',label:'Detailed',thumbnail:600,stage:1200,mask:300};
+   return {id:'normal',label:'Normal',thumbnail:440,stage:800,mask:220};
+}
+
+function collectWorkspaceThumbnails(records, thumbDir, relativeDir, progress, profileName) {
+   var profile=reportSizeProfile(profileName);
    var masks = [], generatedFiles = [];
    // Freeze all current images/masks before navigating any image's history.
    for (var r = 0; r < records.length; ++r) {
@@ -633,19 +647,19 @@ function collectWorkspaceThumbnails(records, thumbDir, relativeDir, progress) {
       var record = records[r], filename = record.anchor + "_current.png";
       record.appearance=previewAppearance(record.view.image);
       record.appearance.stretchRecorded=recordedNonlinearStretch(record,record.historyIndex);
-      if (createThumbnailFromView(record.view, thumbDir + "/" + filename, 440, record.appearance)) {
+      if (createThumbnailFromView(record.view, thumbDir + "/" + filename, profile.thumbnail, record.appearance)) {
          record.currentThumb = relativeDir + "/" + filename;generatedFiles.push(thumbDir+'/'+filename);
       }
       for (var i = 0; i < record.steps.length; ++i) {
          var step = record.steps[i];
          if (step.mask.status === "recorded")
-            step.maskThumb = exportMaskThumbnail(step.mask.name, thumbDir, relativeDir, masks);
+            step.maskThumb = exportMaskThumbnail(step.mask.name, thumbDir, relativeDir, masks, null, profile.mask);
       }
       try {
          var mask = record.window.mask;
          if (mask && !mask.isNull && mask.mainView && !mask.mainView.isNull)
             record.currentMaskThumbnail = exportMaskThumbnail(mask.mainView.fullId || mask.mainView.id,
-               thumbDir, relativeDir, masks, mask.mainView);
+               thumbDir, relativeDir, masks, mask.mainView, profile.mask);
       } catch (e) { Console.writeln("Mask preview error: " + e.message); }
    }
    for (var r = 0; r < records.length; ++r) {
@@ -661,7 +675,7 @@ function collectWorkspaceThumbnails(records, thumbDir, relativeDir, progress) {
             appearance.stretchRecorded=recordedNonlinearStretch(record,index);
             if(appearance.auto){if(!linkedStretch)linkedStretch=appearance;appearance.black=linkedStretch.black;appearance.midtones=linkedStretch.midtones;}
             appearances['$'+index]=appearance;
-            if (createThumbnailFromView(record.view, thumbDir + '/' + filename, 1200, appearance)) {
+            if (createThumbnailFromView(record.view, thumbDir + '/' + filename, profile.stage, appearance)) {
                generatedFiles.push(thumbDir+'/'+filename);
                return states['$'+index] = relativeDir + '/' + filename;
             }
@@ -1672,6 +1686,8 @@ function buildWorkspaceReplayScript(image, start, end) {
       'var replaySteps = ' + JSON.stringify(manifest) + ';',
       'var replayFactories = [' + factories.join(',\n') + '];',
       pixelMathTextTokens.toString(),
+      compareAtlasImages.toString(),
+      showAtlasComparisonDialog.toString(),
       'function remapPixelMathText(text,mapped) {',
       '   var tokens=pixelMathTextTokens(text),result="",last=0;',
       '   for(var i=0;i<tokens.length;++i){var token=tokens[i];if(!token.macro&&!token.call&&!token.local&&Object.prototype.hasOwnProperty.call(mapped,"$"+token.name)){result+=text.slice(last,token.start)+mapped["$"+token.name];last=token.end;}}',
@@ -1747,7 +1763,8 @@ function buildWorkspaceReplayScript(image, start, end) {
       "   var dialog=new Dialog;dialog.windowTitle=\"AstroProcessAtlas - Replay report\";dialog.sizer=new VerticalSizer;dialog.sizer.margin=12;dialog.sizer.spacing=8;",
       "   var box=new TextBox(dialog);box.readOnly=true;box.useRichText=false;box.text=text;box.setMinSize(680,400);dialog.sizer.add(box);",
       "   var save=new PushButton(dialog);save.text=\"Save report...\";save.onClick=function(){try{var picker=new SaveFileDialog;picker.caption=\"Save replay report\";picker.filters=[[\"Text files (*.txt)\",\"*.txt\"]];picker.initialPath=\"AstroProcessAtlas_replay_report.txt\";if(!picker.execute())return;var file=new File;try{file.createForWriting(picker.fileName);file.write(ByteArray.stringToUTF8(text));}finally{file.close();}}catch(e){new MessageBox(\"Unable to save report: \"+e.message,\"AstroProcessAtlas\",StdIcon_Error,StdButton_Ok).execute();}};",
-      "   var close=new PushButton(dialog);close.text=\"Close\";close.onClick=function(){dialog.ok();};var buttons=new HorizontalSizer;buttons.add(save);buttons.addStretch();buttons.add(close);dialog.sizer.add(buttons);dialog.adjustToContents();dialog.execute();",
+      '   var compare=new PushButton(dialog);compare.text="Compare with original...";compare.enabled=!!(output&&!output.isNull);compare.onClick=function(){try{showAtlasComparisonDialog(output,replayImage);}catch(e){new MessageBox(e.message,"AstroProcessAtlas - Comparison",StdIcon_Error,StdButton_Ok).execute();}};',
+      "   var close=new PushButton(dialog);close.text=\"Close\";close.onClick=function(){dialog.ok();};var buttons=new HorizontalSizer;buttons.add(save);buttons.add(compare);buttons.addStretch();buttons.add(close);dialog.sizer.add(buttons);dialog.adjustToContents();dialog.execute();",
       "}",
       "function prepareReplayProcesses(){",
       "   var processes=[],errors=[];",
@@ -2029,6 +2046,75 @@ function embedReportThumbnails(records, directory, generatedFiles, emitAsset, pr
    }
 }
 
+function compareAtlasImages(original, replay, label) {
+   if(!original||!replay||original.isNull||replay.isNull)throw Error('Select two available images.');
+   var a = original.mainView.image, b = replay.mainView.image;
+   if (original === replay) throw Error(label + ': select two different images.');
+   if (a.width !== b.width || a.height !== b.height || a.isColor !== b.isColor)
+      throw Error(label + ': image dimensions and color mode must match.');
+   var base = 'APA_difference_' + label.toLowerCase(), id = base, suffix = 1;
+   while (!View.viewById(id).isNull) id = base + '_' + suffix++;
+   var difference = new ImageWindow(a.width, a.height, a.isColor ? 3 : 1, 64, true, a.isColor, id);
+   try {
+      var p = new PixelMath;
+      p.expression = 'abs(' + original.mainView.id + '-' + replay.mainView.id + ')';
+      p.useSingleExpression = true;
+      p.symbols = '';
+      p.generateOutput = true;
+      p.clearImageCacheAndExit = false;
+      p.cacheGeneratedImages = false;
+      p.use64BitWorkingImage = true;
+      p.rescale = false;
+      p.truncate = false;
+      p.createNewImage = false;
+      if (p.executeOn(difference.mainView) === false) throw Error(label + ': PixelMath failed.');
+      Console.writeln('\n' + label + ': ' + original.mainView.id + ' versus ' + replay.mainView.id);
+      Console.writeln('Input formats: ' + a.bitsPerSample + ' bit / ' + b.bitsPerSample + ' bit');
+      var image = difference.mainView.image, max = 0, rows=[];
+      for (var c = 0; c < (a.isColor ? 3 : 1); ++c) {
+         image.selectedChannel = c;
+         var peak = image.maximum(), mean = image.mean();
+         if (!isFinite(peak) || !isFinite(mean)) throw Error(label + ': non-finite difference statistics.');
+         max = Math.max(max, peak);
+         rows.push({channel:a.isColor?["R","G","B"][c]:"Gray",max:peak,mean:mean});
+         Console.writeln((a.isColor ? ['R', 'G', 'B'][c] : 'Gray') + ': max abs = ' + peak.toExponential(12) + ', mean abs = ' + mean.toExponential(12));
+      }
+      image.resetSelections();
+      difference.show();
+      return {max:max,rows:rows,difference:difference};
+   } catch (error) {
+      difference.forceClose();
+      throw error;
+   }
+}
+
+function showAtlasComparisonDialog(preferredReplay,originalId) {
+   var windows=[];for(var i=0;i<ImageWindow.windows.length;++i)if(!ImageWindow.windows[i].isNull)windows.push(ImageWindow.windows[i]);
+   if(preferredReplay&&!preferredReplay.isNull&&windows.indexOf(preferredReplay)<0)windows.push(preferredReplay);
+   if(windows.length<2)throw Error('Open an original image and its replay result before comparing.');
+   var dialog=new Dialog;dialog.windowTitle='AstroProcessAtlas - Numerical comparison';
+   var label=new Label(dialog);label.text='Compare matching original and replay stages. Creates a 64-bit absolute difference image and reports maximum and mean absolute differences per nominal channel. Input pixels and STF are unchanged.';label.wordWrapping=true;label.setMinWidth(540);
+   var original=new ComboBox(dialog),replay=new ComboBox(dialog),replayIndex=1;
+   for(var i=0;i<windows.length;++i){original.addItem(windows[i].mainView.id);replay.addItem(windows[i].mainView.id);if(windows[i]===preferredReplay||(!preferredReplay&&/_APA_replay(?:_[0-9]+)?$/.test(windows[i].mainView.id)))replayIndex=i;}
+   original.currentItem=0;replay.currentItem=replayIndex;
+   var wanted=originalId||windows[replay.currentItem].mainView.id.replace(/_APA_replay(?:_[0-9]+)?$/,'');
+   for(var i=0;i<windows.length;++i)if(windows[i].mainView.id===wanted)original.currentItem=i;
+   var aLabel=new Label(dialog);aLabel.text='Original';var bLabel=new Label(dialog);bLabel.text='Replay';
+   var status=new Label(dialog);status.wordWrapping=true;
+   var run=new PushButton(dialog);run.text='Compare';run.onClick=function(){dialog.ok();};
+   var update=function(){var a=windows[original.currentItem],b=windows[replay.currentItem];run.enabled=!!(a&&b&&a!==b&&!a.isNull&&!b.isNull&&a.mainView.image.width===b.mainView.image.width&&a.mainView.image.height===b.mainView.image.height&&a.mainView.image.isColor===b.mainView.image.isColor);status.text=run.enabled?'Apply auto STF to the difference image to reveal small residuals; STF does not change the numerical measurements.':'Select different images with matching dimensions and color mode.';};
+   original.onItemSelected=update;replay.onItemSelected=update;update();
+   var cancel=new PushButton(dialog);cancel.text='Cancel';cancel.onClick=function(){dialog.cancel();};var buttons=new HorizontalSizer;buttons.addStretch();buttons.add(run);buttons.add(cancel);
+   dialog.sizer=new VerticalSizer;dialog.sizer.margin=12;dialog.sizer.spacing=8;dialog.sizer.add(label);dialog.sizer.add(aLabel);dialog.sizer.add(original);dialog.sizer.add(bLabel);dialog.sizer.add(replay);dialog.sizer.add(status);dialog.sizer.add(buttons);dialog.adjustToContents();
+   if(!dialog.execute())return;
+   if(typeof Console.show==='function')Console.show();
+   var a=windows[original.currentItem],b=windows[replay.currentItem],result=compareAtlasImages(a,b,'Replay');
+   var text=a.mainView.id+' versus '+b.mainView.id+'\nInput formats: '+a.mainView.image.bitsPerSample+' bit / '+b.mainView.image.bitsPerSample+' bit';
+   for(var c=0;c<result.rows.length;++c)text+='\n'+result.rows[c].channel+': max abs = '+result.rows[c].max.toExponential(12)+'; mean abs = '+result.rows[c].mean.toExponential(12);
+   text+='\n\n'+(result.max===0?'Identical nominal-channel pixels.':'Different nominal-channel pixels.')+'\nDifference image: '+result.difference.mainView.id+'\nAuto STF is for display only.';
+   new MessageBox(text,'AstroProcessAtlas - Comparison result',StdIcon_Information,StdButton_Ok).execute();
+}
+
 function showAboutDialog() {
    var dialog = new Dialog;
    dialog.windowTitle = "About AstroProcessAtlas";
@@ -2085,17 +2171,25 @@ function chooseWorkspaceWindows(windows) {
    about.icon = dialog.scaledResource(":/icons/info.png");
    about.toolTip = "About";
    about.onClick = showAboutDialog;
+   var compare = new PushButton(dialog);compare.text='Compare original / replay...';compare.enabled=windows.length>1;compare.onClick=function(){try{showAtlasComparisonDialog(null,'');}catch(e){new MessageBox(e.message,'AstroProcessAtlas - Comparison',ICON_ERROR,BUTTON_OK).execute();}};
    var buttons = new HorizontalSizer;
-   buttons.spacing = 8; buttons.add(about); buttons.add(all); buttons.add(none); buttons.addStretch(); buttons.add(ok); buttons.add(cancel);
+   buttons.spacing = 8; buttons.add(about); buttons.add(compare); buttons.add(all); buttons.add(none); buttons.addStretch(); buttons.add(ok); buttons.add(cancel);
    dialog.sizer = new VerticalSizer;
    dialog.sizer.margin = 12; dialog.sizer.spacing = 10;
    var embed = new CheckBox(dialog);embed.text='Single HTML file (embed thumbnails)';embed.checked=true;
-   dialog.sizer.add(label); dialog.sizer.add(tree, 100);dialog.sizer.add(sourceLabel);dialog.sizer.add(sources);dialog.sizer.add(embed); dialog.sizer.add(buttons);
+   var sizeLabel=new Label(dialog);sizeLabel.text='Report size';
+   var size=new ComboBox(dialog);size.addItem('Small');size.addItem('Normal');size.addItem('Detailed');size.currentItem=1;
+   var sizeNote=new Label(dialog);sizeNote.wordWrapping=true;
+   var sizeIds=['small','normal','detailed'];
+   size.onItemSelected=function(index){var profile=reportSizeProfile(sizeIds[index]);sizeNote.text='Previews up to '+profile.stage+' px; current image '+profile.thumbnail+' px; masks '+profile.mask+' px. All steps and parameters are retained. Smaller previews reduce export time and file size.';};
+   size.onItemSelected(size.currentItem);
+
+   dialog.sizer.add(label); dialog.sizer.add(tree, 100);dialog.sizer.add(sourceLabel);dialog.sizer.add(sources);dialog.sizer.add(embed);dialog.sizer.add(sizeLabel);dialog.sizer.add(size);dialog.sizer.add(sizeNote); dialog.sizer.add(buttons);
    dialog.adjustToContents();
    if (!dialog.execute()) return [];
    var selected = [];
    for (var i = 0; i < windows.length; ++i) if (tree.child(i).checked) selected.push(windows[i]);
-   selected.embedThumbnails=embed.checked;
+   selected.embedThumbnails=embed.checked;selected.reportProfileId=sizeIds[size.currentItem]||'normal';
    selected.originalInputIds=[];
    for(var i=0;i<windows.length;++i)if(tree.child(i).checked&&sources.child(i).checked)selected.originalInputIds.push(windows[i].mainView.fullId||windows[i].mainView.id);
    return selected;
@@ -2134,7 +2228,7 @@ function generateHistoryReport() {
    var graph = workspaceGraph(records);
    for (var i = 0; i < records.length; ++i) total += workspaceStepGroups(records[i]).length;
    records=orderWorkspaceGraph(records,graph);
-   var thumbnailFiles=collectWorkspaceThumbnails(records, thumbDir, basename + "_thumbs", progress.update);
+   var thumbnailFiles=collectWorkspaceThumbnails(records, thumbDir, basename + "_thumbs", progress.update, windows.reportProfileId);
    var html = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>AstroProcessAtlas</title><style>' + reportStyles() +
       'h2{color:#89b4fa} .graph-scroll{overflow:auto;max-height:760px;border:1px solid #45475a;margin:14px 0} #workspace_graph{display:block;height:auto;background:#11111b} .edge{fill:none;stroke:#89b4fa;stroke-width:1.8} .edge-input,.edge-reference{stroke:#f9e2af;stroke-dasharray:6 4} .edge-mask{stroke:#f38ba8;stroke-dasharray:6 4} .edge-output{stroke:#a6e3a1;stroke-dasharray:6 4} .edge-manual{stroke:#cba6f7;stroke-dasharray:4 3} .edge-possible{stroke:#94e2d5;stroke-dasharray:2 7;stroke-width:2} .possible-info{color:#94e2d5} .redo-edge,.redo-node{opacity:.45} .graph-node rect{fill:#1e1e2e;stroke:#45475a} .graph-node:hover rect{stroke:#89b4fa} .graph-node text{fill:#cdd6f4;font:13px sans-serif} .graph-node .graph-small{fill:#a6adc8;font-size:10px} .image-snapshot{max-width:160px;max-height:160px;display:block;margin-bottom:10px} .image-report{scroll-margin-top:15px} select,input{max-width:100%;background:#1e1e2e;color:#cdd6f4;border:1px solid #45475a;padding:6px} .step-card{scroll-margin-top:15px} </style></head><body>';
    html += '<p><label>Language / Γλώσσα <select id="report_language" onchange="setReportLanguage(this.value)"><option value="en" data-no-i18n>English</option><option value="el" data-no-i18n>Ελληνικά</option></select></label></p>';
@@ -2150,6 +2244,8 @@ function generateHistoryReport() {
    html += '<div class="report-filters"><label>Search <input id="report_search" type="search" placeholder="Image, tool, mask or parameter" oninput="applyReportFilters()"></label> <label>Tool <select id="tool_filter" onchange="applyReportFilters()"><option value="all">All tools</option>';
    for (var t=0;t<tools.length;++t) html += '<option data-no-i18n value="' + escapeHTML(tools[t]) + '">' + escapeHTML(tools[t]) + '</option>';
    html += '</select></label> <label><input id="mask_filter" type="checkbox" onchange="applyReportFilters()">Steps with masks</label> <label><input id="applied_filter" type="checkbox" onchange="applyReportFilters()">Applied steps only</label> <button onclick="resetReportFilters()">Reset filters</button><p id="filter_status" aria-live="polite"></p></div>';
+   var reportProfile=reportSizeProfile(windows.reportProfileId);
+   html+='<p><b>Report size:</b> <span>'+reportProfile.label+'</span> — <span>Maximum stage preview:</span> '+reportProfile.stage+' px</p>';
    html += '<p class="provenance-legend"><b>Connection origin:</b> Recorded in history · Detected from parameters · User annotation. Hover or focus a line for its origin and parameter. A recorded mask name does not identify its historical pixel version.</p>';
    html += workspaceOverviewHTML(records, graph);
    html += '<p><label>Show image history <select id="image_filter" onchange="showImage(this.value)"><option value="all">All</option>';
@@ -2175,14 +2271,14 @@ function generateHistoryReport() {
    }
    html += '<footer class="report-footer"><a href="https://www.yoruhikari.gr/" target="_blank" rel="noopener noreferrer">© 2026 YoruHikari Astrophotography</a></footer>';
    html += '<button id="back_to_top" type="button" hidden onclick="scrollToReportTop()" aria-label="Back to top">↑ Back to top</button>';
-   html += '<div id="comparison_dialog" role="dialog" aria-modal="true" aria-label="Before / after" hidden onclick="if(event.target===this)closeComparison()"><div class="comparison-panel"><button id="comparison_close" type="button" onclick="closeComparison()">Close</button><p>Preview up to 1200 pixels. Dark previews use a display-only auto stretch; image pixels are unchanged. Zoom and pan are shared by both images.</p><label class="zoom-control"><span>Zoom</span><input id="comparison_zoom" type="range" min="100" max="400" value="100" oninput="zoomComparison(this.value)" onchange="zoomComparison(this.value)"></label><div id="comparison_viewport"><div id="comparison_content"></div></div></div></div>';
+   html += '<div id="comparison_dialog" role="dialog" aria-modal="true" aria-label="Before / after" hidden onclick="if(event.target===this)closeComparison()"><div class="comparison-panel"><button id="comparison_close" type="button" onclick="closeComparison()">Close</button><p>Preview resolution follows the selected report size. Dark previews use a display-only auto stretch; image pixels are unchanged. Zoom and pan are shared by both images.</p><label class="zoom-control"><span>Zoom</span><input id="comparison_zoom" type="range" min="100" max="400" value="100" oninput="zoomComparison(this.value)" onchange="zoomComparison(this.value)"></label><div id="comparison_viewport"><div id="comparison_content"></div></div></div></div>';
    // Escape HTML delimiters in inline JSON: names/code must never close a script tag.
    html += '<style>.report-filters{padding:12px;border:1px solid #45475a;display:flex;gap:12px;align-items:center;flex-wrap:wrap}.report-filters input[type=checkbox]{width:auto}.is-filtered,[hidden]{display:none!important}.compare-stage{position:relative;line-height:0}.compare-stage img{display:block;width:100%;max-width:none!important;max-height:none!important}.compare-before{position:absolute;inset:0;clip-path:inset(0 50% 0 0)}.compare-label{position:absolute;top:10px;background:#111b;padding:5px;line-height:1.3;pointer-events:none}.before-label{left:8px}.after-label{right:8px}.comparison input[type=range]{width:100%;padding:0}.comparison-unavailable{font-size:12px;color:#f9e2af}#comparison_dialog{width:min(1100px,94vw);max-height:94vh;background:#181825;color:#cdd6f4;border:1px solid #89b4fa}#comparison_dialog::backdrop{background:#000b}#comparison_viewport{overflow:auto;max-height:70vh}#comparison_content{width:100%}#comparison_dialog .comparison{width:100%}#comparison_dialog .comparison>button{display:none}.edge:focus{stroke-width:4;outline:none}.provenance-legend{font-size:13px;color:#bac2de}</style>';
    html += '<style>.zoom-control{display:inline-flex;align-items:center;gap:10px;margin:8px 0}.zoom-control span{white-space:nowrap}.zoom-control input[type=range]{width:220px;max-width:55vw;margin:0;vertical-align:middle}.graph-node.is-tool-match rect,.graph-node.is-tool-match:hover rect{stroke:#fab387!important;stroke-width:3px!important}.compare-divider{position:absolute;left:50%;top:0;bottom:0;width:2px;background:#fff;box-shadow:0 0 3px #000;pointer-events:none;z-index:2}.compare-divider span{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);border-radius:50%;padding:10px;background:#181825;border:2px solid #fff;line-height:1;color:#fff}.comparison .compare-stage .compare-slider{position:absolute;inset:0;width:100%;height:100%;margin:0;padding:0;opacity:0;cursor:ew-resize;z-index:3}.compare-stage:focus-within{outline:2px solid #fab387}.compare-label{z-index:4}#comparison_dialog{position:fixed;inset:0;z-index:10000;width:auto;max-height:none;background:#000b;border:0;padding:20px;display:flex;align-items:center;justify-content:center}.comparison-panel{background:#181825;border:1px solid #89b4fa;padding:16px;width:1100px;max-width:94vw;max-height:90vh;overflow:auto}#comparison_viewport{max-height:65vh}</style>';
    html += '<script>var workspaceGraphData=' + JSON.stringify(graph).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026') +
       ';var workspaceReplayData=' + JSON.stringify(workspaceReplayData(records)).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026') +
       ';var DARK_STRUCTURE_GPL_LICENSE=' + JSON.stringify(DARK_STRUCTURE_GPL_LICENSE).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026') +
-      ';' + pixelMathTextTokens.toString() + ';' + buildWorkspaceReplayScript.toString() + ';' + reportBrowserScript() + '</script></body></html>';
+      ';' + pixelMathTextTokens.toString() + ';' + compareAtlasImages.toString() + ';' + showAtlasComparisonDialog.toString() + ';' + buildWorkspaceReplayScript.toString() + ';' + reportBrowserScript() + '</script></body></html>';
    writeReportText(file, html);
    } finally { file.close(); }
    progress.update(100, 'Report complete');
@@ -2227,6 +2323,7 @@ var REPORT_TRANSLATIONS = [
    ['Nonlinear stretch recorded in history','Καταγεγραμμένο nonlinear stretch στο ιστορικό'],
    ['Stretch recorded','Καταγεγραμμένο stretch'],
    ['Step data indicators: green — recorded settings; orange — manual inputs or verification; pink — missing data. Recorded settings do not guarantee identical historical pixels. Stretch labels are estimates from pixel brightness.','Ενδείξεις δεδομένων: πράσινο — καταγεγραμμένες ρυθμίσεις· πορτοκαλί — χειροκίνητες είσοδοι ή επαλήθευση· ροζ — ελλιπή δεδομένα. Οι ρυθμίσεις δεν εγγυώνται ίδια ιστορικά pixels. Οι εκτιμήσεις stretch βασίζονται στη φωτεινότητα.'],
+   ['Report size:','Μέγεθος report:'],['Small','Μικρό'],['Normal','Κανονικό'],['Detailed','Λεπτομερές'],['Maximum stage preview:','Μέγιστη προεπισκόπηση σταδίου:'],
    ['Replay image','Εικόνα επανάληψης'],['First process','Πρώτη διεργασία'],['Last process','Τελευταία διεργασία'],
    ['Download PixInsight replay script','Λήψη script επανάληψης για το PixInsight'],
    ['Ready for replay','Έτοιμο για επανάληψη'],
@@ -2787,7 +2884,7 @@ REPORT_TRANSLATIONS = REPORT_TRANSLATIONS.concat([
    ['Before / after','Πριν / μετά'],['Before','Πριν'],['After','Μετά'],['Enlarge comparison','Μεγέθυνση σύγκρισης'],
    ['Before/after comparison unavailable: historical pixels are missing.','Η σύγκριση πριν/μετά δεν είναι διαθέσιμη: λείπουν ιστορικά pixels.'],
    ['Before/after comparison unavailable: image dimensions changed.','Η σύγκριση πριν/μετά δεν είναι διαθέσιμη: άλλαξαν οι διαστάσεις της εικόνας.'],
-   ['Preview up to 1200 pixels. Dark previews use a display-only auto stretch; image pixels are unchanged. Zoom and pan are shared by both images.','Προεπισκόπηση έως 1200 pixels. Τα σκοτεινά previews έχουν αυτόματο stretch μόνο για προβολή· τα pixels δεν αλλάζουν. Η μεγέθυνση και η μετακίνηση είναι κοινές για τις δύο εικόνες.'],
+   ['Preview resolution follows the selected report size. Dark previews use a display-only auto stretch; image pixels are unchanged. Zoom and pan are shared by both images.','Η ανάλυση προεπισκόπησης ακολουθεί το επιλεγμένο μέγεθος report. Τα σκοτεινά previews έχουν αυτόματο stretch μόνο για προβολή· τα pixels δεν αλλάζουν. Η μεγέθυνση και η μετακίνηση είναι κοινές για τις δύο εικόνες.'],
    ['Zoom','Μεγέθυνση'],['Close','Κλείσιμο'],['Search','Αναζήτηση'],['Tool','Εργαλείο'],['All tools','Όλα τα εργαλεία'],
    ['Image, tool, mask or parameter','Εικόνα, εργαλείο, μάσκα ή παράμετρος'],['Steps with masks','Βήματα με μάσκα'],
    ['Applied steps only','Μόνο εφαρμοσμένα βήματα'],['Reset filters','Επαναφορά φίλτρων'],['matching steps','βήματα που ταιριάζουν'],

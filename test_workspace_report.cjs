@@ -98,7 +98,7 @@ File.prototype.createForWriting=()=>{};File.prototype.write=bytes=>{output+=byte
 const context={...helper,File,ImageWindow:{windows,activeWindow:{isNull:true}},
   ByteArray:{stringToUTF8:text=>Buffer.from(text,'utf8')},
   Dialog:function(){this.scaledResource=x=>x;this.adjustToContents=()=>{};this.execute=()=>{if(uncheckIndex>=0)lastTree.children[uncheckIndex].checked=false;return !dialogCancelled;};},
-  TreeBox,TreeBoxNode,HorizontalSizer:Sizer,VerticalSizer:Sizer,Label:function(){},PushButton:function(){},ToolButton:function(){},CheckBox:function(){},
+  TreeBox,TreeBoxNode,ComboBox:function(){this.addItem=()=>{};},HorizontalSizer:Sizer,VerticalSizer:Sizer,Label:function(){},PushButton:function(){},ToolButton:function(){},CheckBox:function(){},
   SaveFileDialog:function(){this.fileName='/preview/workspace.html';this.execute=()=>true;},
   MessageBox:function(){this.execute=()=>{};}};
 vm.runInNewContext(source,context);
@@ -106,6 +106,7 @@ assert.ok(output.includes('<b>Images:</b> 5'));
 assert.ok(output.includes('<html lang="en">'));
 assert.ok(output.includes('id="report_language"'));
 assert.ok(output.includes('<h2>Image and process tree</h2>'));
+assert.ok(output.includes('Maximum stage preview:'));
 assert.ok(output.includes('<h2>Processing summary</h2>'));
 assert.ok(output.indexOf('<h2>Processing summary</h2>')<output.indexOf('class="report-filters"'));
 assert.ok(output.includes('data:image/png;base64,'));
@@ -259,7 +260,7 @@ helper.Dialog=function(){dialogs.push(this);this.scaledResource=x=>x;this.ok=()=
 helper.Dialog.openBrowser=url=>{openedURL=url;};
 helper.Label=function(){controls.push(this);};helper.PushButton=function(){controls.push(this);};
 helper.ToolButton=function(){controls.push(this);};helper.TreeBox=TreeBox;helper.TreeBoxNode=TreeBoxNode;
-helper.CheckBox=function(){controls.push(this);};
+helper.CheckBox=function(){controls.push(this);};helper.ComboBox=function(){this.items=[];this.addItem=x=>this.items.push(x);controls.push(this);};
 helper.HorizontalSizer=Sizer;helper.VerticalSizer=Sizer;
 assert.equal(helper.chooseWorkspaceWindows([windows[0]]).length,1);
 const about=controls.find(c=>c.toolTip==='About');assert.ok(about.icon.includes('info.png'));
@@ -269,6 +270,18 @@ assert.equal(dialogs[1].windowTitle,'About AstroProcessAtlas');
 assert.ok(controls.some(c=>c.text&&c.text.includes('Author: YoruHikari')&&c.text.includes('https://www.yoruhikari.gr/')));
 controls.find(c=>c.text==='Visit website').onClick();assert.equal(openedURL,'https://www.yoruhikari.gr/');
 console.log('Passed: single-image English dialog, About icon, author/site and website action.');
+
+assert.equal(helper.chooseWorkspaceWindows([windows[0]]).reportProfileId,'normal');
+assert.ok(controls.some(c=>c.text==='Compare original / replay...'));
+console.log('Passed: report size selector defaults to Normal and integrated comparison entry is available.');
+
+const baseDialog=helper.Dialog;
+for(const [index,profile] of [[0,'small'],[2,'detailed']]){
+ helper.Dialog=function(){baseDialog.call(this);this.execute=()=>{controls.filter(c=>c.items&&c.items.includes('Detailed')).at(-1).currentItem=index;return true;};};
+ assert.equal(helper.chooseWorkspaceWindows([windows[0]]).reportProfileId,profile);
+}
+helper.Dialog=baseDialog;
+
 
 const cards=graph.nodes.filter(n=>!n.header).map(n=>({id:n.id,hidden:false}));
 const languageQuery=browser.document.querySelectorAll;
@@ -1063,7 +1076,7 @@ console.log('Passed: arbitrary current/before/after selection, shared comparison
  assert.equal(elements.replay_export.disabled,true);
  assert.match(elements.replay_readiness.children[0].textContent,/STOP.*PixelMath needs/);
  const standaloneBuilder={};
- vm.runInNewContext(helper.pixelMathTextTokens.toString()+';'+helper.buildWorkspaceReplayScript.toString(),standaloneBuilder);
+ vm.runInNewContext(helper.pixelMathTextTokens.toString()+';'+helper.compareAtlasImages.toString()+';'+helper.showAtlasComparisonDialog.toString()+';'+helper.buildWorkspaceReplayScript.toString(),standaloneBuilder);
  const exported=standaloneBuilder.buildWorkspaceReplayScript(helper.workspaceReplayData([rec])[0],0,1);
  new vm.Script(exported.replace(/^#.*$/gm,''));
  console.log('Passed: PixelMath reference warnings, EN/EL text, ready no-reference step, unsupported syntax blocker, download and isolated browser builder dependencies.');

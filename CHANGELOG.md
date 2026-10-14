@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Integrate numerical original/replay comparison in the main PixInsight dialog
+  and replay outcome report, with 64-bit absolute difference images and per-channel
+  maximum/mean statistics, preserving input images and display state.
+- Add Small / Normal / Detailed report profiles with 480 / 800 / 1200 px stage
+  previews and matching image/mask sizes; retain all history and parameters.
+- Speed up dark preview stretching with native row reads instead of individual
+  pixel calls, preserving the linked display transform and bounded memory.
+
 - Add step/group data completeness badges, separate from replay eligibility,
   with tree indicators for recorded settings, manual inputs and missing metadata.
 - Add estimated image appearance and recorded histogram stretch indicators.

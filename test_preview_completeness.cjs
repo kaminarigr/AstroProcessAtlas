@@ -62,3 +62,18 @@ assert.match(html,/Step data:/);assert.match(html,/Recorded process settings/);
 assert.match(html,/Auto-stretched preview only/);
 assert.match(api.workspaceOverviewHTML([htmlRecord],graph),/Step data indicators/);
 assert.match(api.workspaceOverviewHTML([htmlRecord],graph),/fill="#a6e3a1"/);
+
+assert.equal(api.reportSizeProfile('small').stage,480);
+assert.equal(api.reportSizeProfile('normal').stage,800);
+assert.equal(api.reportSizeProfile('detailed').stage,1200);
+assert.equal(api.reportSizeProfile('invalid').id,'normal');
+const wide={...dark,width:2400,height:1200,sample(x,y,c){return 0.001+(x%4)*0.001;},render(){return bitmap(this.width,this.height);}};
+let reads=0;wide.getSamples=function(row,rect,c){++reads;for(let x=0;x<this.width;++x)row[x]=this.sample(x,0,c);};
+const gain=api.previewAppearance(wide);reads=0;
+assert.equal(api.createThumbnailFromView({image:wide},'small.png',480,gain),true);
+assert.equal(reads,240);assert.equal(previews.at(-1).width,480);assert.equal(previews.at(-1).height,240);
+const bulk=previews.at(-1).channels[0].slice(0,480);delete wide.getSamples;
+api.createThumbnailFromView({image:wide},'fallback.png',480,gain);
+const fallback=previews.at(-1).channels[0].slice(0,480);
+for(let x=0;x<bulk.length;++x)assert.ok(Math.abs(bulk[x]-fallback[x])<1e-6);
+console.log('Passed: three report sizes and bulk-row stretch matches per-pixel preview sampling with bounded memory.');

@@ -42,7 +42,7 @@ function run(count, startIndex, unavailable = false, failedThumbnail = false, cu
   File.prototype.close = () => {};
   const context = {
     Dialog: function() {this.adjustToContents=()=>{};this.execute=()=>true;this.scaledResource=x=>x;},
-    Label:function(){},PushButton:function(){},ToolButton:function(){},CheckBox:function(){},
+    Label:function(){},PushButton:function(){},ToolButton:function(){},CheckBox:function(){},ComboBox:function(){this.addItem=()=>{};},
     TreeBox:function(){this.children=[];this.setMinSize=()=>{};this.child=i=>this.children[i];},
     TreeBoxNode:function(tree){tree.children.push(this);this.setText=()=>{};},
     HorizontalSizer:function(){this.add=()=>{};this.addStretch=()=>{};},
