@@ -221,7 +221,9 @@ and press **Apply external handling**:
 - **Run GraXpert again:** execute background extraction through the installed
   GraXpert CLI on the current private replay image. Set Subtraction/Division,
   smoothing (0–1), an optional exact `n.n.n` AI model version, device preference and
-  optional executable path. A blank path is selected once during native preflight.
+  optional executable path. Leave it blank to detect the installed PixInsight
+  GraXpert wrapper's saved path, resolve `graxpert` through PATH, or use the standard
+  Windows user installation. Native preflight asks for a file only if detection fails.
 - **Recorded process:** restore the original saved step.
 
 These are user declarations, saved in the HTML and change log. A bare `image`

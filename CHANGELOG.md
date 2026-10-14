@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Discover GraXpert automatically from the installed wrapper's GraXpertPath.txt,
+  resolve its bare command through PATH and check the standard Windows user
+  installation before requesting an executable manually.
+
+- Normalize quoted Windows GraXpert executable paths and reject shortcuts/scripts.
+  Include launch executable, argument array, readable process-error descriptions
+  and captured console output in replay failures, including failed-to-start code 0.
+
 - Add explicit prepared-external checkpoints that skip earlier branch processing,
   preserve checkpoint references and resume single/chain replay from supplied pixels.
 - Add user-configured GraXpert background-extraction CLI replay with correction,
