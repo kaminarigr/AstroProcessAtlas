@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Group chain reference cards by the image using them. Add labelled input/mask
+  SVG icons, matching color accents and separate step captions within each
+  responsive group, with English/Greek labels.
+
+- Reorganize chain replay into final-image selection, input review and download.
+  Use responsive cards for connections and starting inputs, side-by-side workflow
+  editing/configuration, visible source/stage/preparation labels and mobile-sized
+  controls. Collapse optional advanced GraXpert settings and add English/Greek guidance.
+
 - Collapse the PixelMath expression section by default and center tree delete
   icons. Replace browser deletion prompts with an English/Greek modal showing
   the image, step, tool, available mask/inputs and expandable parameters/code;
