@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Add explicit prepared-external checkpoints that skip earlier branch processing,
+  preserve checkpoint references and resume single/chain replay from supplied pixels.
+- Add user-configured GraXpert background-extraction CLI replay with correction,
+  smoothing, optional AI model/device and executable selection during preflight.
+  Validate output, log settings/errors and clean temporary images/files.
+- Save external declarations in workflow operations, HTML and change history,
+  allow original-step restoration and stop auto-binding opaque PixelMath `image`
+  copies to their own raw input. Historical tool/settings remain unverified.
+
 - Restore authored workflow edits only from embedded saved-HTML state. Stop
   reading/writing legacy workflow browser caches, so freshly generated reports
   retain their actual PixelMath/processing histories without stale modifications.

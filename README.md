@@ -209,6 +209,36 @@ controls; separate connection JSON export/import controls are no longer needed. 
 that downloaded HTML to restore them; no separate JSON file is required. Saving
 creates a new download rather than overwriting the report currently open.
 
+### GraXpert and prepared external results
+
+In **Edit replay workflow**, select an image and press **External / GraXpert**
+beside its recorded step (for example a bare `PixelMath: image`). Choose one mode
+and press **Apply external handling**:
+
+- **Use prepared external result:** supply the image immediately AFTER that step
+  in PixInsight. Chain replay starts at that checkpoint and does not repeat its
+  preceding branch steps. In single-image replay, start the range at this entry.
+- **Run GraXpert again:** execute background extraction through the installed
+  GraXpert CLI on the current private replay image. Set Subtraction/Division,
+  smoothing (0–1), an optional exact `n.n.n` AI model version, device preference and
+  optional executable path. A blank path is selected once during native preflight.
+- **Recorded process:** restore the original saved step.
+
+These are user declarations, saved in the HTML and change log. A bare `image`
+copy does not prove GraXpert use and is no longer automatically bound to the raw
+input of its own branch. External references can still be mapped explicitly.
+Historical GraXpert settings/models are not recovered. An unpinned model uses the
+application-selected version and can change results. The external executable must
+support the selected CLI options; see the [official GraXpert CLI definitions](https://github.com/Steffenhir/GraXpert/blob/main/graxpert/main.py).
+
+Direct replay preserves original inputs, logs its settings and available console
+output, imports the processed pixels and closes/removes its temporary windows and
+XISF/FITS files on success or failure. Stop-after-current-step waits for GraXpert
+to finish. Direct execution of a historically masked replacement is blocked; use
+a prepared result containing that original masked processing instead. Automated
+adapter/engine tests use a simulated CLI; native PixInsight/GraXpert validation
+is still required.
+
 ### Replay a linked dependency chain
 
 Generate a new report, open **Replay linked dependency chain**, and select the final
