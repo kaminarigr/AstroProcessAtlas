@@ -102,7 +102,10 @@ Workflow replay supports native HistogramTransformation,
 CurvesTransformation, RGBWorkingSpace, SCNR, ColorSaturation, BlurXTerminator,
 NoiseXTerminator, GradientCorrection, StarXTerminator, NarrowbandNormalization,
 UnsharpMask, MultiscaleLinearTransform, Invert, ColorCalibration,
-BackgroundNeutralization, LRGBCombination and ChannelCombination instances with supported serialization.
+BackgroundNeutralization, LRGBCombination, ChannelCombination,
+SpectrophotometricFluxCalibration, DynamicCrop and FastRotation instances with
+supported serialization. ImageBlend uses its installed CosmicPhotons engine
+when its supported settings were saved in history.
 Calibration and channel-combination references use explicit input mapping as described below.
 StarXTerminator output references are allowed.
 RGBWorkingSpace steps that use historical global settings are blocked.
@@ -294,6 +297,39 @@ When accessible through live history, it captures those states and restores the
 selected input immediately, including on failure. If a required earlier state is
 only inside read-only initial history, select an earlier input instead; processing
 is blocked before branches are executed. All continued processing uses new copies.
+
+### Flux calibration, crop/rotation and ImageBlend
+
+**SpectrophotometricFluxCalibration** replays the recorded native parameters.
+Replay copies and chain checkpoints retain available FITS keywords, image
+properties and astrometric solutions. Use the observation metadata, plate
+solution, filter configuration and catalog appropriate to the new input data;
+recorded settings alone cannot supply missing observation data or catalogs.
+
+**DynamicCrop** and **FastRotation** apply the recorded geometry to the replay
+copy. Native crop positions, angles, scale and rotation/mirror modes are preserved.
+When the geometry changes, standalone replay requests subsequent masks at the
+step where they are needed, using the resulting image dimensions. Adjust these
+native steps in PixInsight when another framing is required.
+
+**ImageBlend** detects the base and blend references in saved Script parameters
+and maps them to selected images or chain checkpoints. It runs the installed
+CosmicPhotons `ImageBlendEngine.js` and `Utilities.js` directly, preserving the
+supported blend mode, opacity, input histogram adjustments, filters, lightness
+and stretch settings. Grayscale/RGB inputs may be mixed; dimensions must match.
+The result is written to the replay copy, and helper images are closed on success
+or failure. New-image combinations can start from their two references without
+an extra target input. Auto and Skip are available; Adjust is reserved for native
+processes.
+
+The engine files must remain at the paths recorded at report generation and pass
+SHA-256 checks. Missing/incomplete settings or unrecognized parameters (including
+newer painted-mask features) block automatic ImageBlend replay instead of guessing.
+Generate a new report after an ImageBlend update. The ImageBlend adapter was
+checked against the installed 1.7 source; newer interfaces need validation.
+ImageBlend is by Mike Cranfield, distributed under GPL-3.0-only. Generated replays
+that include its engine carry the GPL notice and license; AstroProcessAtlas
+portions retain their MIT attribution. See [Cosmic Photons](https://cosmicphotons.com/scripts/).
 
 ### ChannelCombination
 

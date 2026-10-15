@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Support native SpectrophotometricFluxCalibration, DynamicCrop and FastRotation
+  replay. Preserve available metadata and astrometry on copies/checkpoints; defer
+  standalone mask selection after geometry changes until the actual target exists.
+- Support saved ImageBlend combinations through the installed CosmicPhotons engine:
+  map base/blend inputs in standalone and chain replay, preserve supported recorded
+  settings, verify installed source hashes and clean helper images on failure or
+  completion. Detect image references and output aliases; block missing/unknown
+  settings. Include the applicable GPL license and author attribution in exports.
+
 - Resolve PixelMath input references through unique recorded image names from
   newImageId and ImageIdentifier, including weighted combinations whose inputs
   were renamed later. Use the same mapping in the tree, summary and chain replay;
