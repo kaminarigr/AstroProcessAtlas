@@ -2,12 +2,14 @@
 
 ## Unreleased
 
+## 0.3.2 — 2026-10-15
+
 - Integrate manual connections into chain replay as input/mask checkpoints, branch
   origins and generated stars outputs, labelled manual in cards and diagnostics.
   Recompute on add/remove and restore saved links without extra confirmation.
   Block ambiguous roles, conflicts and cycles; do not invent missing parameters.
 
-- Accept confirmed manual stars-output links after the redundant stars origin
+- Support manual stars-output links after the redundant stars origin
   entry has already been removed, leaving an empty history. Reuse the producer
   output without deleting another step or requiring a separate stars input.
 

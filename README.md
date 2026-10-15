@@ -42,7 +42,11 @@ The embedded previews are reduced to at most 640 pixels and compressed for a sma
 
 ## Updates
 
-Current version: **0.3.1**. The version is shown in About.
+Current version: **0.3.2**. The version is shown in About.
+
+Version 0.3.2 integrates manual connections into chain replay, including generated
+stars outputs, and adds creator/feedback links, support guides and issue forms.
+It also fixes PixInsight preprocessing of footer/About URLs.
 
 Version 0.3.1 fixes initial FastIntegration replay handling and restores tree-step
 navigation to visible details.
