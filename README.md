@@ -51,6 +51,32 @@ the new structure. See the [report format](docs/REPORT_FORMAT.md) for integratio
 and future exporter development. Replay support and historical-data limitations
 remain unchanged.
 
+## Print and save PDF
+
+Generate a fresh HTML report. Use **Print full report / PDF** beside the tree
+controls for the complete recording, independently of display filters. To print
+one connected workflow, choose its final image under **Replay linked dependency
+chain** and use **Print linked chain / PDF** beside the replay download button.
+Only the dependency branches and checkpoints needed by that plan are included.
+
+Choose previews, readable parameters, all table rows and/or recorded source code.
+Large tables are abbreviated by default; including every row or full code may
+produce many pages. A separate A4 preview opens with contents, image sections,
+Before/After pairs, mask/input mappings and current Auto/Adjust/Skip choices.
+Current workflow edits are included even before saving the HTML. Full-report
+printing also retains image-origin metadata and clearly identifies redo entries.
+
+Wait for previews to load, then choose **Print / Save PDF** and select your
+browser's **Save as PDF** destination. Allow the preview window if blocked. Printing
+leaves the report and replay images unchanged. It documents the recording/plan,
+not a successful replay execution; copied/adjusted steps do not have new result
+pixels. Recorded auto-stretched previews are identified as previews only.
+
+Print language follows English/Greek selection. Browser-native page numbering and
+margins can vary; A4 layout and both scopes were checked in headless Chromium/Edge.
+Firefox/PixInsight use still needs local verification. PDF output uses the browser,
+requires no upload or PDF library and does not replace the editable HTML.
+
 ## Updates
 
 Current version: **0.3.9**. The version is shown in About.

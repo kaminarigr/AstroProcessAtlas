@@ -1128,3 +1128,6 @@ console.log('Passed: versioned JSON report data, actual HTML bootstrap, isolated
  const events={};browser.document.addEventListener=(name,listener)=>{events[name]=listener;};browser.atlasReportData=model;browser.hydrateAtlasReportSource=helper.hydrateAtlasReportSource;browser.resolveAtlasReportSource=helper.resolveAtlasReportSource;const toggleSource=helper.WORKSPACE_BROWSER_SOURCE.split('\n').find(line=>line.includes("document.addEventListener('toggle'"));vm.runInNewContext(toggleSource,browser);const details={open:true,querySelectorAll:()=>[textarea]};textarea.value='';textarea.closest=()=>details;events.toggle({target:details});assert.ok(textarea.value.includes('HistogramTransformation'));textarea.value='';details.open=false;events.toggle({target:details});assert.equal(textarea.value,'','Closed details stay unloaded');delete browser.atlasReportData;
 }
 console.log('Passed: full source pooling/reference reuse, lazy detail hydration, inert Save markup, invalid references and hash-collision safety.');
+
+// Optional local visual-QA fixture; no real user report is copied or published.
+if(process.env.APA_PRINT_FIXTURE){fs.mkdirSync(__dirname+'/dist/print-qa',{recursive:true});fs.writeFileSync(__dirname+'/dist/print-qa/report.html',fullOutput);}

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add browser-native PDF/print previews for the full recording and the selected
+  linked dependency chain. Print only required branch checkpoints, include current
+  workflow choices/edits and distinguish redo/origin metadata. Use an A4 light
+  layout with contents, readable tables, grouped step components, Before/After
+  previews, input/mask mappings and change history. Offer preview/parameter/table/
+  source options, wait for images and retain the editable HTML unchanged.
+
 - Separate the single-file report's captured workspace from its interface using
   an inert, versioned JSON document and a shared JSON preview store. Save authored
   edits/connections/history in the same document; retain the legacy state adapter.

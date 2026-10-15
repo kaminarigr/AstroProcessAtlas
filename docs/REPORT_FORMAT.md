@@ -3,7 +3,8 @@
 AstroProcessAtlas keeps a single, offline HTML report. Its captured data is
 separate from the browser interface and can be read with a JSON parser without
 running the report's JavaScript. This is the foundation for other viewers and
-exporters; it does not add a separate project application or a PDF export.
+exporters. The browser print/PDF view consumes this model plus the current workflow
+snapshot and readable HTML fragments; no separate project application is needed.
 
 ## Embedded documents
 
@@ -98,3 +99,19 @@ Generate a fresh report to get the new model and source-loading behavior.
 
 Future incompatible formats need an explicit schema migration. Unknown schema
 versions must not be treated as legacy documents or overwritten by Save.
+
+
+## Print view
+
+The print builder selects either the whole current workflow or the tasks required
+by the selected dependency plan. Captured source/preview metadata remain distinct
+from edited choices. Readable table/plot fragments are cloned from the report,
+interactive controls are removed, and a separate light A4 document is built.
+Full recording includes origin metadata and marks redo entries as not applied.
+Grouping preserves all recorded component details. Schema-1 `history.steps.origin`
+is an additive metadata flag used to distinguish integration origins.
+
+Printing does not write project edits or execution results back into the model.
+Preview bytes are resolved from the shared asset map, and copied steps do not
+pretend to have newly computed preview pixels. Browser print/Save as PDF provides
+the PDF output; the editable standalone HTML remains the project document.
