@@ -1834,7 +1834,7 @@ function buildWorkspaceReplayScript(image, start, end) {
       'var replayGraxpertCache=typeof atlasSharedGraxpertCache==="object"?atlasSharedGraxpertCache:{};',
       'var replayIdentifier = ' + JSON.stringify(identifier) + ';',
       'var replayOriginalInputs = ' + JSON.stringify(image.originalInputs || []) + ';',
-      'var replaySteps = ' + JSON.stringify(manifest) + ';',
+      'var replaySteps = ' + JSON.stringify(manifest).split(String.fromCharCode(47)).join('\\u002f') + ';',
       'var replayFactories = [' + factories.join(',\n') + '];',
       pixelMathTextTokens.toString(),
       compareAtlasImages.toString(),

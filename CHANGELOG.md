@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Escape slash characters in exported replay metadata so serialized table
+  comments and URLs cannot truncate strings during PixInsight preprocessing.
+
 - Reuse verified prepared input prefixes in standalone and chain replay. Compare
   complete recorded process settings against applied history, excluding redo,
   masks, manual modes and dependent/output-producing processes. Show reusable

@@ -425,3 +425,10 @@ const preparedManualData=[{id:'Ha',steps:[preparedSteps[0],{...preparedSteps[1],
 console.log('Passed: prepared-input reuse checks exact automatic prefixes, parameters, masks and applied history; single/chain exports avoid duplicate processing, retain earlier clone checkpoints, restore originals and block inaccessible inherited states.');
 
 }
+const commentedNative=process('CurvesTransformation','\nP.K = [ // x, y\n[0,0],[1,1]\n];\nP.note="https://example.invalid/path";\n');commentedNative.source='/* timing */\n'+commentedNative.source;
+for(const script of [api.buildWorkspaceReplayScript({id:'Ha',steps:[commentedNative]},0,0),api.buildWorkspaceChainScript([{id:'Ha',steps:[commentedNative]}],api.buildWorkspaceChainPlan([{id:'Ha',steps:[commentedNative]}],0,{}))]){
+ const metadataLines=script.split(/\r?\n/).filter(line=>line.startsWith('var replaySteps = '));assert.ok(metadataLines.length);
+ for(const line of metadataLines){assert.ok(!line.includes('//'));assert.ok(!line.includes('/*'));const context={};vm.runInNewContext(line.replace(/\/\/.*$/,''),context);assert.equal(context.replaySteps[0].recordedSource,commentedNative.source,'Escaping preserves complete source after PJSR comment preprocessing');}
+ new vm.Script(script.replace(/^#.*$/gm,''));
+}
+console.log('Passed: standalone and chain replay metadata preserves serialized table comments and URLs without raw PJSR comment delimiters.');
