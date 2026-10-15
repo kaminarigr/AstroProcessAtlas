@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fix a PixInsight strict-mode warning in the print preview image-loading callback.
+
 - Add browser-native PDF/print previews for the full recording and the selected
   linked dependency chain. Print only required branch checkpoints, include current
   workflow choices/edits and distinguish redo/origin metadata. Use an A4 light

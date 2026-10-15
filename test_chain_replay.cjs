@@ -543,6 +543,10 @@ console.log('Passed: schema-versioned report Save/reopen/reset retains one captu
 }
 console.log('Passed: full/chain print scopes, dependency checkpoints, unrelated-branch exclusion, translated headings and escaped source/error text.');
 
+// PJSR strict mode rejects declarations inside try blocks, even though browsers accept them.
+assert.ok(api.installAtlasPrinting.toString().includes('var ready=function(){'));
+assert.ok(!api.installAtlasPrinting.toString().includes('function ready('));
+
 // Print opens an independent document, waits for images and handles blocked popups without changing the workflow.
 {
  const model={format:'AstroProcessAtlasReport',schemaVersion:1,generator:{version:'0.3.9'},workspace:{images:[{id:'One',steps:[pixel('$T*2')]}],graph:{nodes:[],edges:[]}},sources:{},history:[],project:null},before=JSON.stringify(model),messages=[],start={disabled:true},status={},preview={complete:false,naturalWidth:0};let markup='',printed=0,focused=0;
