@@ -31,7 +31,7 @@
 #include <pjsr/Sizer.jsh>
 #include <pjsr/CryptographicHash.jsh>
 
-var ASTROPROCESS_ATLAS_VERSION = "0.3.8";
+var ASTROPROCESS_ATLAS_VERSION = "0.3.9";
 
 function createReportProgress() {
    var dialog = null, label = null, bar = null, value = 0;

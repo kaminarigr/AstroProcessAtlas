@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.9 — 2026-10-15
 
 - Support NarrowbandHueCombination replay from complete recorded settings: map
   up to three grayscale channels and optional RGB stars in standalone and chain

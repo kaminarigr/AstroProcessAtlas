@@ -1,6 +1,14 @@
 # AstroProcessAtlas
 
-Τρέχουσα έκδοση: **0.3.2**.
+Τρέχουσα έκδοση: **0.3.9**.
+
+Η 0.3.9 επεκτείνει το replay με ColorCalibration, BackgroundNeutralization,
+LRGBCombination, ChannelCombination, SpectrophotometricFluxCalibration,
+DynamicCrop, FastRotation, ImageBlend και NarrowbandHueCombination. Διατηρεί
+διαθέσιμα μεταδεδομένα και αστρομετρική λύση στα αντίγραφα, ζητά τις επόμενες
+μάσκες μετά τις αλλαγές γεωμετρίας και αναγνωρίζει παλιότερα ονόματα εισόδων
+PixelMath από το ιστορικό. Για τους συνδυασμούς scripts απαιτούνται πλήρεις
+υποστηριζόμενες αποθηκευμένες ρυθμίσεις. Δημιούργησε νέο HTML και replay script.
 
 Η 0.3.2 αξιοποιεί τις χειροκίνητες συνδέσεις στο replay, μαζί με εξόδους stars,
 και προσθέτει συνδέσμους feedback, οδηγούς συνεισφοράς και διορθώσεις URL.

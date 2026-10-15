@@ -42,7 +42,15 @@ The embedded previews are reduced to at most 640 pixels and compressed for a sma
 
 ## Updates
 
-Current version: **0.3.8**. The version is shown in About.
+Current version: **0.3.9**. The version is shown in About.
+
+Version 0.3.9 expands replay with ColorCalibration, BackgroundNeutralization,
+LRGBCombination, ChannelCombination, SpectrophotometricFluxCalibration,
+DynamicCrop, FastRotation, ImageBlend and NarrowbandHueCombination. It preserves
+available metadata/astrometry on replay copies, handles masks after geometry
+changes and resolves renamed PixelMath inputs through recorded image aliases.
+Script combinations require complete supported saved parameters; see the tool
+sections below for their requirements and preview/stretch behavior.
 
 Version 0.3.8 adds per-step Auto / Adjust in PixInsight / Skip modes, real pause
 and resume by rerunning the same replay script, and reuse of matching prepared
