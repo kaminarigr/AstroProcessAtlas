@@ -447,3 +447,7 @@ const sourceNode=baseGraph.nodes.find(node=>node.header),targetNode=baseGraph.no
 assert.match(source,/\.tree-delete\{display:none\}/);assert.match(source,/\.graph-scroll\.tree-editing \.tree-delete\{display:inline\}/);assert.match(source,/\.tree-delete,\.tree-delete \*\{cursor:pointer\}/);
 console.log('Passed: edit mode controls frame/help/delete availability; tile drops create directed connections, self drops do nothing and gap copying remains separate.');
 }
+{
+const controllerSource=api.chainBrowserController.toString();assert.ok(!controllerSource.includes('http://'),'SVG namespaces must not expose comment delimiters to the PixInsight preprocessor');new vm.Script(controllerSource.replace(/\/\/[^\r\n]*/g,''));assert.ok(source.includes('http:\\u002f\\u002fwww.w3.org/2000/svg'));
+console.log('Passed: tree edit controller survives PixInsight-style line-comment preprocessing with escaped SVG namespace URLs.');
+}

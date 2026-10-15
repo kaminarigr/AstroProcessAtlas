@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Escape SVG namespace URLs in tree editing and browser code to prevent
+  PixInsight preprocessing from truncating functions at URL slash pairs.
+
 - Make tree editing explicit with an amber canvas border and edit instructions.
   Show delete controls only in edit mode with pointer cursors. Dropping a tile
   onto another creates a manual connection; dropping between steps still copies.
