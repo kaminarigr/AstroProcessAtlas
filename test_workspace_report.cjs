@@ -1076,7 +1076,7 @@ console.log('Passed: arbitrary current/before/after selection, shared comparison
  assert.equal(elements.replay_export.disabled,true);
  assert.match(elements.replay_readiness.children[0].textContent,/STOP.*PixelMath needs/);
  const standaloneBuilder={};
- vm.runInNewContext(helper.pixelMathTextTokens.toString()+';'+helper.compareAtlasImages.toString()+';'+helper.previewAppearance.toString()+';'+helper.comparisonPreviewBitmap.toString()+';'+helper.comparisonIsGameMask.toString()+';'+helper.showAtlasComparisonResult.toString()+';'+helper.showAtlasComparisonDialog.toString()+';'+helper.buildWorkspaceReplayScript.toString(),standaloneBuilder);
+ vm.runInNewContext(helper.pixelMathTextTokens.toString()+';'+helper.compareAtlasImages.toString()+';'+helper.previewAppearance.toString()+';'+helper.comparisonPreviewBitmap.toString()+';'+helper.comparisonIsGameMask.toString()+';'+helper.showAtlasComparisonResult.toString()+';'+helper.showAtlasComparisonDialog.toString()+';'+helper.atlasReplaySession.toString()+';'+helper.buildWorkspaceReplayScript.toString(),standaloneBuilder);
  const exported=standaloneBuilder.buildWorkspaceReplayScript(helper.workspaceReplayData([rec])[0],0,1);
  new vm.Script(exported.replace(/^#.*$/gm,''));
  console.log('Passed: PixelMath reference warnings, EN/EL text, ready no-reference step, unsupported syntax blocker, download and isolated browser builder dependencies.');

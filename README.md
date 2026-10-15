@@ -227,21 +227,24 @@ the **Execution** setting beside each step:
 Click a processing step in **Review the plan and download** to choose its execution mode in a modal. Green means Auto, amber means Adjust in PixInsight and gray means Skip. Apply confirms the choice; Cancel leaves it unchanged. The editor stays synchronized and Save keeps these choices in the report. Unsupported choices are disabled.
 
 - **Automatic — recorded settings:** run the recorded parameters normally.
-- **Adjust in PixInsight:** for supported native processes, open the process
-  interface with its recorded settings and pause replay on the new working copy.
-  Adjust the settings and apply them to the target named in the waiting window.
-  Close the process interface, then press **Continue after applying**. Replay
-  detects a history change on that target and does not apply the recorded process
-  a second time. You can apply more than once before continuing.
+- **Adjust in PixInsight:** open the recorded native process settings and
+  finish the replay script. Close the pause message, adjust and apply the process
+  normally to the named replay image, then run the **same downloaded .js** again.
+  Choose **Continue after applying** to resume without a second application.
 - **Skip this step:** leave its checkpoint unchanged and continue downstream.
   Output/input-creation steps cannot be skipped; a branch that requires a skipped
   stars producer is blocked instead of silently using a missing output.
 
-While waiting for adjustment, **Skip without applying** is available only while
-the target remains at its starting history position. Undo back to that position
-if you want to skip after trying a setting. **Stop replay** retains partial results.
-History changes on another image do not enable Continue for the replay target.
-The selected mask is applied before adjustment and detached when the step ends.
+The resume dialog enables **Continue after applying** only after the named
+image's history changes. **Skip without applying** requires its original history
+position; **Cancel** leaves the session paused. **Discard saved replay** releases
+saved temporary checkpoints while retaining completed branch images.
+The selected mask stays attached throughout the pause and is removed on resume.
+Required checkpoints are kept until their last use, including across pauses.
+Keep the same PixInsight session open, with replay images, masks and checkpoints
+unmodified and unrenamed except for the deliberate changes on the paused target.
+Resume metadata is stored in PixInsight Settings, not in additional user files.
+Changed or missing checkpoints block continuation instead of restarting branches.
 
 The plan and tree identify adjusted/skipped steps. **Save edited report (HTML)**
 saves these execution choices as a workflow variant; the same choices apply to
@@ -252,8 +255,8 @@ steps creating a new target image; their existing specialized handling remains.
 The report open in your browser is not rewritten by PixInsight. Available process
 parameters applied during an adjustment are included in the replay diagnostic
 report. To capture the actual tuned workflow and its history for reuse, generate
-a new AstroProcessAtlas report from the resulting images. The waiting interface
-and native tools still need validation in PixInsight; automated checks simulate
+a new AstroProcessAtlas report from the resulting images. The native handoff
+and resume dialogs still need validation in PixInsight; automated checks simulate
 the manual applications and continuation flow.
 
 ### GraXpert and prepared external results
