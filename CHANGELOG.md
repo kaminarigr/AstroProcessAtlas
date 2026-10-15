@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add saved per-step execution modes: Automatic, Adjust in PixInsight and Skip.
+  Native adjustment opens recorded settings in a nonmodal workflow, waits for a
+  history change on the replay target and continues without duplicate execution.
+  Capture available adapted parameters in diagnostics; support waiting-step
+  skip/cancellation and block skipping required branch/stars producers.
+  Mark modes in the tree and plan; script adapters retain specialized handling.
+
 ## 0.3.2 — 2026-10-15
 
 - Integrate manual connections into chain replay as input/mask checkpoints, branch
