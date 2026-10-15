@@ -144,6 +144,13 @@ are not proof of its pixel version: times can be missing or inherited, and the
 history does not link the target operation to an exact mask-history position.
 Historical pixels, masks and missing inputs are not bundled in the exported script.
 
+PixelMath combinations also resolve references to earlier recorded image names
+from `newImageId` and ImageIdentifier. This includes weighted expressions such as
+`0.4*ImageA + 0.6*ImageB` when the source images were renamed later. Exact current
+names take priority; an ambiguous historical name requires explicit selection.
+The recorded expression is preserved, and the historical source checkpoint still
+needs review.
+
 Standalone PixelMath replay preserves the serialized expressions and processing
 settings, including single or separate channel expressions, symbols, rescaling,
 truncation and working precision. `$T` refers to the current replay result. For

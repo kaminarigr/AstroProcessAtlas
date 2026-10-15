@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Resolve PixelMath input references through unique recorded image names from
+  newImageId and ImageIdentifier, including weighted combinations whose inputs
+  were renamed later. Use the same mapping in the tree, summary and chain replay;
+  preserve exact-name priority and require selection for ambiguous aliases.
+
 - Support ChannelCombination replay with recorded native color-space settings,
   enabled and Auto channels, new RGB creation and partial existing-target updates.
   Integrate standalone/chain input mapping, masks, manual adjustment and skip.

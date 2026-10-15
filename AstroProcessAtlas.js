@@ -740,6 +740,16 @@ function addReference(refs, name, kind, detail) {
    refs.push({name:name, kind:kind, detail:detail});
 }
 
+function imageIdentityAliases(image){
+   var names=[];function add(name){if(typeof name==='string'&&/^[A-Za-z_]\w*$/.test(name)&&name!==image.id&&names.indexOf(name)<0)names.push(name);}
+   if('aliases' in image&&Array.isArray(image.aliases))for(var a=0;a<image.aliases.length;++a)add(image.aliases[a]);
+   for(var i=0;i<image.steps.length;++i){var step=image.steps[i];if('redo' in step&&step.redo)continue;
+      if('action' in step&&step.action==='identifier'&&'identifier' in step)add(step.identifier);
+      if('createsImage' in step&&step.createsImage&&'outputId' in step)add(step.outputId);
+      if('proc' in step&&step.proc&&typeof getProcessName==='function'){var proc=step.proc,tool=getProcessName(proc);if(tool==='ImageIdentifier'&&'id' in proc)add(proc.id);if(tool==='PixelMath'&&'createNewImage' in proc&&proc.createNewImage===true&&'newImageId' in proc)add(proc.newImageId);}
+   }return names;
+}
+
 function imageReferences(step, records, owner) {
    var proc = step.proc, name = getProcessName(proc), refs = [];
    if (step.mask.status === "recorded") addReference(refs, step.mask.name, "mask", "Historical mask");
@@ -752,6 +762,10 @@ function imageReferences(step, records, owner) {
       if(name==="ChannelCombination"){var combinationRefs=nativeImageReplayParameters(step,owner||{id:""},false);if(combinationRefs&&!combinationRefs.error)for(var cr=0;cr<combinationRefs.parameters.length;++cr)addReference(refs,combinationRefs.parameters[cr].name,"input","Channel "+(combinationRefs.parameters[cr].row+1));}
       if(name==="ColorCalibration"||name==="BackgroundNeutralization"){var nativeRefs=nativeImageReplayParameters(step,owner||{id:""},false);if(nativeRefs&&!nativeRefs.error)for(var nr=0;nr<nativeRefs.parameters.length;++nr)addReference(refs,nativeRefs.parameters[nr].name,"reference",nativeRefs.parameters[nr].parameter);}
       if (name === "PixelMath") {
+         var parsedInputs=typeof step.source==='string'?pixelMathReplaySource(step):null;
+         if(parsedInputs){for(var pi=0;pi<parsedInputs.inputs.length;++pi)addReference(refs,parsedInputs.inputs[pi],"input","PixelMath expression / symbols");}
+         else{
+
          // Only match known image IDs; unknown tokens could be functions or local symbols.
          var expressions = [proc.expression || ""];
          if (!proc.useSingleExpression) expressions.push(proc.expression1 || "", proc.expression2 || "");
@@ -766,8 +780,9 @@ function imageReferences(step, records, owner) {
             while ((token = tokenRE.exec(text)) !== null) {
                if (text.charAt(token.index-1) === '$' || symbols["$" + token[0]] || text.slice(tokenRE.lastIndex).match(/^\s*\(/)) continue;
                for (var r = 0; r < records.length; ++r)
-                  if (records[r].id === token[0]) addReference(refs, token[0], "input", "PixelMath expression " + (e+1));
+                  if (records[r].id === token[0] || imageIdentityAliases(records[r]).indexOf(token[0])>=0) addReference(refs, token[0], "input", "PixelMath expression " + (e+1));
             }
+         }
          }
          if (proc.createNewImage) addReference(refs, proc.newImageId, "output", "PixelMath newImageId");
       }
@@ -976,10 +991,11 @@ function normalizeWorkspaceStarsHistories(records) {
 function workspaceGraph(records) {
    normalizeWorkspaceCloneHistories(records);
    normalizeWorkspaceStarsHistories(records);
-   var graph = {nodes:[], edges:[], unresolved:[]}, headerById = {};
+   var graph = {nodes:[], edges:[], unresolved:[]}, headerById = {},aliasHeaders={};
    for (var r = 0; r < records.length; ++r) {
       var record = records[r];
       headerById["$" + record.id] = record.anchor;
+      var aliases=imageIdentityAliases(record);for(var ai=0;ai<aliases.length;++ai){var aliasKey='$'+aliases[ai];if(!aliasHeaders[aliasKey])aliasHeaders[aliasKey]=[];aliasHeaders[aliasKey].push({anchor:record.anchor,id:record.id});}
       graph.nodes.push({id:record.anchor, image:record.id, label:record.id, x:24+r*290, y:30, header:true, isColor:record.isColor});
       var previous = record.anchor;
       var groups = workspaceStepGroups(record);
@@ -1021,10 +1037,11 @@ function workspaceGraph(records) {
          step.possibleInputs = [];
          for (var j = 0; j < refs.length; ++j) {
             var ref = refs[j], imageNode = headerById["$" + ref.name];
-            if (ref.name === records[r].id) continue;
+            var aliases=aliasHeaders['$'+ref.name],aliasImage='';if(!imageNode&&aliases&&aliases.length===1){imageNode=aliases[0].anchor;aliasImage=aliases[0].id;ref.resolvedImage=aliasImage;}
+            if (imageNode === records[r].anchor || ref.name === records[r].id) continue;
             if (!imageNode) { graph.unresolved.push({image:records[r].id, step:step.anchor, name:ref.name, detail:ref.detail}); continue; }
             graph.edges.push({from:ref.kind === "output" ? step.groupAnchor : imageNode,
-               to:ref.kind === "output" ? imageNode : step.groupAnchor, kind:ref.kind, detail:ref.detail,
+               to:ref.kind === "output" ? imageNode : step.groupAnchor, kind:ref.kind, detail:ref.detail+(aliasImage?' — recorded image alias '+ref.name+' → '+aliasImage:''),
                provenance:ref.kind === 'mask' ? 'recorded' : 'parameter',
                uncertain:true, redo:step.redo});
          }
@@ -1033,11 +1050,11 @@ function workspaceGraph(records) {
             if (records[r].steps[g].groupAnchor !== step.groupAnchor) continue;
             var groupRefs = imageReferences(records[r].steps[g], records, records[r]);
             for (var j = 0; j < groupRefs.length; ++j) {
-               if ((groupRefs[j].kind === 'input' || groupRefs[j].kind === 'reference') && headerById['$' + groupRefs[j].name]) knownInput = true;
+               if ((groupRefs[j].kind === 'input' || groupRefs[j].kind === 'reference') && (headerById['$' + groupRefs[j].name] || aliasHeaders['$'+groupRefs[j].name]&&aliasHeaders['$'+groupRefs[j].name].length===1)) knownInput = true;
             }
          }
          for (var j = 0; j < refs.length; ++j) {
-            if ((refs[j].kind === 'input' || refs[j].kind === 'reference') && headerById['$' + refs[j].name]) {
+            if ((refs[j].kind === 'input' || refs[j].kind === 'reference') && (headerById['$' + refs[j].name] || aliasHeaders['$'+refs[j].name]&&aliasHeaders['$'+refs[j].name].length===1)) {
                knownInput = true;
             }
          }
@@ -1335,7 +1352,7 @@ function imageReportHTML(record, emit) {
       if (step.references && step.references.length) {
          var rows = [];
          for (var j = 0; j < step.references.length; ++j) rows.push([step.references[j].name, step.references[j].kind, step.references[j].detail,
-            provenanceLabel(step.references[j].kind === 'mask' ? 'recorded' : 'parameter') + ' — unknown historical version']);
+            provenanceLabel(step.references[j].kind === 'mask' ? 'recorded' : 'parameter') + ('resolvedImage' in step.references[j]?' — recorded alias of '+step.references[j].resolvedImage:'') + ' — unknown historical version']);
          html += parameterTable(['Image reference', 'Role', 'Parameter', 'Connection origin'], rows);
       }
       html += replayStepHTML(record, step) + readableParameters(step.proc, step.source) + pixelMathSection(step.proc, step.source, record.isColor) +
@@ -1649,7 +1666,7 @@ function workspaceReplayData(records) {
       SCNR:true, ColorSaturation:true, BlurXTerminator:true, NoiseXTerminator:true, GradientCorrection:true,
       StarXTerminator:true, NarrowbandNormalization:true, UnsharpMask:true, MultiscaleLinearTransform:true, Invert:true, Convolution:true, ProcessContainer:true, ColorCalibration:true, LRGBCombination:true, BackgroundNeutralization:true, ChannelCombination:true};
    for (var r = 0; r < records.length; ++r) {
-      var record = records[r], image = {id:record.id, anchor:record.anchor, version:ASTROPROCESS_ATLAS_VERSION, originalInputs:[], steps:[]};
+      var record = records[r], image = {id:record.id, anchor:record.anchor, version:ASTROPROCESS_ATLAS_VERSION, aliases:imageIdentityAliases(record), originalInputs:[], steps:[]};
       for (var oi = 0; oi < records.length; ++oi) if (records[oi].isOriginalInput) image.originalInputs.push(records[oi].id);
       var groups = workspaceStepGroups(record);
       for (var s = 0; s < groups.length; ++s) {
@@ -2250,6 +2267,7 @@ function suggestChainBindings(data){
    function base(value){return value.toLowerCase().replace(/(?:_(?:final|processed|linear|starless|nbn|replay)(?:_[0-9]+)?)+$/g,'');}
    for(var i=0;i<slots.length;++i){var slot=slots[i],matches=[];
       for(var j=0;j<data.length;++j)if(data[j].id===slot.name){matches=[data[j]];break;}
+      if(!matches.length)for(var j=0;j<data.length;++j)if(imageIdentityAliases(data[j]).indexOf(slot.name)>=0)matches.push(data[j]);
       if(!matches.length)for(var j=0;j<data.length;++j)if(data[j].id.toLowerCase()===slot.name.toLowerCase())matches.push(data[j]);
       if(!matches.length)for(var j=0;j<data.length;++j){var renamed=false;for(var r=0;r<data[j].steps.length;++r)if(data[j].steps[r].action==='identifier'&&data[j].steps[r].identifier&&base(data[j].steps[r].identifier)===base(slot.name))renamed=true;if(base(data[j].id)===base(slot.name)||renamed)matches.push(data[j]);}
       var source=matches.length===1?matches[0]:null,stage=source?source.steps.length:0;
@@ -2653,7 +2671,7 @@ function processingSummaryHTML(records) {
       if(step.mask.status==='recorded')maskNames['$'+step.mask.name]=step.mask.name;
       var refs=step.references||[];
       for(var j=0;j<refs.length;++j)if(refs[j].kind==='input'||refs[j].kind==='reference'){
-         inputNames['$'+refs[j].name]=refs[j].name;
+         var resolved='resolvedImage' in refs[j]?refs[j].resolvedImage:refs[j].name;inputNames['$'+resolved]=resolved;
       }
    }
    for(var key in inputNames)inputs.push(inputNames[key]);
@@ -2999,7 +3017,7 @@ function generateHistoryReport() {
    html += '<script>var workspaceGraphData=' + JSON.stringify(graph).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026') +
       ';var workspaceReplayData=' + JSON.stringify(workspaceReplayData(records)).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026') +
       ';var DARK_STRUCTURE_GPL_LICENSE=' + JSON.stringify(DARK_STRUCTURE_GPL_LICENSE).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026') +
-      ';' + pixelMathTextTokens.toString() + ';' + compareAtlasImages.toString() + ';' + previewAppearance.toString() + ';' + comparisonPreviewBitmap.toString() + ';' + comparisonIsGameMask.toString() + ';' + showAtlasComparisonResult.toString() + ';' + showAtlasComparisonDialog.toString() + ';' + prepareGraxpertReplay.toString() + ';' + runGraxpertReplay.toString() + ';' + historyParameterKey.toString() + ';' + readHistoryMasks.toString() + ';' + preparedReplayPrefix.toString() + ';' + atlasReplaySession.toString() + ';' + runInteractiveReplayStep.toString() + ';' + buildWorkspaceReplayScript.toString() + ';' + remapWorkflowExpression.toString() + ';' + editedWorkspaceGraph.toString() + ';' + workflowFingerprint.toString() + ';' + editReplayWorkflow.toString() + ';' + restoreReplayWorkflow.toString() + ';' + workflowSnapshotKey.toString() + ';' + workflowStateJSON.toString() + ';' + ambiguousImageCopy.toString() + ';' + chainSlotKey.toString() + ';' + applyManualReplayConnections.toString() + ';' + chainReferenceSlots.toString() + ';' + suggestChainBindings.toString() + ';' + buildWorkspaceChainPlan.toString() + ';' + runWorkspaceChain.toString() + ';' + buildWorkspaceChainScript.toString() + ';' + reportBrowserScript() + ';' + chainBrowserController.toString() + ';chainBrowserController();</script></body></html>';
+      ';' + pixelMathTextTokens.toString() + ';' + compareAtlasImages.toString() + ';' + previewAppearance.toString() + ';' + comparisonPreviewBitmap.toString() + ';' + comparisonIsGameMask.toString() + ';' + showAtlasComparisonResult.toString() + ';' + showAtlasComparisonDialog.toString() + ';' + prepareGraxpertReplay.toString() + ';' + runGraxpertReplay.toString() + ';' + historyParameterKey.toString() + ';' + readHistoryMasks.toString() + ';' + preparedReplayPrefix.toString() + ';' + atlasReplaySession.toString() + ';' + runInteractiveReplayStep.toString() + ';' + buildWorkspaceReplayScript.toString() + ';' + remapWorkflowExpression.toString() + ';' + editedWorkspaceGraph.toString() + ';' + workflowFingerprint.toString() + ';' + editReplayWorkflow.toString() + ';' + restoreReplayWorkflow.toString() + ';' + workflowSnapshotKey.toString() + ';' + workflowStateJSON.toString() + ';' + ambiguousImageCopy.toString() + ';' + chainSlotKey.toString() + ';' + applyManualReplayConnections.toString() + ';' + chainReferenceSlots.toString() + ';' + imageIdentityAliases.toString() + ';' + suggestChainBindings.toString() + ';' + buildWorkspaceChainPlan.toString() + ';' + runWorkspaceChain.toString() + ';' + buildWorkspaceChainScript.toString() + ';' + reportBrowserScript() + ';' + chainBrowserController.toString() + ';chainBrowserController();</script></body></html>';
    writeReportText(file, html);
    } finally { file.close(); }
    progress.update(100, 'Report complete');
