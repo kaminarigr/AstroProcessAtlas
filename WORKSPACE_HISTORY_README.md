@@ -546,6 +546,8 @@ masked αντικαταστάσεις χρησιμοποίησε έτοιμο α
 Στο **Optional: edit steps or configure GraXpert → Steps in an image** υπάρχει
 επιλογή **Execution** για κάθε βήμα:
 
+Κλικ σε βήμα στη λίστα **Review the plan and download** ανοίγει modal επιλογής τρόπου εκτέλεσης: πράσινο Auto, πορτοκαλί Adjust in PixInsight και γκρι Skip. Το Apply επιβεβαιώνει την επιλογή, ενώ το Cancel την ακυρώνει. Ο editor συγχρονίζεται και το Save αποθηκεύει τις επιλογές στο report. Μη υποστηριζόμενες επιλογές είναι ανενεργές.
+
 - **Automatic — recorded settings**: εκτέλεση με τις καταγεγραμμένες παραμέτρους.
 - **Adjust in PixInsight**: για υποστηριζόμενες εγγενείς διεργασίες, ανοίγει το
   εργαλείο με τις καταγεγραμμένες ρυθμίσεις και το replay περιμένει. Άλλαξε τις

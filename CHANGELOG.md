@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Change a processing step's execution mode directly from the chain review plan
+  through an accessible modal. Show Auto in green, Adjust in PixInsight in amber
+  and Skip in gray, with text labels and disabled unsupported choices.
+
 - Add saved per-step execution modes: Automatic, Adjust in PixInsight and Skip.
   Native adjustment opens recorded settings in a nonmodal workflow, waits for a
   history change on the replay target and continues without duplicate execution.

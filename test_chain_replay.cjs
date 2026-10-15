@@ -372,3 +372,17 @@ console.log('Passed: edited HTML restores execution modes, stopping a waiting ch
 
 const skipMaskedMode=api.editReplayWorkflow(maskData,api.suggestChainBindings(maskData),{type:'execution-mode',image:'Oiii',index:0,mode:'skip'});const skipMaskedManual=api.applyManualReplayConnections(skipMaskedMode.data,skipMaskedMode.bindings,{edges:[{from:'ha_process',to:'masked_step'}]});assert.equal(skipMaskedManual.errors.length,0);assert.equal(Object.keys(skipMaskedManual.bindings).length,0);assert.equal(api.buildWorkspaceChainPlan(skipMaskedManual.data,1,skipMaskedManual.bindings).roots.length,1);
 console.log('Passed: skipped steps do not demand obsolete manual mask/input dependencies.');
+const planModes=editorHarness({data:modeData,target:0});
+function planRows(h){return h.elements.chain_plan.children.find(node=>node.tag==='ol').children;}
+function modeDialog(h){return h.context.document.body.children.find(node=>node.id==='execution_mode_dialog');}
+function modeChoice(dialog,mode){return dialog.children.find(node=>node.attrs&&node.attrs['data-execution-mode']===mode);}
+assert.match(planRows(planModes)[1].className,/plan-mode-auto/);
+assert.equal(planRows(planModes)[1].attrs['aria-haspopup'],'dialog');
+planRows(planModes)[1].onclick();let choiceDialog=modeDialog(planModes);assert.ok(choiceDialog);assert.equal(choiceDialog.children.at(-1).children[1].disabled,true);
+modeChoice(choiceDialog,'adjust').onclick();choiceDialog.children.at(-1).children[0].onclick();assert.equal(planModes.context.workspaceReplayData[0].steps[0].executionMode,undefined,'Cancel leaves workflow unchanged');
+planRows(planModes)[1].onkeydown({key:'Enter',preventDefault(){}});choiceDialog=modeDialog(planModes);modeChoice(choiceDialog,'adjust').onclick();choiceDialog.children.at(-1).children[1].onclick();assert.equal(planModes.context.workspaceReplayData[0].steps[0].executionMode,'adjust');assert.match(planRows(planModes)[1].className,/plan-mode-adjust/);assert.equal(descendants(planModes.elements.workflow_steps.children[0]).find(node=>node.tag==='select').value,'adjust');
+planRows(planModes)[1].onclick();choiceDialog=modeDialog(planModes);modeChoice(choiceDialog,'skip').onclick();choiceDialog.children.at(-1).children[1].onclick();assert.match(planRows(planModes)[1].className,/plan-mode-skip/);
+planRows(planModes)[1].onclick();choiceDialog=modeDialog(planModes);modeChoice(choiceDialog,'auto').onclick();choiceDialog.children.at(-1).children[1].onclick();assert.match(planRows(planModes)[1].className,/plan-mode-auto/);
+planRows(planModes)[2].onclick();choiceDialog=modeDialog(planModes);assert.equal(modeChoice(choiceDialog,'adjust').disabled,true,'PixelMath retains its specialized replay adapter');choiceDialog.onkeydown({key:'Escape',preventDefault(){}});assert.equal(modeDialog(planModes),undefined);
+assert.equal(planRows(planModes)[0].attrs['aria-haspopup'],undefined,'Starting input is not a processing step');
+console.log('Passed: plan mode modal supports keyboard activation, cancellation, auto/adjust/skip colors, editor synchronization and disabled specialized adjustments.');

@@ -224,6 +224,8 @@ creates a new download rather than overwriting the report currently open.
 Open **Optional: edit steps or configure GraXpert → Steps in an image** and choose
 the **Execution** setting beside each step:
 
+Click a processing step in **Review the plan and download** to choose its execution mode in a modal. Green means Auto, amber means Adjust in PixInsight and gray means Skip. Apply confirms the choice; Cancel leaves it unchanged. The editor stays synchronized and Save keeps these choices in the report. Unsupported choices are disabled.
+
 - **Automatic — recorded settings:** run the recorded parameters normally.
 - **Adjust in PixInsight:** for supported native processes, open the process
   interface with its recorded settings and pause replay on the new working copy.
