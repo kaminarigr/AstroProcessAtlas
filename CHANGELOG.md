@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Reuse verified prepared input prefixes in standalone and chain replay. Compare
+  complete recorded process settings against applied history, excluding redo,
+  masks, manual modes and dependent/output-producing processes. Show reusable
+  counts during input selection and mark reused tasks in progress/diagnostics.
+  Recover required earlier live-history checkpoints without repeating processing,
+  restore selected inputs even on failure, and block inaccessible inherited states.
+
 - Change a processing step's execution mode directly from the chain review plan
   through an accessible modal. Show Auto in green, Adjust in PixInsight in amber
   and Skip in gray, with text labels and disabled unsupported choices.

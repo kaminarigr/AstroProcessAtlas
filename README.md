@@ -259,6 +259,27 @@ a new AstroProcessAtlas report from the resulting images. The native handoff
 and resume dialogs still need validation in PixInsight; automated checks simulate
 the manual applications and continuation flow.
 
+### Reusing prepared inputs
+
+Both replay exporters can start from a prepared input when its latest applied
+history exactly matches a consecutive automatic prefix of the selected workflow.
+For example, matching GradientCorrection and BlurXTerminator settings let replay
+copy the prepared pixels and continue at the following step. Input selectors show
+how many steps qualify; progress and diagnostics mark them **Reused**.
+
+Comparison ignores timing comments, formatting and instance variable names, but
+checks recorded parameter values and verified absence of a historical mask.
+It stops before manual/skip modes, masked processes, scripts, external operations,
+referenced image inputs, ProcessContainer and generated outputs such as stars.
+Additional applied work after the matching prefix prevents reuse; redo is ignored.
+This verifies recorded settings, not equality to the original image's pixels.
+
+Chain replay retains earlier checkpoints needed by clones or other references.
+When accessible through live history, it captures those states and restores the
+selected input immediately, including on failure. If a required earlier state is
+only inside read-only initial history, select an earlier input instead; processing
+is blocked before branches are executed. All continued processing uses new copies.
+
 ### GraXpert and prepared external results
 
 In **Optional: edit steps or configure GraXpert**, select an image and press **External / GraXpert**
