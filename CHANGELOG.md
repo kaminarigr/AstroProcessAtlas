@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.3.8 — 2026-10-15
+
 - Escape SVG namespace URLs in tree editing and browser code to prevent
   PixInsight preprocessing from truncating functions at URL slash pairs.
 

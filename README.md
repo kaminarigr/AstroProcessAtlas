@@ -42,7 +42,13 @@ The embedded previews are reduced to at most 640 pixels and compressed for a sma
 
 ## Updates
 
-Current version: **0.3.2**. The version is shown in About.
+Current version: **0.3.8**. The version is shown in About.
+
+Version 0.3.8 adds per-step Auto / Adjust in PixInsight / Skip modes, real pause
+and resume by rerunning the same replay script, and reuse of matching prepared
+inputs. Tree editing now supports drag-to-connect, edit-only delete controls and
+an explicit edit border. Resume metadata and serialized source are protected
+against the PixInsight string/preprocessing issues found during testing.
 
 Version 0.3.2 integrates manual connections into chain replay, including generated
 stars outputs, and adds creator/feedback links, support guides and issue forms.
