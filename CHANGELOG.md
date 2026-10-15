@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Make tree editing explicit with an amber canvas border and edit instructions.
+  Show delete controls only in edit mode with pointer cursors. Dropping a tile
+  onto another creates a manual connection; dropping between steps still copies.
+  Reuse manual-link validation, persistence and replay routing; keep comparison
+  dragging available outside edit mode.
+
 - Encode resume metadata as ASCII hex with read-back verification, protecting
   strings containing newlines, paths and Unicode in PixInsight Settings. Recover
   legacy JSON with literal string control characters without clearing sessions.

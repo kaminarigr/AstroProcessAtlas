@@ -703,3 +703,10 @@ changes. The installed tool version must be suitable for the saved settings.
 StarXTerminator is required with useStarMask. Imported Mask, incomplete settings,
 historical masks/references and invalid serialization remain blockers. No native
 Script instance is constructed or executed, and other scripts remain unsupported.
+
+When **Edit tree** is enabled, the tree frame turns amber and delete controls
+appear with a pointer cursor. Drag a tile onto another tile to create a directed
+manual connection (purple target outline), or drop between steps to copy the
+process (orange insertion line). Connections use the same saved annotations and
+chain replay rules as the manual form. Save the report to keep your edits.
+Outside edit mode, tile dragging continues to compare stages and deletion is hidden.
