@@ -703,6 +703,7 @@ open source, and welcomes feedback from real PixInsight workflows.
 - [Report a problem](https://github.com/kaminarigr/AstroProcessAtlas/issues/new?template=bug_report.yml).
 - [Suggest an improvement](https://github.com/kaminarigr/AstroProcessAtlas/issues/new?template=feature_request.yml).
 - [Read the support guide](SUPPORT.md) for useful diagnostics.
+- [Track issues and released fixes](docs/ISSUE_MANAGEMENT.md), including maintainer notifications.
 - [Contribute](CONTRIBUTING.md) by testing, improving documentation or sharing the project.
 
 The PixInsight **About** dialog and new reports provide the same links. Nothing is

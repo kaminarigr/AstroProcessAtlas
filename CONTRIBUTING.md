@@ -32,6 +32,12 @@ changes focused and follow the existing PJSR-compatible JavaScript style.
 Run the checks listed in the README. Test PixInsight-specific behavior in
 PixInsight when possible and distinguish native tests from simulated tests.
 
+For fixes, link the real issue with `Refs #…`, identify the target release and add
+an issue link to the changelog. Use the PR template and the
+[issue management guide](docs/ISSUE_MANAGEMENT.md). Keep committed/merged fixes
+separate from released fixes; post the version/release link before closing a
+resolved report after publication.
+
 Retain the existing copyright and license notices. AstroProcessAtlas is under
 the MIT License; replay exports embedding DarkStructureEnhance have separate
 GPL notices documented in the README.

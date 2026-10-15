@@ -26,6 +26,12 @@ target, not completed native compatibility testing. Extend the platform range in
    deploys them to Pages. Prereleases are not deployed automatically.
 5. Test both the ZIP and `updates.xri` at the repository URL, then test installation in PixInsight.
 
+For issue-related changes, link each actual issue in the changelog and public
+release notes. After publishing and verifying the download/update feed, comment
+on those issues with the released version and release link, then close resolved
+reports as **Completed**. Do not mark an unreleased fix as available. See
+[issue management and comment templates](ISSUE_MANAGEMENT.md).
+
 The current script version is `0.3.9`; use the matching tag `v0.3.9`.
 **Build release → Run workflow** also accepts an existing tag. Deployment can be retried
 with **Publish PixInsight repository → Run workflow** and the published release tag.

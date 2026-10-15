@@ -1,6 +1,8 @@
 name: Report a problem / Αναφορά προβλήματος
 description: Help reproduce an AstroProcessAtlas problem.
 title: "[Bug] "
+assignees:
+  - kaminarigr
 body:
   - type: markdown
     attributes:

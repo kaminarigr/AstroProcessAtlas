@@ -28,6 +28,14 @@ entire report or original images unless you intend to make them public.
 Support is provided through public issues as time permits. Opening a link does
 not automatically submit anything.
 
+## Following a report
+
+New submissions through the bug/proposal forms default to assigning the
+maintainer. Use **Subscribe** on an issue to follow it, and enable the notification
+channels you want in GitHub. When a fix is released, the maintainer can post its
+version and release link and close the issue as completed. A committed fix may
+still be awaiting publication. See the [issue management guide](docs/ISSUE_MANAGEMENT.md).
+
 ## Ελληνικά
 
 Για αναφορά προβλήματος χρησιμοποίησε το **About** ή τους συνδέσμους στο footer
@@ -37,3 +45,9 @@ not automatically submit anything.
 
 Έλεγξε το περιεχόμενο πριν το δημοσιεύσεις: τα issues είναι δημόσια. Δεν χρειάζεται
 να κοινοποιήσεις όλο το HTML ή τις αρχικές εικόνες για μια πρώτη αναφορά.
+
+
+Για να παρακολουθείς την εξέλιξη μιας αναφοράς, επίλεξε **Subscribe** στο issue.
+Όταν κυκλοφορήσει η διόρθωση, αναφέρουμε την έκδοση και τον σύνδεσμο release και
+κλείνουμε το issue ως Completed. Οι ειδοποιήσεις εξαρτώνται από τις ρυθμίσεις σου
+στο GitHub. Μια διόρθωση στο Git δεν σημαίνει ότι έχει ήδη δημοσιευτεί αναβάθμιση.

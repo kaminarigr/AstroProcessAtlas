@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Assign new bug/proposal form submissions to the maintainer by default. Add a PR
+  template and issue-to-release guidance with changelog links, notification setup
+  and resolution comments that distinguish committed fixes from published releases.
+
 ## 0.3.9 — 2026-10-15
 
 - Support NarrowbandHueCombination replay from complete recorded settings: map

@@ -1,6 +1,8 @@
 name: Suggest an improvement / Πρόταση βελτίωσης
 description: Describe a workflow need or an interface improvement.
 title: "[Idea] "
+assignees:
+  - kaminarigr
 body:
   - type: textarea
     id: need
