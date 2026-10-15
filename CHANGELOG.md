@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Encode resume metadata as ASCII hex with read-back verification, protecting
+  strings containing newlines, paths and Unicode in PixInsight Settings. Recover
+  legacy JSON with literal string control characters without clearing sessions.
+
 - Guard optional image-window and resume metadata properties before reading
   them, avoiding strict PixInsight warnings while serializing ordinary objects.
 
