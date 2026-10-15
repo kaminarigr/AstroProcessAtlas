@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Support NarrowbandHueCombination replay from complete recorded settings: map
+  up to three grayscale channels and optional RGB stars in standalone and chain
+  replay, apply HSV/screen/SCNR and recorded amounts, and retain the source script's
+  Generate behavior without its preview-only stretch. Produce a new 32-bit RGB
+  result and release helpers on success/failure. Detect references in the tree;
+  explain missing settings and block unknown parameters or external masks.
+
 - Support native SpectrophotometricFluxCalibration, DynamicCrop and FastRotation
   replay. Preserve available metadata and astrometry on copies/checkpoints; defer
   standalone mask selection after geometry changes until the actual target exists.

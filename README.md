@@ -298,6 +298,30 @@ selected input immediately, including on failure. If a required earlier state is
 only inside read-only initial history, select an earlier input instead; processing
 is blocked before branches are executed. All continued processing uses new copies.
 
+### NarrowbandHueCombination
+
+Replay supports saved NarrowbandHueCombination settings matching the installed
+Toolbox 1.50 interface of the script by Jürgen Bätz. Select the prepared grayscale
+first channel, optional
+second/third grayscale channels and optional RGB stars image. All selected inputs
+must share their dimensions. Standalone and chain replay map these references
+and produce a new 32-bit RGB result using the recorded HSV hues, channel amounts,
+screen combination, stars midtones and SCNR settings. The input images are kept,
+and helper images are released on completion or failure. Auto and Skip are
+available; Adjust remains limited to supported native processes.
+
+In the inspected source, Auto stretch/Linked stretch affect the interactive
+preview; Generate recomputes the combination without that preview stretch. Replay
+preserves this Generate behavior and does not add a hidden input/output stretch.
+Choose inputs at their required processing state.
+
+All hue/amount, SCNR and preview flags must be recorded; absent optional view IDs
+mean those inputs were unused. Missing or unknown settings block automatic replay.
+The installed script saves parameters when creating an instance, and Generate may
+leave insufficient Script parameters in image history. Atlas cannot recover
+settings that were never recorded. External historical masks on this combination
+are blocked because the script creates a separate unmasked output.
+
 ### Flux calibration, crop/rotation and ImageBlend
 
 **SpectrophotometricFluxCalibration** replays the recorded native parameters.
