@@ -101,13 +101,15 @@ processing suffixes. Suggestions remain editable.
 Workflow replay supports native HistogramTransformation,
 CurvesTransformation, RGBWorkingSpace, SCNR, ColorSaturation, BlurXTerminator,
 NoiseXTerminator, GradientCorrection, StarXTerminator, NarrowbandNormalization,
-UnsharpMask, MultiscaleLinearTransform and Invert instances with supported serialization and no
-historical input references. StarXTerminator output references are allowed.
+UnsharpMask, MultiscaleLinearTransform, Invert, ColorCalibration,
+BackgroundNeutralization and LRGBCombination instances with supported serialization.
+Calibration and LRGB references use explicit input mapping as described below.
+StarXTerminator output references are allowed.
 RGBWorkingSpace steps that use historical global settings are blocked.
 Required tools, licenses and matching models must already be available in PixInsight.
 This does not guarantee identical pixels across tool/model versions.
 
-Scripts outside the supported adapters, integrations, image combinations and unsupported output-generating processes,
+Scripts outside the supported adapters, integrations, other image combinations and unsupported output-generating processes,
 unknown historical mask states and externally masked grouped scripts are currently blockers. The report
 shows the runnable prefix; the replay dialog states where execution will stop.
 Execution stops at that blocker or a process failure, preserves the partial result,
@@ -285,6 +287,33 @@ When accessible through live history, it captures those states and restores the
 selected input immediately, including on failure. If a required earlier state is
 only inside read-only initial history, select an earlier input instead; processing
 is blocked before branches are executed. All continued processing uses new copies.
+
+### Color calibration and LRGB combination
+
+**ColorCalibration** and **BackgroundNeutralization** retain recorded rejection
+limits, background/white-balance settings, ROI coordinates and other parameters.
+Empty reference IDs retain the native current-target behavior. Explicit references
+are selected during standalone preflight; open previews are also selectable.
+ColorCalibration does not request an inactive white reference when manual white
+balance is enabled. Replay targets and calibration references must be RGB.
+
+**LRGBCombination** retains enabled channels, channel weights, lightness and
+saturation transfer functions, clipping and chrominance-noise-reduction settings.
+Apply luminance or selected channels to an existing RGB input, or start a range
+with all three RGB channels enabled and no mask to create a new RGB result.
+The latter asks for the output name and source channels, without an extra RGB
+starting image. Enabled channels recorded as Auto are exposed as explicit inputs
+(e.g. `RGB_R`); disabled rows do not require input selection. Channel images must
+be grayscale with matching dimensions. No extra stretching is applied.
+
+In chain replay, reference/channel cards select source checkpoints and the
+exported script remaps parameters to the actual replay image IDs. A historical
+preview without its own reconstructible image branch requires an equivalent
+prepared reference image/checkpoint selected by the user. ROI coordinates are
+preserved; check them when adapting the workflow to differently sized images.
+Existing-target native steps also support masks, Adjust in PixInsight and Skip.
+These adapters have automated mapping/execution checks; real PixInsight numerical
+validation still requires a test with your images.
 
 ### GraXpert and prepared external results
 

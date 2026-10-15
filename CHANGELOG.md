@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Support ColorCalibration, BackgroundNeutralization and LRGBCombination replay.
+  Preserve recorded settings and ROIs; select calibration references (including
+  previews in standalone replay) and remap channel/reference IDs to chain
+  checkpoints. Support LRGB on existing RGB targets and new full-RGB combinations,
+  enabled/Auto channels, weights, transfer functions and noise-reduction settings.
+  Integrate references with masks, manual adjustment, skip and copied steps.
+
 ## 0.3.8 — 2026-10-15
 
 - Escape SVG namespace URLs in tree editing and browser code to prevent

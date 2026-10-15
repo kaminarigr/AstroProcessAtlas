@@ -747,8 +747,9 @@ function imageReferences(step, records, owner) {
       if (name === "ChannelCombination" || name === "LRGBCombination") {
          var labels = name === "LRGBCombination" ? ["R", "G", "B", "L"] : ["Channel 1", "Channel 2", "Channel 3"];
          for (var i = 0; i < proc.channels.length; ++i)
-            if (proc.channels[i][0]) addReference(refs, proc.channels[i][1], "input", labels[i]);
+            if (proc.channels[i][0]) addReference(refs, proc.channels[i][1]||(name==="LRGBCombination"&&owner?owner.id+"_"+labels[i]:""), "input", labels[i]);
       }
+      if(name==="ColorCalibration"||name==="BackgroundNeutralization"){var nativeRefs=nativeImageReplayParameters(step,owner||{id:""},false);if(nativeRefs&&!nativeRefs.error)for(var nr=0;nr<nativeRefs.parameters.length;++nr)addReference(refs,nativeRefs.parameters[nr].name,"reference",nativeRefs.parameters[nr].parameter);}
       if (name === "PixelMath") {
          // Only match known image IDs; unknown tokens could be functions or local symbols.
          var expressions = [proc.expression || ""];
@@ -1618,11 +1619,27 @@ function darkStructureReplaySource(step) {
    } catch (e) { return null; }
 }
 
+function nativeImageReplayParameters(step,owner,first){
+   var tool=getProcessName(step.proc);if(['ColorCalibration','BackgroundNeutralization','LRGBCombination'].indexOf(tool)<0)return null;
+   var proc=step.proc,parameters=[],inputs=[],error='',creates=false;
+   function add(parameter,name,row){if(!name)return;if(typeof name!=='string'||!name.trim()){error='Invalid recorded image reference.';return;}name=name.trim();parameters.push({parameter:parameter,name:name,row:row===undefined?-1:row});if(inputs.indexOf(name)<0)inputs.push(name);}
+   if(tool==='LRGBCombination'){
+      if(!('channels' in proc)||!proc.channels||proc.channels.length!==4)return {error:'LRGBCombination requires its four recorded channel rows.'};
+      var enabled=0,labels=['R','G','B','L'];for(var c=0;c<4;++c){var row=proc.channels[c];if(!row||row.length<3)return {error:'Incomplete LRGBCombination channel parameters.'};if(row[0]){enabled++;add('channels',row[1]||owner.id+'_'+labels[c],c);}}
+      if(!enabled)error='LRGBCombination has no enabled source channels.';
+      creates=!!first&&step.mask&&step.mask.status==='unrecorded'&&!!proc.channels[0][0]&&!!proc.channels[1][0]&&!!proc.channels[2][0];
+   }else{
+      if(tool==='ColorCalibration'&&!(('manualWhiteBalance' in proc)&&proc.manualWhiteBalance===true)&&'whiteReferenceViewId' in proc)add('whiteReferenceViewId',proc.whiteReferenceViewId);
+      if('backgroundReferenceViewId' in proc)add('backgroundReferenceViewId',proc.backgroundReferenceViewId);
+   }
+   return {parameters:parameters,inputs:inputs,error:error,createsImage:creates,requiresTarget:!creates};
+}
+
 function workspaceReplayData(records) {
    var data = [];
    var supported = {HistogramTransformation:true, CurvesTransformation:true, RGBWorkingSpace:true,
       SCNR:true, ColorSaturation:true, BlurXTerminator:true, NoiseXTerminator:true, GradientCorrection:true,
-      StarXTerminator:true, NarrowbandNormalization:true, UnsharpMask:true, MultiscaleLinearTransform:true, Invert:true, Convolution:true, ProcessContainer:true};
+      StarXTerminator:true, NarrowbandNormalization:true, UnsharpMask:true, MultiscaleLinearTransform:true, Invert:true, Convolution:true, ProcessContainer:true, ColorCalibration:true, LRGBCombination:true, BackgroundNeutralization:true};
    for (var r = 0; r < records.length; ++r) {
       var record = records[r], image = {id:record.id, anchor:record.anchor, version:ASTROPROCESS_ATLAS_VERSION, originalInputs:[], steps:[]};
       for (var oi = 0; oi < records.length; ++oi) if (records[oi].isOriginalInput) image.originalInputs.push(records[oi].id);
@@ -1647,9 +1664,10 @@ function workspaceReplayData(records) {
             continue;
          }
          if (isImageOriginStep(step, record.steps.indexOf(step))) continue;
-         var tool = getProcessName(step.proc), reason = '', source = null, identifier = '', selective = selectiveColorReplaySource(step), dark = darkStructureReplaySource(step), game = gameReplaySource(step), pixel = pixelMathReplaySource(step);
+         var tool = getProcessName(step.proc), reason = '', source = null, identifier = '', selective = selectiveColorReplaySource(step), dark = darkStructureReplaySource(step), game = gameReplaySource(step), pixel = pixelMathReplaySource(step), nativeImages=nativeImageReplayParameters(step,record,image.steps.length===0);
          var requiredReferences = (step.references || []).filter(function(ref) {
             if (ref.kind === 'mask' && step.mask && step.mask.status === 'recorded' && ref.name === step.mask.name) return false;
+            if(nativeImages&&(ref.kind==='input'||ref.kind==='reference')&&(nativeImages.inputs||[]).indexOf(ref.name)>=0)return false;
             if (pixel && (ref.kind === 'input' || ref.kind === 'reference' || (ref.kind === 'output' && step.proc.createNewImage === true))) return false;
             return !(tool === 'StarXTerminator' && step.proc.stars === true && ref.kind === 'output');
          });
@@ -1668,6 +1686,7 @@ function workspaceReplayData(records) {
          }
          else if (tool === 'PixelMath' && !pixel) reason = 'PixelMath needs valid serialized expressions without quoted strings, directives, preview/global references or cache-only execution.';
          else if (!supported[tool] && !selective && !dark && !game && !pixel) reason = getProcessTitle(step.proc).toLowerCase() === 'selectivecolorcorrection' ? selectiveColorReplayBlockReason(step) : 'This process is not yet supported by the replay exporter: ' + getProcessTitle(step.proc);
+         else if(nativeImages&&nativeImages.error)reason=nativeImages.error;
          else if (!step.mask || step.mask.status === 'unknown') reason = 'Historical mask state is unknown.';
          else if (step.mask.status === 'recorded' && !step.mask.name) reason = 'Historical mask state is unknown.';
          else if (step.mask.status === 'recorded' && selective) reason = 'SelectiveColorCorrection needs an unavailable historical mask or reference image.';
@@ -1684,9 +1703,9 @@ function workspaceReplayData(records) {
             time:step.time || '',
             substep:step.substepNumber || 0, tool:selective ? 'SelectiveColorCorrection' : dark ? 'DarkStructureEnhance' : game ? 'GAME' : tool, reason:reason,
             action:tool === 'ImageIdentifier' ? 'identifier' : selective ? 'selective' : dark ? 'dark' : game ? 'game' : pixel ? 'pixelmath' : 'process', identifier:identifier,
-            inputs:pixel ? pixel.inputs : [],
-            createsImage:!!(pixel && pixel.createsImage), requiresTarget:!!(pixel && pixel.requiresTarget), outputId:pixel ? pixel.outputId : '',
-            warning:pixel && pixel.inputs.length ? 'Choose PixelMath reference images in PixInsight at their recorded processing state.' : game ? 'GAME drawing settings were not recorded. Select the completed original GAME mask in PixInsight; mask creation is not repeated.' : dark ? 'DarkStructureEnhance settings were not recorded. Choose them manually in PixInsight.' : '', library:dark ? dark.library : '',
+            inputs:pixel ? pixel.inputs : nativeImages ? nativeImages.inputs : [], imageParameters:nativeImages?nativeImages.parameters:[],
+            createsImage:!!((pixel && pixel.createsImage)||(nativeImages&&nativeImages.createsImage)), requiresTarget:!!((pixel && pixel.requiresTarget)||(nativeImages&&nativeImages.requiresTarget)), outputId:pixel ? pixel.outputId : '',
+            warning:nativeImages&&nativeImages.inputs.length?'Choose reference images at their recorded processing state; previews may be replaced by equivalent prepared reference images in chain replay.':pixel && pixel.inputs.length ? 'Choose PixelMath reference images in PixInsight at their recorded processing state.' : game ? 'GAME drawing settings were not recorded. Select the completed original GAME mask in PixInsight; mask creation is not repeated.' : dark ? 'DarkStructureEnhance settings were not recorded. Choose them manually in PixInsight.' : '', library:dark ? dark.library : '',
             starRequired:!!(selective && selective.starRequired),
             mask:step.mask && step.mask.status === 'recorded' ? {name:step.mask.name, inverted:typeof step.mask.inverted === 'boolean' ? step.mask.inverted : null} : null,
             source:source && tool !== 'ImageIdentifier' ? source.source : '', variable:source && tool !== 'ImageIdentifier' ? source.variable : ''});
@@ -1808,7 +1827,7 @@ function buildWorkspaceReplayScript(image, start, end) {
       var step = selected[i];
       manifest.push({title:step.title, tool:step.tool, number:step.number, substep:step.substep,executionMode:step.executionMode||'auto',
          recordedSource:(step.action==='process'||step.action==='pixelmath')?step.source||'':'',manualDerivedOrigin:!!step.manualDerivedOrigin, reason:step.reason || (step.action === 'palette' && i > 0 ? 'Start the selected range at PerfectPalettePicker and choose its prepared inputs.' : step.action === 'game' && i > 0 ? 'Start the selected range at GAME and select its completed original mask.' : step.action === 'external' && i > 0 ? 'Start the selected range at the external prepared result.' : ''),
-         action:step.action, inputs:step.inputs || [], createsImage:!!step.createsImage, requiresTarget:!!step.requiresTarget, outputId:step.outputId||'', starRequired:!!step.starRequired, mask:step.mask || null, time:step.time || ''});
+         action:step.action, inputs:step.inputs || [], imageParameters:step.imageParameters||[], createsImage:!!step.createsImage, requiresTarget:!!step.requiresTarget, outputId:step.outputId||'', starRequired:!!step.starRequired, mask:step.mask || null, time:step.time || ''});
       if (!step.reason && step.action === 'identifier') identifier = step.identifier;
       factories.push(step.reason || step.action === 'identifier' || step.action === 'external' || step.action === 'skip' ? 'null' : 'function(){\n' + step.source + '\nreturn ' + step.variable + ';\n}');
    }
@@ -1872,6 +1891,18 @@ function buildWorkspaceReplayScript(image, start, end) {
       '   if(!dialog.execute())throw Error("PixelMath input selection cancelled.");',
       '   for(var n=0;n<names.length;++n){var selected=candidates[boxes[n].currentItem-1];if(!selected||selected.isNull)throw Error("Select an available image for PixelMath input: "+names[n]);mapped["$"+names[n]]=selected.mainView.id;cache["$"+names[n]]=selected;replayChoice("Step "+step.number+": PixelMath "+names[n]+" -> "+selected.mainView.id);}',
       '   return mapped;',
+      '}',
+      'function chooseNativeReplayInputs(output,step){',
+      '   if(replayChainContext){var selected=replayChainContext.inputs(step),mapped={};for(var name in selected)if(Object.prototype.hasOwnProperty.call(selected,name)){var window=selected[name];if(!window||window.isNull)throw Error("Unavailable chain reference: "+name);mapped[name]=window.mainView.id;}return mapped;}',
+      '   var mapped={},names=step.inputs||[],views=[];if(!names.length)return mapped;for(var i=0;i<ImageWindow.windows.length;++i){var w=ImageWindow.windows[i];if(w.isNull)continue;views.push(w.mainView);if(step.tool!=="LRGBCombination"&&"previews" in w){var previews=w.previews;for(var p=0;p<previews.length;++p)views.push(previews[p]);}}',
+      '   var dialog=new Dialog;dialog.windowTitle="AstroProcessAtlas - "+step.tool+" references";dialog.sizer=new VerticalSizer;dialog.sizer.margin=12;dialog.sizer.spacing=8;var info=new Label(dialog);info.text="Choose reference images at the required processing state. Calibration previews can be selected. Recorded ROI coordinates remain unchanged.";info.wordWrapping=true;info.setMinWidth(500);dialog.sizer.add(info);var boxes=[];',
+      '   for(var n=0;n<names.length;++n){var label=new Label(dialog);label.text=names[n];dialog.sizer.add(label);var box=new ComboBox(dialog);box.addItem("Choose a reference");if(output)box.addItem("Current replay result");var offset=output?2:1;box.currentItem=output&&names[n]===replayImage?1:0;for(var v=0;v<views.length;++v){var id=views[v].fullId||views[v].id;box.addItem(id);if(id===names[n]&&box.currentItem===0)box.currentItem=v+offset;}boxes.push(box);dialog.sizer.add(box);}',
+      '   var ok=new PushButton(dialog);ok.text="Continue";ok.onClick=function(){dialog.ok();};var cancel=new PushButton(dialog);cancel.text="Cancel";cancel.onClick=function(){dialog.cancel();};var update=function(){ok.enabled=boxes.every(function(box){return box.currentItem>0;});};for(var b=0;b<boxes.length;++b)boxes[b].onItemSelected=update;update();var buttons=new HorizontalSizer;buttons.addStretch();buttons.add(ok);buttons.add(cancel);dialog.sizer.add(buttons);dialog.adjustToContents();if(!dialog.execute())throw Error(step.tool+" reference selection cancelled.");',
+      '   for(var n=0;n<names.length;++n){var index=boxes[n].currentItem;if(index<1)throw Error("Choose reference: "+names[n]);var view=views[index-(output?2:1)];mapped["$"+names[n]]=output&&index===1?"@APA_CURRENT":view&&(view.fullId||view.id);if(!mapped["$"+names[n]])throw Error("Unavailable reference: "+names[n]);replayChoice(step.tool+" "+names[n]+" -> "+mapped["$"+names[n]]);}return mapped;',
+      '}',
+      'function applyNativeReplayInputs(process,output,step,mapping){',
+      '   if(!output.mainView.image.isColor)throw Error(step.tool+" requires an RGB replay target.");var parameters=step.imageParameters||[],channels=step.tool==="LRGBCombination"?JSON.parse(JSON.stringify(process.channels)):null;',
+      '   for(var n=0;n<parameters.length;++n){var parameter=parameters[n],id=mapping["$"+parameter.name];if(id==="@APA_CURRENT")id=output.mainView.id;if(!id)throw Error("Missing reference: "+parameter.name);var view=View.viewById(id);if(!view||view.isNull)throw Error("Reference is unavailable: "+id);if(step.tool==="LRGBCombination"){if(view.image.isColor||view.image.width!==output.mainView.image.width||view.image.height!==output.mainView.image.height)throw Error("LRGBCombination requires grayscale channels with matching dimensions: "+id);channels[parameter.row][1]=id;}else{if(!view.image.isColor)throw Error(step.tool+" requires an RGB reference: "+id);process[parameter.parameter]=id;}}if(channels)process.channels=channels;',
       '}',
       'function runPixelMathReplay(process,output,step,cache,initialMapping) {',
       '   var mapped=initialMapping||choosePixelMathInputs(output,step,cache),keys=process.useSingleExpression===false?["expression","expression1","expression2","expression3","symbols"]:["expression","expression3","symbols"];',
@@ -1993,10 +2024,11 @@ function buildWorkspaceReplayScript(image, start, end) {
       "   if(mask.isColor&&!image.isColor)throw Error(\"A color mask cannot be used on a grayscale replay image: \"+name);",
       "}",
       "function prepareReplayResources(input,processes,palette,pixelMathCache,maskCache,firstMapping){",
-      '   if(replayChainContext){var masks=[],mappings=[];for(var i=0;i<replaySteps.length;++i){masks[i]=null;mappings[i]={};if(replaySteps[i].action==="pixelmath")mappings[i]=choosePixelMathInputs(input,replaySteps[i],pixelMathCache);if(replaySteps[i].mask){masks[i]=replayChainContext.mask(replaySteps[i].mask);if(!masks[i])throw Error("Missing chain mask.");replayChoice("Mask "+replaySteps[i].mask.name+" -> "+masks[i].window.mainView.id+"; Color invert: "+masks[i].colorInvert);}}return {masks:masks,mappings:mappings};}',
-      "   var image=input.mainView.image,geometry={width:image.width,height:image.height,isColor:palette?true:image.isColor},masks=[],mappings=[];",
+      '   if(replayChainContext){var masks=[],mappings=[];for(var i=0;i<replaySteps.length;++i){masks[i]=null;mappings[i]={};if((replaySteps[i].imageParameters||[]).length)mappings[i]=chooseNativeReplayInputs(input,replaySteps[i]);else if(replaySteps[i].action==="pixelmath")mappings[i]=choosePixelMathInputs(input,replaySteps[i],pixelMathCache);if(replaySteps[i].mask){masks[i]=replayChainContext.mask(replaySteps[i].mask);if(!masks[i])throw Error("Missing chain mask.");replayChoice("Mask "+replaySteps[i].mask.name+" -> "+masks[i].window.mainView.id+"; Color invert: "+masks[i].colorInvert);}}return {masks:masks,mappings:mappings};}',
+      "   var image=input.mainView.image,geometry={width:image.width,height:image.height,isColor:palette||(replaySteps[0].tool===\"LRGBCombination\"&&replaySteps[0].createsImage)?true:image.isColor},masks=[],mappings=[];",
       "   var proxy={isNull:false,mainView:{id:replayImage+\"_APA_current_result\",image:geometry},removeMask:function(){},setMask:function(){}};",
       "   for(var i=0;i<replaySteps.length;++i){masks[i]=null;mappings[i]={};var step=replaySteps[i],process=processes[i];replayAudit.current=i;updateReplayProgress(i,\"Loading inputs / masks\");if(replayStopRequested)throw Error(\"Replay cancelled before processing.\");",
+      '      if((step.imageParameters||[]).length)mappings[i]=i===0&&firstMapping?firstMapping:chooseNativeReplayInputs(proxy,step);',
       "      if(step.action===\"pixelmath\"){",
       "         var mapping=i===0&&firstMapping?firstMapping:choosePixelMathInputs(proxy,step,pixelMathCache);",
       "         var names=step.inputs||[];",
@@ -2017,7 +2049,7 @@ function buildWorkspaceReplayScript(image, start, end) {
       'function runAtlasReplay() {',
       '   if(!replayChainContext&&replayHasAdjust){var session=atlasReplaySession(replaySessionKey),saved=session.read();if(saved){var decision=session.choose(saved);if(decision==="cancel")return;if(decision==="discard"){session.discard(saved);return;}var state=session.decode(saved.data,saved.pending);replayAudit=state.audit;replayAudit.current=state.index;if(decision==="applied")replayChoice(session.changes(saved));replayChoice("Manual adjustment "+decision+" on "+state.output.mainView.id+"; recorded step not applied again.");state.output.removeMask();finishReplayStep(state.index);openReplayProgress();try{continueAtlasReplay(state.output,prepareReplayProcesses(),state.resources,state.pixelMathCache,state.maskCache,{},state.index+1);}finally{closeReplayProgress(null);}return;}}',
       '   var candidates = [],game=replaySteps[0].action==="game";',
-      '   var pixelOutput=replaySteps[0].action==="pixelmath"&&replaySteps[0].createsImage,pixelStart=pixelOutput&&!replaySteps[0].requiresTarget&&!replaySteps[0].mask&&replaySteps[0].inputs.length>0;',
+      '   var lrgbStart=replaySteps[0].tool==="LRGBCombination"&&replaySteps[0].createsImage,pixelOutput=(replaySteps[0].action==="pixelmath"||lrgbStart)&&replaySteps[0].createsImage,pixelStart=pixelOutput&&!replaySteps[0].requiresTarget&&!replaySteps[0].mask&&replaySteps[0].inputs.length>0;',
       '   for(var i=0;i<ImageWindow.windows.length;++i) if(!ImageWindow.windows[i].isNull&&(!game||!ImageWindow.windows[i].mainView.image.isColor))candidates.push(ImageWindow.windows[i]);',
       '   if(!candidates.length)throw Error(game?"Open the completed original grayscale GAME mask before replay.":pixelStart?"Open the PixelMath reference images before replay.":"Open an image in the state BEFORE the first selected step.");',
       '   var processes=prepareReplayProcesses();',
@@ -2050,6 +2082,7 @@ function buildWorkspaceReplayScript(image, start, end) {
       '   if(palette){combo.visible=false;naming.text="Output name: "+(replayIdentifier||replayImage)+"_APA_replay";confirm.text="I confirm the selected input states match the original palette preparation.";dialog.adjustToContents();}',
       '   if(replaySteps[0].action==="external"){confirm.text="I confirm this input already contains the completed external processing at this step.";info.text="Select the image immediately AFTER the external result, before subsequent steps. Earlier processing is not repeated.";}',
       '   if(pixelOutput){naming.text="Output name:";if(pixelStart){combo.visible=false;label.text="PixelMath: set the output name. Reference images will be selected next.";confirm.text="I will select reference images at their original processing state.";info.text="Create a new PixelMath result and continue subsequent steps on it.";run.text="Create result";}dialog.adjustToContents();}',
+      '   if(lrgbStart){label.text="LRGBCombination: choose output name; source channels are selected next.";confirm.text="I will select grayscale source channels at their required processing state.";info.text="Create a new RGB result from the recorded channel combination.";}',
       '   if(!replayChainContext&&!palette&&!game&&!pixelOutput){var inputInfo=info.text,inputChanged=combo.onItemSelected;combo.onItemSelected=function(index){if(inputChanged)inputChanged(index);var selected=candidates[combo.currentItem],matched=selected?preparedReplayPrefix(selected,replaySteps).count:0;info.text=inputInfo+" Prepared automatic steps verified: "+matched+". These steps will be reused, not executed again.";info.wordWrapping=true;};combo.onItemSelected(combo.currentItem);confirm.text="I confirm the selected input is at the workflow start or after the verified matching steps.";}',
       '   if(replayChainContext){confirm.checked=true;var wanted=replayChainContext.input;if(wanted){var idx=-1;for(var ci=0;ci<candidates.length;++ci)if(!wanted.isNull&&candidates[ci].mainView.id===wanted.mainView.id){idx=ci;break;}if(idx<0)throw Error("Chain target is unavailable: "+(wanted.isNull?"closed window":wanted.mainView.id)+"; eligible images: "+candidates.map(function(window){return window.mainView.id;}).join(", "));combo.currentItem=idx;}outputName.text=replayChainContext.baseId;for(var b=0;b<bindings.length;++b){var selected=replayChainContext.palette(bindings[b].name);var pi=-1;for(var ci=0;ci<candidates.length;++ci)if(selected.window&&!selected.window.isNull&&candidates[ci].mainView.id===selected.window.mainView.id){pi=ci;break;}if(pi<0)throw Error("Chain palette input is unavailable: "+bindings[b].name);bindings[b].combo.currentItem=pi;bindings[b].state.currentItem=selected.state;}}',
       '   if(!replayChainContext&&(!dialog.execute()||!confirm.checked))return;',
@@ -2059,7 +2092,7 @@ function buildWorkspaceReplayScript(image, start, end) {
       '   var mapped={},temporary=[],prepared={},maskCache={},pixelMathCache={},firstPixelMapping=null,output=null;',
       '   try {',
       '   openReplayProgress();',
-      '   if(pixelStart){replayAudit.current=0;firstPixelMapping=choosePixelMathInputs(null,replaySteps[0],pixelMathCache);input=pixelMathCache["$"+replaySteps[0].inputs[0]];}',
+      '   if(pixelStart){replayAudit.current=0;if(lrgbStart){firstPixelMapping=chooseNativeReplayInputs(null,replaySteps[0]);input=View.viewById(firstPixelMapping["$"+replaySteps[0].inputs[0]]).window;}else{firstPixelMapping=choosePixelMathInputs(null,replaySteps[0],pixelMathCache);input=pixelMathCache["$"+replaySteps[0].inputs[0]];}}',
       '   if(palette){for(var b=0;b<bindings.length;++b){var channel=candidates[bindings[b].combo.currentItem];if(!channel||channel.isNull||channel.mainView.image.isColor)throw Error("Select an available grayscale channel for "+bindings[b].name);if(bindings[b].state.currentItem!==1&&bindings[b].state.currentItem!==2)throw Error("Choose the preparation state for "+bindings[b].name);if(b===0)input=channel;else if(channel.mainView.image.width!==input.mainView.image.width||channel.mainView.image.height!==input.mainView.image.height)throw Error("Palette inputs must have matching dimensions.");}}',
       "   replayChoice(\"Starting image: \"+input.mainView.id);",
       "   if(palette)for(var b=0;b<bindings.length;++b)replayChoice(\"Palette \"+bindings[b].name+\" -> \"+candidates[bindings[b].combo.currentItem].mainView.id+\"; state: \"+(bindings[b].state.currentItem===2?\"Linear - stretch on copy\":\"Already prepared\"));",
@@ -2075,9 +2108,9 @@ function buildWorkspaceReplayScript(image, start, end) {
       '   while(!View.viewById(id).isNull)id=baseId+"_"+(suffix++);',
       '   var img=input.mainView.image;',
       '   if(replayChainContext&&replayChainContext.inPlace){output=input;}else{',
-      '   output=new ImageWindow(palette?img.width:1,palette?img.height:1,palette?3:img.numberOfChannels,img.bitsPerSample,img.isReal,palette?true:img.isColor,id);',
+      '   output=new ImageWindow(palette||lrgbStart?img.width:1,palette||lrgbStart?img.height:1,palette||lrgbStart?3:img.numberOfChannels,img.bitsPerSample,img.isReal,palette||lrgbStart?true:img.isColor,id);',
       '   output.mainView.beginProcess(UndoFlag_NoSwapFile);',
-      '   try{if(palette)output.mainView.image.fill(0);else output.mainView.image.assign(img);}finally{output.mainView.endProcess();}',
+      '   try{if(palette||lrgbStart)output.mainView.image.fill(0);else output.mainView.image.assign(img);}finally{output.mainView.endProcess();}',
       '   if(!palette){output.rgbWorkingSpace=input.rgbWorkingSpace;output.mainView.stf=input.mainView.stf;}',
       '   output.show();',
       '   }',
@@ -2097,6 +2130,7 @@ function buildWorkspaceReplayScript(image, start, end) {
       '         Console.writeln("Replay "+(k+1)+"/"+replaySteps.length+": "+replaySteps[k].title);',
       '         if(replaySteps[k].starRequired&&typeof StarXTerminator!=="function")throw Error("SelectiveColorCorrection requires StarXTerminator for its star mask.");',
       '         var process=processes[k];',
+      '         if(["ColorCalibration","BackgroundNeutralization","LRGBCombination"].indexOf(replaySteps[k].tool)>=0)applyNativeReplayInputs(process,output,replaySteps[k],resources.mappings[k]);',
       '         applyReplayMask(output,replaySteps[k].mask,maskCache,replaySteps[k],resources.masks[k]);',
       '         if(replaySteps[k].executionMode==="adjust"){updateReplayProgress(k,"Waiting for adjustment");try{runInteractiveReplayStep(process,output,replaySteps[k],replayChoice);}catch(error){if(error.atlasPause)pausing=true;throw error;}finally{if(!pausing&&output&&!output.isNull)output.removeMask();}finishReplayStep(k);continue;}',
       '         if(replaySteps[k].action==="graxpert"){runGraxpertReplay(process,output,replayChoice);finishReplayStep(k);processEvents();continue;}',
@@ -2224,7 +2258,7 @@ function buildWorkspaceChainPlan(data,target,bindings){
    function referenceError(text,slot){errorSlots[errors.length]=slot.key;errors.push(text);}
    function edge(binding,slot,owner){
       if(!binding||byId['$'+binding.source]===undefined||binding.stage!==Math.floor(binding.stage)||binding.stage<0||binding.stage>data[byId['$'+binding.source]].steps.length){referenceError(owner+': choose a source checkpoint for '+slot.name,slot);return;}
-      var source=data[byId['$'+binding.source]],first=source.steps[0];if(binding.stage===0&&!source.clone&&!source.stars&&first&&(first.action==='palette'||(first.action==='pixelmath'&&first.createsImage&&!first.requiresTarget&&!first.mask&&(first.inputs||[]).length>0&&(first.inputs||[]).indexOf(source.id)<0))){referenceError(owner+': no pixel checkpoint exists before the combination in '+source.id,slot);return;}
+      var source=data[byId['$'+binding.source]],first=source.steps[0];if(binding.stage===0&&!source.clone&&!source.stars&&first&&(first.action==='palette'||((first.action==='pixelmath'||first.tool==='LRGBCombination')&&first.createsImage&&!first.requiresTarget&&!first.mask&&(first.inputs||[]).length>0&&(first.inputs||[]).indexOf(source.id)<0))){referenceError(owner+': no pixel checkpoint exists before the combination in '+source.id,slot);return;}
       if(slot.palette&&binding.preparation!==1&&binding.preparation!==2)referenceError(owner+': choose prepared or linear input state for '+slot.name,slot);
       snapshots[key(binding.source,binding.stage)]=true;visit(binding.source,binding.stage);
    }
@@ -2234,7 +2268,7 @@ function buildWorkspaceChainPlan(data,target,bindings){
       if(stage===0){
          var origin=image.clone||image.stars;
          if(origin){task.kind=image.clone?'clone':'stars';task.origin=origin;if(typeof origin.stage!=='number'||origin.stage!==Math.floor(origin.stage)||origin.stage<0||byId['$'+origin.source]===undefined||origin.stage>data[byId['$'+origin.source]].steps.length)errors.push(id+': origin checkpoint is unavailable; generate a new report.');else{snapshots[key(origin.source,origin.stage)]=true;visit(origin.source,origin.stage);}}
-         else{var first=image.steps[0];task.kind=first&&(first.action==='palette'||(first.action==='pixelmath'&&first.createsImage&&!first.requiresTarget&&!first.mask&&(first.inputs||[]).length>0&&(first.inputs||[]).indexOf(id)<0))?'virtual':'input';if(task.kind==='input')roots.push({image:index,id:id,game:!!(first&&first.action==='game')});}
+         else{var first=image.steps[0];task.kind=first&&(first.action==='palette'||((first.action==='pixelmath'||first.tool==='LRGBCombination')&&first.createsImage&&!first.requiresTarget&&!first.mask&&(first.inputs||[]).length>0&&(first.inputs||[]).indexOf(id)<0))?'virtual':'input';if(task.kind==='input')roots.push({image:index,id:id,game:!!(first&&first.action==='game')});}
       }else if(image.steps[stage-1].action==='external'){task.kind='external-input';roots.push({image:index,id:id+'@'+stage,branch:id,stage:stage,external:true,game:false});
       }else{
          visit(id,stage-1);var step=image.steps[stage-1];if(step.warning&&step.warning.indexOf('User-confirmed stars output:')===0)warnings.push(id+' / '+step.number+': '+step.warning);if(step.action==='skip'&&!step.manualDerivedOrigin)warnings.push(id+' / '+step.number+': skipped by user; original external processing is not reproduced.');if(step.reason)errors.push(id+' / '+step.number+' '+step.title+': '+step.reason);
@@ -2390,7 +2424,7 @@ function editReplayWorkflow(data,bindings,operation){
       if(operation.mode==='adjust'&&(modeBase.action!=='process'||modeBase.reason||modeBase.tool==='ProcessContainer'||modeBase.createsImage))throw Error('Interactive adjustment is currently available for supported native processes only.');
       if(operation.mode==='skip'&&(modeBase.createsImage||['palette','game','external','identifier'].indexOf(modeBase.action)>=0))throw Error('This step creates or selects a branch input and cannot be skipped.');
       modeBase.executionMode=operation.mode;modeBase.edited=!!(modeCurrent.executionOriginalStep||modeCurrent).edited;modeBase.number=modeCurrent.number;modeBase.anchor=modeCurrent.anchor;if(operation.mode!=='auto')modeBase.executionOriginalStep=JSON.parse(JSON.stringify(modeCurrent.executionOriginalStep||modeCurrent));
-      if(operation.mode==='skip'){modeBase.action='skip';modeBase.reason='';modeBase.source='';modeBase.variable='';modeBase.inputs=[];modeBase.mask=null;modeBase.starRequired=false;modeBase.warning='Skipped in this workflow variant; pixels remain unchanged.';}else if(operation.mode==='adjust')modeBase.warning='Adjust this native process on the replay image, apply it, then continue. Recorded parameters are not applied a second time.';
+      if(operation.mode==='skip'){modeBase.action='skip';modeBase.reason='';modeBase.source='';modeBase.variable='';modeBase.inputs=[];modeBase.imageParameters=[];modeBase.mask=null;modeBase.starRequired=false;modeBase.warning='Skipped in this workflow variant; pixels remain unchanged.';}else if(operation.mode==='adjust')modeBase.warning='Adjust this native process on the replay image, apply it, then continue. Recorded parameters are not applied a second time.';
       modeData[source].steps[at]=modeBase;modeData[source].edited=true;var modeBindings=suggestChainBindings(modeData);for(var modeKey in bindings)if(Object.prototype.hasOwnProperty.call(modeBindings,modeKey))modeBindings[modeKey]=JSON.parse(JSON.stringify(bindings[modeKey]));return {data:modeData,bindings:modeBindings};
    }
    if(operation.type==='stars-origin'){
@@ -2404,7 +2438,7 @@ function editReplayWorkflow(data,bindings,operation){
          if(operation.mode==='graxpert'&&base.mask)throw Error('Direct GraXpert requires an unmasked step. Use a prepared result for a historically masked replacement.');
          var config=operation.mode==='graxpert'?operation.settings||{}:{},correction=config.correction||'Subtraction',smoothing=Number(config.smoothing===undefined?0.5:config.smoothing),model=config.model||'',device=config.device||'gpu',executable=config.executable||'';
          if(['Subtraction','Division'].indexOf(correction)<0||!isFinite(smoothing)||smoothing<0||smoothing>1||typeof model!=='string'||model&&!/^[0-9]+[.][0-9]+[.][0-9]+$/.test(model)||['default','cpu','gpu'].indexOf(device)<0||typeof executable!=='string'||executable.length>4096||/[\r\n]/.test(executable))throw Error('Invalid GraXpert settings.');
-         var original=JSON.parse(JSON.stringify(base));base.originalReplayStep=original;delete base.executionOriginalStep;base.executionMode='auto';base.externalDeclaration=operation.mode;base.time='';base.edited=true;base.action=operation.mode==='prepared'?'external':'graxpert';base.tool=operation.mode==='prepared'?'ExternalResult':'GraXpert';base.title=operation.mode==='prepared'?'Prepared external result':'GraXpert — user settings';base.inputs=[];base.mask=null;base.reason='';base.createsImage=false;base.requiresTarget=true;base.starRequired=false;base.source=operation.mode==='prepared'?'':'var P = '+JSON.stringify({correction:correction,smoothing:smoothing,model:model,device:device,executable:executable})+';';base.variable=operation.mode==='prepared'?'':'P';base.warning=operation.mode==='prepared'?'Choose the completed image AFTER this external processing. Earlier branch steps are skipped.':'New GraXpert run with user settings. Original settings were not recorded.';base.graxpertSettings={correction:correction,smoothing:smoothing,model:model,device:device,executable:executable};
+         var original=JSON.parse(JSON.stringify(base));base.originalReplayStep=original;delete base.executionOriginalStep;base.executionMode='auto';base.externalDeclaration=operation.mode;base.time='';base.edited=true;base.action=operation.mode==='prepared'?'external':'graxpert';base.tool=operation.mode==='prepared'?'ExternalResult':'GraXpert';base.title=operation.mode==='prepared'?'Prepared external result':'GraXpert — user settings';base.inputs=[];base.imageParameters=[];base.mask=null;base.reason='';base.createsImage=false;base.requiresTarget=true;base.starRequired=false;base.source=operation.mode==='prepared'?'':'var P = '+JSON.stringify({correction:correction,smoothing:smoothing,model:model,device:device,executable:executable})+';';base.variable=operation.mode==='prepared'?'':'P';base.warning=operation.mode==='prepared'?'Choose the completed image AFTER this external processing. Earlier branch steps are skipped.':'New GraXpert run with user settings. Original settings were not recorded.';base.graxpertSettings={correction:correction,smoothing:smoothing,model:model,device:device,executable:executable};
       }
       if(operation.mode==='skip'){if(!ambiguousImageCopy(original))throw Error('Skip is available only for ambiguous PixelMath image copies.');base.action='skip';base.tool='PixelMath';base.title='PixelMath — skipped by user';base.source='';base.variable='';base.warning='Skipped by user: pixels are unchanged at this step. Original external processing is not reproduced.';}
       externalData[source].steps[at]=base;externalData[source].edited=true;var externalBindings=suggestChainBindings(externalData);for(var key in bindings)if(Object.prototype.hasOwnProperty.call(externalBindings,key))externalBindings[key]=JSON.parse(JSON.stringify(bindings[key]));return {data:externalData,bindings:externalBindings};
@@ -2412,7 +2446,7 @@ function editReplayWorkflow(data,bindings,operation){
    var destination=operation.type==='copy'?index(operation.to):source,position=operation.type==='copy'?operation.at:at,insert=operation.type==='copy';
    if(operation.type!=='copy'&&operation.type!=='remove')throw Error('Unknown workflow edit.');if(position!==Math.floor(position)||position<0||position>data[destination].steps.length)throw Error('Select a valid insertion position.');
    var result=JSON.parse(JSON.stringify(data)),oldBindings=JSON.parse(JSON.stringify(bindings)),owner=result[destination].id,step=JSON.parse(JSON.stringify(data[source].steps[at]));
-   if(insert){if(data[source].id!==owner&&(step.inputs||[]).indexOf(data[source].id)>=0){var mapping={};mapping['$'+data[source].id]=owner;step.source=step.source.replace(/(\b(?:expression[0-3]?|symbols)\s*=\s*)("(?:[^"\\]|\\.)*")/g,function(all,prefix,literal){try{return prefix+JSON.stringify(remapWorkflowExpression(JSON.parse(literal),mapping));}catch(error){return all;}});step.inputs=step.inputs.map(function(name){return name===data[source].id?owner:name;});}
+   if(insert){if(data[source].id!==owner&&(step.inputs||[]).indexOf(data[source].id)>=0){var mapping={};mapping['$'+data[source].id]=owner;step.source=step.source.replace(/(\b(?:expression[0-3]?|symbols)\s*=\s*)("(?:[^"\\]|\\.)*")/g,function(all,prefix,literal){try{return prefix+JSON.stringify(remapWorkflowExpression(JSON.parse(literal),mapping));}catch(error){return all;}});step.inputs=step.inputs.map(function(name){return name===data[source].id?owner:name;});if(step.imageParameters)for(var ip=0;ip<step.imageParameters.length;++ip)if(step.imageParameters[ip].name===data[source].id)step.imageParameters[ip].name=owner;if(step.executionOriginalStep){step.executionOriginalStep.inputs=step.inputs.slice();if(step.imageParameters)step.executionOriginalStep.imageParameters=JSON.parse(JSON.stringify(step.imageParameters));}}
       step.edited=true;step.copiedFrom={image:data[source].id,number:step.number,title:step.title};var uid='apa_edit_'+owner+'_'+position,suffix=1;var exists=function(id){for(var i=0;i<result.length;++i)for(var j=0;j<result[i].steps.length;++j)if(result[i].steps[j].anchor===id)return true;return false;};while(exists(uid))uid='apa_edit_'+owner+'_'+position+'_'+suffix++;step.anchor=uid;step.memberAnchors=[];result[destination].steps.splice(position,0,step);}else result[destination].steps.splice(position,1);
    for(var i=0;i<result[destination].steps.length;++i)result[destination].steps[i].number=i+1;
    result[destination].edited=true;
