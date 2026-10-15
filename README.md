@@ -481,6 +481,25 @@ node test_chain_replay.cjs
 
 These checks mock the PixInsight APIs and browser DOM. They do not replace testing in PixInsight and a real browser.
 
+## Feedback and supporting development
+
+AstroProcessAtlas is created and maintained by **YoruHikari**, remains free and
+open source, and welcomes feedback from real PixInsight workflows.
+
+- [Report a problem](https://github.com/kaminarigr/AstroProcessAtlas/issues/new?template=bug_report.yml).
+- [Suggest an improvement](https://github.com/kaminarigr/AstroProcessAtlas/issues/new?template=feature_request.yml).
+- [Read the support guide](SUPPORT.md) for useful diagnostics.
+- [Contribute](CONTRIBUTING.md) by testing, improving documentation or sharing the project.
+
+The PixInsight **About** dialog and new reports provide the same links. Nothing is
+submitted automatically. Review logs and screenshots before posting: GitHub
+issues are public and reports may contain image names and local paths.
+There is currently no financial-support link; contributions are entirely optional.
+
+Για feedback και αναφορά προβλημάτων, χρησιμοποίησε το **About** ή το footer του
+νέου report. Βοήθησε με δοκιμές, προτάσεις και κοινοποίηση με αναφορά στον δημιουργό.
+Δεν χρειάζεται δωρεά. Έλεγξε τα προσωπικά δεδομένα πριν τα δημοσιεύσεις σε issue.
+
 ## Author
 
 **YoruHikari** — [YoruHikari Astrophotography](https://www.yoruhikari.gr/).

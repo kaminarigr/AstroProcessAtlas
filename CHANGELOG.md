@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Expand creator credits and the PixInsight About dialog; add feedback and
+  contribution links to About and the bilingual report footer.
+- Add public bug/feature issue forms, support and contribution guides. Include
+  the guides in release packages while retaining validation of older packages.
+  Encourage optional testing, documentation and sharing; no donation link or
+  automatic report submission is added.
+
 ## 0.3.1 — 2026-10-15
 
 - Treat initial FastIntegration history as integrated-image origin metadata, like

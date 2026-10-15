@@ -258,7 +258,7 @@ const controls=[],dialogs=[];let openedURL;
 helper.Dialog=function(){dialogs.push(this);this.scaledResource=x=>x;this.ok=()=>{};
   this.adjustToContents=()=>{};this.execute=()=>true;};
 helper.Dialog.openBrowser=url=>{openedURL=url;};
-helper.Label=function(){controls.push(this);};helper.PushButton=function(){controls.push(this);};
+helper.Label=function(){this.setMinWidth=()=>{};controls.push(this);};helper.PushButton=function(){controls.push(this);};
 helper.ToolButton=function(){controls.push(this);};helper.TreeBox=TreeBox;helper.TreeBoxNode=TreeBoxNode;
 helper.CheckBox=function(){controls.push(this);};helper.ComboBox=function(){this.items=[];this.addItem=x=>this.items.push(x);controls.push(this);};
 helper.HorizontalSizer=Sizer;helper.VerticalSizer=Sizer;
@@ -1084,3 +1084,6 @@ console.log('Passed: arbitrary current/before/after selection, shared comparison
 
 let revealedStep=false;const hiddenGroup={hidden:true,tagName:'DETAILS',open:false,parentNode:sections[0]};elements.image_0_step_0={hidden:true,parentNode:hiddenGroup,scrollIntoView:()=>revealedStep=true};elements.report_search.value='SHO';elements.tool_filter.value='NonMatchingTool';elements.mask_filter.checked=true;elements.applied_filter.checked=true;browser.window.selectGraphNode('image_0_step_0',{stopPropagation(){},preventDefault(){}});assert.equal(elements.image_filter.value,'image_0');assert.equal(elements.report_search.value,'');assert.equal(elements.tool_filter.value,'all');assert.equal(elements.mask_filter.checked,false);assert.equal(elements.image_0_step_0.hidden,false);assert.equal(hiddenGroup.hidden,false);assert.equal(hiddenGroup.open,true);assert.equal(revealedStep,true);assert.equal(sections[0].hidden,false);
 console.log('Passed: selecting a tree step clears conflicting filters, reveals its detail and collapsed ancestors, synchronizes the image selector and explicitly scrolls to the detail.');
+
+helper.Dialog.openBrowser=url=>{openedURL=url;};controls.find(control=>control.text==='Report a problem').onClick();assert.match(openedURL,/issues\/new\?template=bug_report.yml$/);controls.find(control=>control.text==='Suggest an improvement').onClick();assert.match(openedURL,/feature_request.yml$/);controls.find(control=>control.text==='Ways to contribute').onClick();assert.match(openedURL,/CONTRIBUTING.md$/);const communityHtml=fs.readFileSync(__dirname+'/AstroProcessAtlas.js','utf8');{assert.ok(communityHtml.includes('class="project-links"'));assert.ok(communityHtml.includes('Review logs before sharing'));}
+console.log('Passed: About feedback/contribution actions open explicit project pages, with creator credits and privacy guidance in the report footer.');

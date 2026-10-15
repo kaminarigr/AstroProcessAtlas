@@ -34,6 +34,9 @@ def validate(folder, require_signed=False):
         with zipfile.ZipFile(folder / name) as archive:
             prefix = 'src/scripts/AstroProcessAtlas/'
             expected = {prefix + n for n in ('AstroProcessAtlas.js', 'AstroProcessAtlas.svg', 'LICENSE', 'README.md', 'CHANGELOG.md')}
+            support_docs = {prefix + 'SUPPORT.md', prefix + 'CONTRIBUTING.md'}
+            if support_docs.intersection(archive.namelist()):
+                expected.update(support_docs)
             if signature is not None:
                 expected.add(prefix + 'AstroProcessAtlas.xsgn')
             if set(archive.namelist()) != expected or len(archive.namelist()) != len(expected):

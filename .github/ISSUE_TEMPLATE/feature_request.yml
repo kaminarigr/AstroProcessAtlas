@@ -1,0 +1,22 @@
+name: Suggest an improvement / Πρόταση βελτίωσης
+description: Describe a workflow need or an interface improvement.
+title: "[Idea] "
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What are you trying to do? / Τι θέλεις να πετύχεις;
+      description: Describe the workflow and what is currently difficult.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Suggested behavior / Προτεινόμενη λειτουργία
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Examples or alternatives (optional)
+      description: Share only examples you are comfortable publishing.

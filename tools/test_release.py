@@ -19,9 +19,11 @@ class ReleaseTests(unittest.TestCase):
             self.assertEqual(platform.get('version'), '1.9.3:1.9.4')
             import zipfile
             with zipfile.ZipFile(build(VERSION, '20261009', folder)) as archive:
-                self.assertEqual(len(archive.namelist()), 5)
+                self.assertEqual(len(archive.namelist()), 7)
                 self.assertIn('src/scripts/AstroProcessAtlas/AstroProcessAtlas.svg', archive.namelist())
                 self.assertIn('src/scripts/AstroProcessAtlas/LICENSE', archive.namelist())
+                self.assertIn('src/scripts/AstroProcessAtlas/SUPPORT.md', archive.namelist())
+                self.assertIn('src/scripts/AstroProcessAtlas/CONTRIBUTING.md', archive.namelist())
 
     def test_release_documentation_matches_script(self):
         readme = (ROOT / 'README.md').read_text(encoding='utf-8')

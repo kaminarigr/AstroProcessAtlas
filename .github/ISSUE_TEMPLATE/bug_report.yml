@@ -1,0 +1,40 @@
+name: Report a problem / Αναφορά προβλήματος
+description: Help reproduce an AstroProcessAtlas problem.
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: "Thank you for testing AstroProcessAtlas by YoruHikari. Issues are public: review logs, paths and image names before sharing. / Τα issues είναι δημόσια· έλεγξε τα δεδομένα πριν τα κοινοποιήσεις."
+  - type: input
+    id: atlas_version
+    attributes:
+      label: AstroProcessAtlas version
+      description: See About in PixInsight.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: PixInsight version, operating system and browser
+      placeholder: Include the browser/version for HTML report problems.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce / Βήματα αναπαραγωγής
+      description: Describe the image/step selection and action that triggers the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: expected_actual
+    attributes:
+      label: Expected and actual behavior / Αναμενόμενο και πραγματικό αποτέλεσμα
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Exact error or reviewed log excerpt
+      description: For replay, include the last task/tool and nearby trace lines. Remove private paths and image names. Avoid uploading a full report by default.
+      render: text

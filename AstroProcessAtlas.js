@@ -583,7 +583,7 @@ function reportStyles() {
    html += '.appearance-badge{display:inline-block;padding:4px 8px;margin:4px;border:1px solid #45475a;border-radius:6px;font-size:11px}.completeness{padding:10px;margin:10px 0;border-left:3px solid;font-size:12px}.completeness-recorded{color:#a6e3a1}.completeness-manual{color:#fab387}.completeness-missing{color:#f38ba8}';
    html += ".thumb-box { width: 440px; min-width: 440px; background: #11111b; display: flex; align-items: center; justify-content: center; padding: 10px; border-right: 1px solid #313244; }\n";
    html += ".thumb-box img { max-width: min(400px, 100%); max-height: 400px; height: auto; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.7); }\n";
-   html += '.report-footer{margin-top:40px;padding:24px 12px;border-top:1px solid #313244;text-align:center;color:#a6adc8;font-size:13px}.report-footer a{color:#89b4fa;text-decoration:none}.report-footer a:hover{text-decoration:underline}@media(max-width:1000px){.step-card{flex-direction:column}.thumb-box{width:auto;min-width:0;border-right:0;border-bottom:1px solid #313244}}';
+   html += '.report-footer{margin-top:40px;padding:24px 12px;border-top:1px solid #313244;text-align:center;color:#a6adc8;font-size:13px}.report-footer .project-links{display:flex;justify-content:center;gap:12px 20px;flex-wrap:wrap;margin:16px 0}.report-footer .project-links a{padding:8px 12px;border:1px solid #45475a;border-radius:6px}.report-footer a{color:#89b4fa;text-decoration:none}.report-footer a:hover{text-decoration:underline}@media(max-width:1000px){.step-card{flex-direction:column}.thumb-box{width:auto;min-width:0;border-right:0;border-bottom:1px solid #313244}}';
    html += ".details-box { padding: 14px 20px; flex-grow: 1; display: flex; flex-direction: column; justify-content: center; }\n";
    html += ".step-num { font-size: 13px; font-weight: bold; color: #f5e0dc; text-transform: uppercase; letter-spacing: 1px; }\n";
    html += ".step-title { font-size: 17px; font-weight: bold; color: #89b4fa; margin: 4px 0 8px 0; }\n";
@@ -2639,16 +2639,21 @@ function showAboutDialog() {
    dialog.windowTitle = "About AstroProcessAtlas";
    var label = new Label(dialog);
    label.useRichText = true;
-   label.text = "<b>AstroProcessAtlas</b><br>Version: " + ASTROPROCESS_ATLAS_VERSION + "<br><br>Author: YoruHikari<br>https://www.yoruhikari.gr/";
+   label.text = "<b>AstroProcessAtlas</b><br>Version: " + ASTROPROCESS_ATLAS_VERSION + "<br><br>Author: YoruHikari<br>YoruHikari Astrophotography<br>https://www.yoruhikari.gr/<br><br>Free and open source — MIT License.<br>Explore image history, compare stages and rebuild supported workflows.<br><br>Help improve AstroProcessAtlas: share feedback, test workflows or report a problem.<br>Review logs before sharing; reports may contain image names and local paths.";
    var website = new PushButton(dialog); website.text = "Visit website";
    website.onClick = function() { Dialog.openBrowser("https://www.yoruhikari.gr/"); };
+   label.wordWrapping = true;label.setMinWidth(440);
+   var problem=new PushButton(dialog);problem.text="Report a problem";problem.onClick=function(){Dialog.openBrowser("https://github.com/kaminarigr/AstroProcessAtlas/issues/new?template=bug_report.yml");};
+   var idea=new PushButton(dialog);idea.text="Suggest an improvement";idea.onClick=function(){Dialog.openBrowser("https://github.com/kaminarigr/AstroProcessAtlas/issues/new?template=feature_request.yml");};
+   var contribute=new PushButton(dialog);contribute.text="Ways to contribute";contribute.onClick=function(){Dialog.openBrowser("https://github.com/kaminarigr/AstroProcessAtlas/blob/main/CONTRIBUTING.md");};
+   var feedbackButtons=new HorizontalSizer;feedbackButtons.spacing=8;feedbackButtons.add(problem);feedbackButtons.add(idea);feedbackButtons.add(contribute);
    var close = new PushButton(dialog); close.text = "Close";
    close.onClick = function() { dialog.ok(); };
    var buttons = new HorizontalSizer;
    buttons.spacing = 8; buttons.add(website); buttons.addStretch(); buttons.add(close);
    dialog.sizer = new VerticalSizer;
    dialog.sizer.margin = 16; dialog.sizer.spacing = 12;
-   dialog.sizer.add(label); dialog.sizer.add(buttons);
+   dialog.sizer.add(label);dialog.sizer.add(feedbackButtons);dialog.sizer.add(buttons);
    dialog.adjustToContents(); dialog.execute();
 }
 
@@ -2790,7 +2795,7 @@ function generateHistoryReport() {
       progress.update(90+9*i/records.length, 'Writing report: ' + records[i].id);
       imageReportHTML(records[i], emit);
    }
-   html += '<footer class="report-footer"><a href="https://www.yoruhikari.gr/" target="_blank" rel="noopener noreferrer">© 2026 YoruHikari Astrophotography</a></footer>';
+   html += '<footer class="report-footer"><p><strong data-no-i18n>AstroProcessAtlas '+escapeHTML(ASTROPROCESS_ATLAS_VERSION)+'</strong> · <span>Created by YoruHikari</span></p><a href="https://www.yoruhikari.gr/" target="_blank" rel="noopener noreferrer">© 2026 YoruHikari Astrophotography</a><p>Free and open source. Help improve the project with feedback, testing or sharing.</p><nav class="project-links" aria-label="Project links"><a href="https://github.com/kaminarigr/AstroProcessAtlas" target="_blank" rel="noopener noreferrer">Source code</a><a href="https://github.com/kaminarigr/AstroProcessAtlas/issues/new?template=bug_report.yml" target="_blank" rel="noopener noreferrer">Report a problem</a><a href="https://github.com/kaminarigr/AstroProcessAtlas/issues/new?template=feature_request.yml" target="_blank" rel="noopener noreferrer">Suggest an improvement</a><a href="https://github.com/kaminarigr/AstroProcessAtlas/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener noreferrer">Ways to contribute</a></nav><p class="thumb-note">Review logs before sharing: they may contain image names and local paths.</p></footer>';
    html += '<button id="back_to_top" type="button" hidden onclick="scrollToReportTop()" aria-label="Back to top">↑ Back to top</button>';
    html += '<div id="comparison_dialog" role="dialog" aria-modal="true" aria-label="Before / after" hidden onclick="if(event.target===this)closeComparison()"><div class="comparison-panel"><button id="comparison_close" type="button" onclick="closeComparison()">Close</button><p>Preview resolution follows the selected report size. Dark previews use a display-only auto stretch; image pixels are unchanged. Zoom and pan are shared by both images.</p><label class="zoom-control"><span>Zoom</span><input id="comparison_zoom" type="range" min="100" max="400" value="100" oninput="zoomComparison(this.value)" onchange="zoomComparison(this.value)"></label><div id="comparison_viewport"><div id="comparison_content"></div></div></div></div>';
    // Escape HTML delimiters in inline JSON: names/code must never close a script tag.
@@ -2925,6 +2930,14 @@ var REPORT_TRANSLATIONS = [
    ["Use a source image (select below)", "Χρήση εικόνας πηγής (επιλογή παρακάτω)"],
    ["Skip ambiguous image copy (leave pixels unchanged)", "Παράλειψη ασαφούς αντιγραφής (καμία αλλαγή στην εικόνα)"],
    ["Replace with GraXpert", "Αντικατάσταση με GraXpert"],
+   ["Created by YoruHikari", "Δημιουργία: YoruHikari"],
+   ["Free and open source. Help improve the project with feedback, testing or sharing.", "Δωρεάν και open source. Βοήθησε την εξέλιξή του με προτάσεις, δοκιμές ή κοινοποίηση."],
+   ["Source code", "Πηγαίος κώδικας"],
+   ["Report a problem", "Αναφορά προβλήματος"],
+   ["Suggest an improvement", "Πρόταση βελτίωσης"],
+   ["Ways to contribute", "Τρόποι συνεισφοράς"],
+   ["Project links", "Σύνδεσμοι του project"],
+   ["Review logs before sharing: they may contain image names and local paths.", "Έλεγξε τα logs πριν τα κοινοποιήσεις: μπορεί να περιέχουν ονόματα εικόνων και τοπικές διαδρομές."],
    ["External processing / GraXpert", "Εξωτερική επεξεργασία / GraXpert"],
    ["External / GraXpert", "Εξωτερικό / GraXpert"],
    ["Use the source image and Step selectors above to choose the record to configure. A bare PixelMath image reference does not identify GraXpert.", "Επίλεξε την εικόνα προέλευσης και το βήμα παραπάνω. Μια απλή αναφορά PixelMath image δεν αποδεικνύει χρήση GraXpert."],
