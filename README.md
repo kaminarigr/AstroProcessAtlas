@@ -260,16 +260,27 @@ is still required.
 
 ### Replay a linked dependency chain
 
-A manually drawn line is an annotation, not an execution instruction. If a line
-connects a StarXTerminator process tile to a separate stars image whose history
-begins with StarXTerminator, the chain input review offers **Rebuild a manually
-linked stars image**. Confirm the checkbox and choose **Use this stars connection
-for replay**. This explicitly enables Generate Star Image on the source replay
-step, uses its side output and retains subsequent stars processing. It does not
-verify historical pixels. Save the edited HTML to keep this decision; Undo restores
-the previous workflow. Generic manual links remain annotations. A stars image with an empty history is
-also eligible if you already removed its redundant StarXTerminator entry; explicit
-confirmation is still required.
+Manual connections participate in chain replay alongside recovered connections and
+are labelled **manual** in the plan and diagnostics. A link from a process uses
+its exact checkpoint; a link from an image uses its final available stage.
+
+- Links to process inputs/masks supply the referenced source checkpoint. Source
+  and stage follow the tree link; palette preparation and mask Color invert remain
+  explicit choices.
+- Links to an image with no combination inputs establish its starting branch
+  checkpoint, so recorded downstream steps run on a copy of that source.
+- StarXTerminator-to-stars links enable Generate Star Image in replay and reuse
+  its output, including when the redundant stars origin entry was already removed.
+  A source-image header can resolve a unique StarXTerminator producer; if several
+  exist, link from the intended process tile.
+
+No additional stars-link confirmation is needed. Removing a manual link recomputes
+replay from the authored workflow without retaining inferred parameter changes.
+Save the HTML to preserve the connections. Ambiguous roles, conflicting sources
+and dependency cycles block export with an explanation rather than silently
+ignoring the link. Manual connections supply dependencies, not missing process
+parameters or historical pixels. Unsupported processes still require a supported
+replacement or prepared result.
 
 Generate a new report and open **Replay linked dependency chain**:
 

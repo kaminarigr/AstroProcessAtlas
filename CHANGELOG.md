@@ -2,16 +2,17 @@
 
 ## Unreleased
 
+- Integrate manual connections into chain replay as input/mask checkpoints, branch
+  origins and generated stars outputs, labelled manual in cards and diagnostics.
+  Recompute on add/remove and restore saved links without extra confirmation.
+  Block ambiguous roles, conflicts and cycles; do not invent missing parameters.
+
 - Accept confirmed manual stars-output links after the redundant stars origin
   entry has already been removed, leaving an empty history. Reuse the producer
   output without deleting another step or requiring a separate stars input.
 
 - Escape URL slash pairs in concatenated report-footer and About strings to
   prevent PixInsight preprocessing from truncating them as line comments.
-
-- Add explicit confirmation for manual StarXTerminator-to-stars links. Enable
-  Generate Star Image for replay, reuse the side output and retain later steps
-  and checkpoint mappings. Ordinary annotations never silently change execution.
 
 - Expand creator credits and the PixInsight About dialog; add feedback and
   contribution links to About and the bilingual report footer.
