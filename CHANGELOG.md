@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 — 2026-10-15
 
 - Fix a PixInsight strict-mode warning in the print preview image-loading callback.
 

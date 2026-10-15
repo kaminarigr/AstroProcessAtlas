@@ -79,7 +79,17 @@ requires no upload or PDF library and does not replace the editable HTML.
 
 ## Updates
 
-Current version: **0.3.9**. The version is shown in About.
+Current version: **0.4.0**. The version is shown in About.
+
+Version 0.4.0 adds print-ready PDF views for the full recording or a selected
+linked dependency chain, with readable parameters, Before/After previews,
+input/mask mappings and change history. Choose which details to include and use
+the browser's Print / Save PDF command. The editable HTML remains the primary
+report. Its captured data now uses a versioned, embedded JSON format with shared
+previews and source code, preserving single-file saves and compatibility with
+previous saved workflow state. Large source fields load when needed. This release
+also fixes the PixInsight strict-mode warning in print initialization and adds
+maintainer assignment and issue-resolution guidance for feedback.
 
 Version 0.3.9 expands replay with ColorCalibration, BackgroundNeutralization,
 LRGBCombination, ChannelCombination, SpectrophotometricFluxCalibration,
