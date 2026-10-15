@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Support ChannelCombination replay with recorded native color-space settings,
+  enabled and Auto channels, new RGB creation and partial existing-target updates.
+  Integrate standalone/chain input mapping, masks, manual adjustment and skip.
+  New channel combinations retain the highest source sample precision.
+
 - Support ColorCalibration, BackgroundNeutralization and LRGBCombination replay.
   Preserve recorded settings and ROIs; select calibration references (including
   previews in standalone replay) and remap channel/reference IDs to chain

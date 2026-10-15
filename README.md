@@ -102,8 +102,8 @@ Workflow replay supports native HistogramTransformation,
 CurvesTransformation, RGBWorkingSpace, SCNR, ColorSaturation, BlurXTerminator,
 NoiseXTerminator, GradientCorrection, StarXTerminator, NarrowbandNormalization,
 UnsharpMask, MultiscaleLinearTransform, Invert, ColorCalibration,
-BackgroundNeutralization and LRGBCombination instances with supported serialization.
-Calibration and LRGB references use explicit input mapping as described below.
+BackgroundNeutralization, LRGBCombination and ChannelCombination instances with supported serialization.
+Calibration and channel-combination references use explicit input mapping as described below.
 StarXTerminator output references are allowed.
 RGBWorkingSpace steps that use historical global settings are blocked.
 Required tools, licenses and matching models must already be available in PixInsight.
@@ -287,6 +287,23 @@ When accessible through live history, it captures those states and restores the
 selected input immediately, including on failure. If a required earlier state is
 only inside read-only initial history, select an earlier input instead; processing
 is blocked before branches are executed. All continued processing uses new copies.
+
+### ChannelCombination
+
+ChannelCombination replay selects the enabled grayscale source channels and
+preserves the recorded native color space (RGB, CIEXYZ, CIELab, CIELch, HSV or HSI).
+PixInsight performs the conversion; no extra stretch or JavaScript color conversion
+is added. Disabled rows remain disabled, while Auto channel IDs are exposed as
+explicit inputs with the corresponding color-space suffixes.
+
+A first unmasked combination with all three channels enabled creates a new RGB
+result: choose the output name and channels without supplying an extra RGB image.
+Partial or masked combinations use an existing RGB input. Source dimensions must
+match. New combinations retain the highest source sample precision.
+Both single and chain replay are supported; chain bindings use the selected
+historical checkpoints and actual replay IDs. Existing-target steps also work
+with masks, Adjust in PixInsight and Skip. Native numerical validation still
+requires testing with your images in PixInsight.
 
 ### Color calibration and LRGB combination
 
