@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add explicit confirmation for manual StarXTerminator-to-stars links. Enable
+  Generate Star Image for replay, reuse the side output and retain later steps
+  and checkpoint mappings. Ordinary annotations never silently change execution.
+
 - Expand creator credits and the PixInsight About dialog; add feedback and
   contribution links to About and the bilingual report footer.
 - Add public bug/feature issue forms, support and contribution guides. Include

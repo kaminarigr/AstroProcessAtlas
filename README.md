@@ -260,6 +260,15 @@ is still required.
 
 ### Replay a linked dependency chain
 
+A manually drawn line is an annotation, not an execution instruction. If a line
+connects a StarXTerminator process tile to a separate stars image whose history
+begins with StarXTerminator, the chain input review offers **Rebuild a manually
+linked stars image**. Confirm the checkbox and choose **Use this stars connection
+for replay**. This explicitly enables Generate Star Image on the source replay
+step, uses its side output and retains subsequent stars processing. It does not
+verify historical pixels. Save the edited HTML to keep this decision; Undo restores
+the previous workflow. Generic manual links remain annotations.
+
 Generate a new report and open **Replay linked dependency chain**:
 
 1. **Choose the final image.** Select the result you want to rebuild.
