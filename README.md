@@ -40,6 +40,17 @@ The embedded previews are reduced to at most 640 pixels and compressed for a sma
 4. Leave **Single HTML file (embed thumbnails)** enabled for a portable report.
 5. Save the report and open it in a browser. If embedding is disabled, keep the HTML and its `_thumbs` folder together.
 
+## Portable report data
+
+New reports keep captured workflow data in a versioned JSON document inside the
+same HTML, separate from the interface. Saved edits and connections are stored
+with that document. Recorded code and previews use shared stores; large full-code
+fields load when opened or copied. No extra JSON file or viewer installation is
+required. Earlier reports retain their own viewer; generate a new report to use
+the new structure. See the [report format](docs/REPORT_FORMAT.md) for integration
+and future exporter development. Replay support and historical-data limitations
+remain unchanged.
+
 ## Updates
 
 Current version: **0.3.9**. The version is shown in About.

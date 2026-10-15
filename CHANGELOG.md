@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Separate the single-file report's captured workspace from its interface using
+  an inert, versioned JSON document and a shared JSON preview store. Save authored
+  edits/connections/history in the same document; retain the legacy state adapter.
+  Keep the baseline isolated from UI changes and reject unknown schema versions.
+- Retain complete recorded process/container sources in a shared pool, reuse
+  identical replay source strings and load large code fields on detail expansion
+  or Copy. Document the format for future viewers/exporters without sidecar files.
+
 - Assign new bug/proposal form submissions to the maintainer by default. Add a PR
   template and issue-to-release guidance with changelog links, notification setup
   and resolution comments that distinguish committed fixes from published releases.
