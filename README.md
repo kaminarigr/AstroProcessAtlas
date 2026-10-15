@@ -267,7 +267,9 @@ linked stars image**. Confirm the checkbox and choose **Use this stars connectio
 for replay**. This explicitly enables Generate Star Image on the source replay
 step, uses its side output and retains subsequent stars processing. It does not
 verify historical pixels. Save the edited HTML to keep this decision; Undo restores
-the previous workflow. Generic manual links remain annotations.
+the previous workflow. Generic manual links remain annotations. A stars image with an empty history is
+also eligible if you already removed its redundant StarXTerminator entry; explicit
+confirmation is still required.
 
 Generate a new report and open **Replay linked dependency chain**:
 

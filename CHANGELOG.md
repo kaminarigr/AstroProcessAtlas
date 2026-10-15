@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Accept confirmed manual stars-output links after the redundant stars origin
+  entry has already been removed, leaving an empty history. Reuse the producer
+  output without deleting another step or requiring a separate stars input.
+
 - Escape URL slash pairs in concatenated report-footer and About strings to
   prevent PixInsight preprocessing from truncating them as line comments.
 
