@@ -432,3 +432,7 @@ for(const script of [api.buildWorkspaceReplayScript({id:'Ha',steps:[commentedNat
  new vm.Script(script.replace(/^#.*$/gm,''));
 }
 console.log('Passed: standalone and chain replay metadata preserves serialized table comments and URLs without raw PJSR comment delimiters.');
+{
+const settings=new Map();const strict=value=>new Proxy(value,{get(target,key){if(!(key in target))throw Error('Read of undefined property '+String(key));return Reflect.get(target,key);}});const sessionContext={Settings:{read:key=>settings.get(key),write:(key,type,value)=>settings.set(key,value),remove:key=>settings.delete(key)},DataType_String:13};vm.runInNewContext(api.atlasReplaySession.toString(),sessionContext);const session=sessionContext.atlasReplaySession('strict');const pending={target:'Target',history:2,title:'CurvesTransformation'};session.write(strict({pending:strict(pending),choices:strict([strict({message:'paused'})]),mask:null}));const saved=session.read();assert.equal(saved.data.choices[0].message,'paused');assert.equal(session.decode(strict({choices:strict([strict({message:'ok'})])}),pending).choices[0].message,'ok');session.clear();assert.equal(settings.size,0);
+console.log('Passed: pause metadata encoder and decoder never probe absent ImageWindow properties on plain objects or arrays under strict PJSR-style property checks.');
+}

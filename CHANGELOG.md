@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Guard optional image-window and resume metadata properties before reading
+  them, avoiding strict PixInsight warnings while serializing ordinary objects.
+
 - Escape slash characters in exported replay metadata so serialized table
   comments and URLs cannot truncate strings during PixInsight preprocessing.
 
