@@ -32,7 +32,7 @@
 #include <pjsr/CryptographicHash.jsh>
 #include <pjsr/DataType.jsh>
 
-var ASTROPROCESS_ATLAS_VERSION = "0.4.0";
+var ASTROPROCESS_ATLAS_VERSION = "0.4.1";
 
 function createReportProgress() {
    var dialog = null, label = null, bar = null, value = 0;

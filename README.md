@@ -79,7 +79,15 @@ requires no upload or PDF library and does not replace the editable HTML.
 
 ## Updates
 
-Current version: **0.4.0**. The version is shown in About.
+Current version: **0.4.1**. The version is shown in About.
+
+Version 0.4.1 adds editable replay parameters with per-step restoration, including
+HistogramTransformation and CurvesTransformation. Step details gain responsive
+Before/After histograms, sampled clipping explanations and compact parameter
+columns. Acquisition filter/camera evidence improves original-input and replay
+channel suggestions, even when image names differ; clone names are excluded from
+automatic original suggestions. Captured previews remain separate from replay
+edits, and suggested inputs still need confirmation of their processing state.
 
 Version 0.4.0 adds print-ready PDF views for the full recording or a selected
 linked dependency chain, with readable parameters, Before/After previews,

@@ -18,7 +18,7 @@ target, not completed native compatibility testing. Extend the platform range in
 ## Release process
 
 1. Update `ASTROPROCESS_ATLAS_VERSION`, the README version and `CHANGELOG.md`, then commit.
-2. Create and push the matching tag, e.g. `v0.4.0`.
+2. Create and push the matching tag, e.g. `v0.4.1`.
 3. **Build release** runs regression and packaging checks, builds the ZIP and
    `updates.xri`, and uploads them with `SHA256SUMS.txt` to a draft GitHub release.
 4. Review the draft and click **Publish release** in GitHub. For a stable release,
@@ -32,7 +32,7 @@ on those issues with the released version and release link, then close resolved
 reports as **Completed**. Do not mark an unreleased fix as available. See
 [issue management and comment templates](ISSUE_MANAGEMENT.md).
 
-The current script version is `0.4.0`; use the matching tag `v0.4.0`.
+The current script version is `0.4.1`; use the matching tag `v0.4.1`.
 **Build release → Run workflow** also accepts an existing tag. Deployment can be retried
 with **Publish PixInsight repository → Run workflow** and the published release tag.
 Manual publication accepts prereleases too; choose the intended stable version.
@@ -69,7 +69,7 @@ and [GitHub Pages workflows](https://docs.github.com/en/pages/getting-started-wi
 ## Optional signing later
 
 Sign the exact release script with CodeSign, build with `--signature AstroProcessAtlas.xsgn`,
-then sign the resulting `updates.xri`. Use `python tools/validate_repository.py dist/release-0.4.0/signed
+then sign the resulting `updates.xri`. Use `python tools/validate_repository.py dist/release-0.4.1/signed
 --require-signed` to check structure and checksums. PixInsight must verify cryptographic
 authenticity. Replace all matching draft assets before publishing. Never upload private `.xssk` keys.
 
@@ -85,8 +85,8 @@ node test_chain_replay.cjs
 node test_histogram_advisor.cjs
 node tools/test_diagnose_replay_difference.cjs
 python -m unittest discover -s tools -p "test_release.py"
-python tools/build_release.py --version 0.4.0 --date 20261015 --output dist/release-0.4.0
-python tools/validate_repository.py dist/release-0.4.0
+python tools/build_release.py --version 0.4.1 --date 20261015 --output dist/release-0.4.1
+python tools/validate_repository.py dist/release-0.4.1
 ```
 
 Mock and package checks do not replace a real PixInsight installation test.

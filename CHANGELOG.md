@@ -2,111 +2,34 @@
 
 ## Unreleased
 
-- Suggest native replay starting inputs and palette channels from recorded
-  integration Origin/filter identities, independently of view names. Preserve
-  explicit chain selections and avoid ambiguous or clone candidates.
+## 0.4.1 — 2026-10-16
 
-- Exclude image names ending in `_clone*` from automatic original-input
-  suggestions, even with an integration Origin; keep manual selection available.
-
-- Precheck original input suggestions in the initial image dialog from recorded
-  ImageIntegration/FastIntegration Origins. Keep every tick editable; ignore
-  filenames, later integration steps and undone entries. Explain inherited history.
-
-- Record acquisition identities independently of image IDs: canonical filter sets,
-  camera, narrowband/broadband/mixed/unknown family and evidence provenance. Read
-  current FITS/XISF metadata and enabled ImageIntegration/FastIntegration paths;
-  preserve conflicts, partial evidence and name hints without treating them as
-  certain types. Infer composition only from usable recorded input relationships.
-- Add filter-aware Histogram training/prediction, a small same-camera preference,
-  explicit untyped legacy fallback and acquisition provenance in feedback. Detect
-  the actual new trial input and offer an optional user correction; never copy the
-  recorded target's type onto unrelated input pixels. Keep old libraries valid.
-
-
-- Align the parameter column with the top of step details and tighten local
-  spacing. Give sampled clipping its own diagnostic column beside histograms;
-  reflow diagnostics below information at medium widths and stack on mobile.
-- Explain sampled endpoint changes in English/Greek: possible shadow/highlight
-  clipping increases, decreases, unchanged fractions, no endpoints or unavailable
-  comparison. Preserve numeric percentages and avoid claiming proven pixel loss.
-
-
-- Show sampled black/white endpoint fractions below step histograms with per-channel
-  Before/After percentages and percentage-point deltas. Highlight increases and
-  decreases, omit incomparable deltas and distinguish endpoint estimates from
-  confirmed full-image clipping or edited replay predictions.
-- Arrange step context and parameters in responsive columns. Split long scalar
-  parameter lists into balanced tables and distribute curve/statistics channels
-  across available width while preserving replay-change columns.
-
-
-- Move step histograms into a permanently open right-hand column beside existing
-  step information and parameters. Stack the histogram below on narrow screens
-  and keep replay changes in the information column.
-
-
-- Capture 128-bin linear/log-intensity histograms from the existing raw sample
-  grid and show responsive Before/After RGB or grayscale plots in step details.
-  Use a shared frequency scale, explicit missing-data states and English/Greek
-  labels. Preserve bins in report data without adding them to training features.
-
-
-- Add 4 x 4 regional statistics from the existing sample grid and distribution-based
-  local features for the Histogram learner; keep global fallback for old captures.
-- Add a persistent shared training folder in PixInsight. Trials refresh their
-  model from the latest library and merge evaluations with atomic replacement and
-  a recovery backup. New reports carry a snapshot; open HTML reports can load the
-  folder explicitly, including in Firefox. Keep folder paths out of HTML exports.
-- Extend regression/browser/native PixInsight checks for regional matching,
-  shared-library persistence, rollback, corruption and old-data compatibility.
-
-
-- Normalize generated Histogram trial source to LF. Mixed CRLF/LF from serialized
-  functions and joined sections caused PixInsight preprocessing to report
-  return-outside-function errors. Verify the complete generated source with the
-  installed PixInsight runtime; retain flat, uniquely named inference helpers.
-
-- Preserve Histogram trial ownership as a permanent, storable view property and
-  reassert it after generated processing. Recover missing legacy markers only
-  after validating saved IDs, geometry and candidate histories; distinguish missing
-  images from mismatched ownership. Keep current-trial tamper checks strict.
-
-- Add a fully local, trainable Histogram advisor for recorded unmasked steps.
-  Compare recorded settings, a weighted-neighbour proposal and a user-adjusted
-  copy in PixInsight with neutral STF and real script finish/resume. Capture
-  explicit preferences, ties/rejections and raw outcomes in evaluation JSON.
-  Import historical reports and feedback, fit the local learner, save its dataset
-  in the edited HTML and optionally apply an accepted matrix to the workflow.
-  Preserve originals, refuse altered/masked/multi-process trial candidates and
-  fall back to recorded values outside learned data. No service or extra runtime
-  is required. Add regression and browser integration coverage.
-
-
-- Capture sampled raw image statistics before/after accessible history steps,
-  cache shared checkpoints and retain measurements even if preview export fails.
-  Show per-channel brightness/distribution/clipping estimates with compatible-state
-  deltas in collapsed details; save them in the one-file report data. Explicitly
-  mark missing pixels and distinguish image spread from noise. Replay is unchanged.
-
-- Avoid literal comment delimiters in the structured-parameter parser regexes,
-  preventing PixInsight preprocessing from truncating the script.
-
+- Edit recorded UnsharpMask, NoiseXTerminator and BlurXTerminator parameters in
+  the report, with validated values and per-step restoration of recorded settings.
 - Edit HistogramTransformation channel matrices and CurvesTransformation control
-  points/interpolation in HTML. Add/remove intermediate curve points, show a
-  control-point outline, validate numeric bounds and ordering, retain masks and
-  other recorded settings, and save/replay or reset exact original sources.
-  Show edited/added/removed points in Replay changes beside recorded tables.
-
-- Show edited replay values beside recorded values in a Replay changes table
-  column instead of inserting a separate panel beside the image. Remove the
-  column when all parameters are restored.
-
-- Edit supported recorded UnsharpMask, NoiseXTerminator and BlurXTerminator
-  parameters in the report. Validate values, retain exact recorded defaults per
-  step and restore them after save/reopen, mode changes or copying. Apply variants
-  to both replay exports and show changes in the tree, plan and print view.
-  Keep recorded preview pixels and history tables explicitly separate from edits.
+  points/interpolation. Preserve masks and other settings, and save changes in
+  the HTML for both individual and linked-chain replay.
+- Compare recorded values with edits in a Replay changes column. Keep captured
+  history and preview pixels separate from replay modifications.
+- Show Before/After sampled histograms beside step parameters, with linear and
+  log-intensity views for grayscale/RGB channels and explicit missing-data states.
+- Show sampled black/white endpoint fractions, percentage-point changes and plain
+  English/Greek explanations in a separate responsive column. These estimates do
+  not establish full-image clipping or predict the effect of edited parameters.
+- Capture global and regional raw image statistics at accessible history states,
+  reuse shared checkpoints and retain measurements when preview export fails.
+- Compact and align step details, distribute parameters across available width,
+  and stack information and diagnostics on smaller screens.
+- Record acquisition filter sets, camera and evidence provenance from available
+  FITS/XISF metadata and enabled ImageIntegration/FastIntegration Origin paths.
+  Keep unknown, conflicting and name-only evidence explicitly distinguished.
+- Precheck original inputs with a recorded integration Origin; exclude `_clone*`
+  names and undone/later integration steps. All suggestions remain editable.
+- Suggest replay starting inputs and palette channels from recorded Origin/filter
+  identities even when view names differ. Preserve explicit selections and avoid
+  ambiguous or clone matches. Confirm the input processing state before replay.
+- Fix PixInsight preprocessing of structured-parameter expressions and generated
+  source line endings, with regression and native syntax checks.
 
 ## 0.4.0 — 2026-10-15
 
