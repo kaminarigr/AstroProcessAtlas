@@ -77,6 +77,9 @@ aesthetic needs. Suggested can equal Recorded with sparse/no matching data. A
 distance gate falls back to Recorded outside the learned distribution, explicitly.
 Alpha settings are retained from Recorded, not predicted.
 
+The downloaded PixInsight trial contains only flat inference/evaluation helpers;
+training and historical-report import remain in the HTML interface.
+
 The before/after statistics and three outcomes are retained for future model
 evaluation; this first predictor learns selected parameter matrices from before-state
 features, not a full visual objective or a guaranteed after-state target. There is

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Replace the nested learning factory in downloaded Histogram trials with a flat,
+  inference-only runtime to avoid the PixInsight return-outside-function syntax
+  failure. Keep training/import logic in HTML and verify equivalent predictions,
+  evaluation data and strict-mode generated-script parsing.
+
 - Preserve Histogram trial ownership as a permanent, storable view property and
   reassert it after generated processing. Recover missing legacy markers only
   after validating saved IDs, geometry and candidate histories; distinguish missing
