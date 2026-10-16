@@ -158,7 +158,7 @@ renamable image ID.
 
 ## Local Histogram advisor
 
-For a recorded, unmasked HistogramTransformation, open **Customize parameters**
+For a recorded HistogramTransformation with a known mask state, open **Customize parameters**
 and **Compare three versions and learn locally**. Download a trial that creates
 Recorded / Suggested / User copies in PixInsight. The script finishes so you can
 adjust User normally; rerun the same file to compare without STF and save your
@@ -169,8 +169,9 @@ The first local learner uses historical statistics/H matrices and learns from
 your accepted results, with ties and rejection options. Its dataset stays inside
 the saved HTML, can be transferred via library JSON, and requires no service or
 additional installation. Sparse or dissimilar examples fall back to recorded
-values; suggestions are not guaranteed improvements. It supports one unmasked
-Histogram stage, not an automatic adaptive chain.
+values; suggestions are not guaranteed improvements. It supports one Histogram
+stage, including a user-selected mask and Color invert when recorded, rather than
+an automatic adaptive chain.
 
 Choose **Training folder...** in the initial PixInsight dialog to share learning
 between reports. Trials read the latest library and save evaluations there
@@ -1004,5 +1005,12 @@ accepted examples. Known-purpose trials use matching purpose/role/scope examples
 unknown or incompatible examples do not supply a proposal. Older unclassified
 libraries remain readable but need new contextual examples for these trials.
 The advisor offers an optional purpose correction before download. Recorded masked
-steps remain outside the current three-copy trial support; their context can still
-be described. Capture measurements and previews remain unchanged by inference.
+steps request a matching mask and Color invert in PixInsight. A private snapshot
+is shared by all three versions and retained while you adjust User. Keep that
+mask and its inversion unchanged; rerun the same script to compare. The snapshot
+is released after saving or discarding the session, while the original mask and
+trial image pixels remain available. Mask statistics and inversion accompany
+evaluations, and masked examples are kept separate from unmasked proposals.
+Historical masked steps are not automatically imported as training examples
+because the exact historical mask pixels may be unavailable. Capture measurements
+and previews remain unchanged by inference.

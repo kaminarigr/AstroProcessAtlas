@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Support recorded masked HistogramTransformation three-version trials: select a
+  mask and Color invert in PixInsight, share a private snapshot across candidates,
+  verify its state on resume and release it after saving/discarding. Keep original
+  masks untouched and preserve mask statistics/inversion in evaluations. Separate
+  masked examples from unmasked suggestions; retain historical masked-import limits.
+
 - Estimate HistogramTransformation purpose from recorded workflow relationships,
   adjacent applied steps, masks, channel-combination context and sampled states.
   Show role/scope, evidence and confidence; preserve ambiguity rather than treating
