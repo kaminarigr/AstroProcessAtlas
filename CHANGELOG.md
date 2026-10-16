@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Record acquisition identities independently of image IDs: canonical filter sets,
+  camera, narrowband/broadband/mixed/unknown family and evidence provenance. Read
+  current FITS/XISF metadata and enabled ImageIntegration/FastIntegration paths;
+  preserve conflicts, partial evidence and name hints without treating them as
+  certain types. Infer composition only from usable recorded input relationships.
+- Add filter-aware Histogram training/prediction, a small same-camera preference,
+  explicit untyped legacy fallback and acquisition provenance in feedback. Detect
+  the actual new trial input and offer an optional user correction; never copy the
+  recorded target's type onto unrelated input pixels. Keep old libraries valid.
+
+
 - Align the parameter column with the top of step details and tighten local
   spacing. Give sampled clipping its own diagnostic column beside histograms;
   reflow diagnostics below information at medium widths and stack on mobile.

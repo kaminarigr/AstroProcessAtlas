@@ -33,6 +33,47 @@ export/import works as before.
 To carry over earlier evaluations, import their JSON in the HTML; the next trial
 saved with a configured folder merges those examples into the shared library.
 
+## Filter, composition and camera context
+
+Acquisition identity is separate from the image ID. New report captures inspect
+available current FITS `FILTER`/`FILTNAME` and `INSTRUME`/`CAMERA` keywords and
+present XISF filter/camera properties. Origin ImageIntegration/FastIntegration
+input tables are parsed as data, never executed: enabled image paths are counted
+once, disabled entries and drizzle/normalization columns are excluded. Recognized
+`FILTER-...` paths and specific filename patterns can yield Ha, SII, OIII, R, G,
+B or L and camera hints such as ATR585M. Full path consensus is distinguished
+from actual metadata. Original exposure files are not opened automatically.
+
+The report displays the identity, camera, evidence source/confidence and input
+agreement counts. Recognized recorded combination links can form a filter set;
+possible edges, missing parents and masks do not establish a complete composition.
+Inherited single-filter metadata is not blindly applied to a recorded RGB
+combination. RGB without provenance remains unknown, not automatically broadband.
+Custom/unrecognized filter labels and contradictions stay uncertain. Name-only
+hints never constrain model matching.
+
+Historical training examples and new trial feedback retain this context. Known
+filter/composition matches are preferred; examples of another known type are
+excluded. If no typed matches exist, untyped legacy examples may be used with an
+explicit fallback reason. A matching known camera multiplies neighbour weight by
+1.25; a different camera does not block a match. Global/regional numeric features
+and the distribution-distance gate still apply. Filter sets describe inputs, not
+a guaranteed exact palette assignment or sensor-response model.
+
+In the trial input dialog, detection uses the **actual selected input's** metadata
+and history, not the recorded target name. The optional **Input filter / composition**
+selector can correct/confirm Ha/SII/OIII/R/G/B/L or RGB broadband/narrowband sets.
+Choosing a correction is stored as `source: user`, `confidence: confirmed`;
+leaving Automatic preserves detection provenance. Unknown is always available.
+The selection is saved with the pending trial and final evaluation.
+
+Old evaluations remain valid and are not relabelled from their image names.
+Importing older modern HTML can recover types from recorded Origin inputs where
+present; absent metadata and uncertain compositions cannot be reconstructed as
+facts. Typed historical IDs remain distinct from legacy untyped seeds, and user
+preferences are retained. New reports are needed to collect current FITS/XISF
+metadata that was not captured in old HTML.
+
 ## Regional measurements
 
 New captures reuse the existing uniform sample grid (up to 4096 raw pixels per

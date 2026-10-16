@@ -212,3 +212,25 @@ states. They are derived from the same validated fractions/deltas as the table,
 not from additional image analysis. The information/parameter columns start at
 the same top edge; diagnostic columns move below on medium screens and stack on
 small screens. No report schema changes are required for this presentation.
+
+## Acquisition identity (optional, version 1)
+
+Each captured history image may carry `acquisitionEvidence` (selected current
+filter/camera metadata with its FITS/XISF source) and normalized `acquisition`:
+`version`, `isColor`, `filters`, `cameras`, `family`, `source`, `confidence`,
+`frames`, `matchedFrames` and optional `cameraSource`. Canonical filters are Ha,
+SII, OIII, R, G, B and L; family is narrowband, broadband, mixed or unknown.
+Source distinguishes metadata, origin-paths, history-links, user, name-hint,
+conflict and unknown. Confidence distinguishes recorded, consensus, inferred,
+confirmed, hint, partial, conflict and unknown. No source exposure files are read.
+
+Library examples, model exemplars and evaluation JSON may contain the same optional
+identity. Legacy records without it remain valid. Only recorded/consensus/inferred/
+confirmed known filter sets constrain matching, and their grayscale/RGB type must
+agree with the numeric pixel statistics. Unknown, conflicting or partial identities
+and name hints cannot act as trusted filter labels. Camera is a small preference.
+
+Trial pending state stores identity of the actual selected input. User corrections
+are explicit evidence; recorded-target context is not silently reused. Available
+combination history is restricted to the relevant stage when later combinations
+would otherwise leak future input types into an earlier Histogram example.

@@ -141,6 +141,13 @@ before/after deltas and short explanations flag possible clipping increases. The
 pixels or predictions for modified replay values. Step information, parameters
 and channel sections use responsive columns to reduce vertical scrolling.
 
+Reports also show an **Acquisition** identity: filter/channel set, camera,
+acquisition family and evidence source. Available FITS/XISF metadata and consensus
+from enabled Origin integration inputs take precedence over view names. Possible
+links, incomplete inputs and conflicting metadata are kept uncertain; RGB alone
+never implies broadband. This identity follows the captured provenance, not a
+renamable image ID.
+
 ## Local Histogram advisor
 
 For a recorded, unmasked HistogramTransformation, open **Customize parameters**
@@ -163,6 +170,11 @@ automatically. New reports include its current snapshot; an open HTML can refres
 through **Load shared training folder**. Firefox requires explicit folder selection.
 New captures add 4 x 4 regional distribution features using the same sampled
 pixels; older training data remains compatible through global-feature fallback.
+
+The learner prefers the same known filter/composition and excludes other known
+filter types. Untyped old data remains a documented fallback; the same camera
+receives a small preference. Each trial detects its actual selected input, with
+an optional filter/composition correction recorded as user-confirmed data.
 
 See [the complete local-advisor workflow and limits](docs/HISTOGRAM_ADVISOR.md).
 
