@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Align the parameter column with the top of step details and tighten local
+  spacing. Give sampled clipping its own diagnostic column beside histograms;
+  reflow diagnostics below information at medium widths and stack on mobile.
+- Explain sampled endpoint changes in English/Greek: possible shadow/highlight
+  clipping increases, decreases, unchanged fractions, no endpoints or unavailable
+  comparison. Preserve numeric percentages and avoid claiming proven pixel loss.
+
+
 - Show sampled black/white endpoint fractions below step histograms with per-channel
   Before/After percentages and percentage-point deltas. Highlight increases and
   decreases, omit incomparable deltas and distinguish endpoint estimates from

@@ -192,7 +192,7 @@ exclude these arrays; its current features remain global/regional descriptors.
 
 ### Sampled endpoint/clipping display
 
-The histogram sidebar also uses existing channel `blackFraction` (samples <= 0)
+A separate clipping column beside the histogram uses existing channel `blackFraction` (samples <= 0)
 and `whiteFraction` (samples >= 1), independent of histogram-bin availability.
 Before/After are percentages. Deltas are percentage points and require matching
 raw image geometry, color/channel identities and finite sample counts without
@@ -205,3 +205,10 @@ The step information area uses responsive context/parameter columns. Generic
 parameter lists longer than eight entries split into balanced tables, preserving
 all entries, compact-value expanders and replay-change matching. Curve channels
 and expanded statistics channels can also share horizontal space.
+
+Clipping narratives describe per-channel increases (possible shadow/highlight
+clipping), decreases, unchanged endpoints, no sampled endpoints or insufficient
+states. They are derived from the same validated fractions/deltas as the table,
+not from additional image analysis. The information/parameter columns start at
+the same top edge; diagnostic columns move below on medium screens and stack on
+small screens. No report schema changes are required for this presentation.

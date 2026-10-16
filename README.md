@@ -135,9 +135,9 @@ Step details show **Image histogram — Before / After** in a permanently open
 right-hand column (below the details on narrow screens): sampled RGB or
 grayscale distributions without STF, with linear/logarithmic intensity axes and
 shared frequency scaling. Generate a new report to capture histogram bins; older
-HTML files cannot reconstruct them from summary statistics alone. Below the
-plots, sampled black/white endpoint percentages and their before/after deltas
-flag possible clipping increases. These are sample estimates, not proof of lost
+HTML files cannot reconstruct them from summary statistics alone. Beside the
+plots in a separate responsive column, sampled black/white endpoint percentages,
+before/after deltas and short explanations flag possible clipping increases. These are sample estimates, not proof of lost
 pixels or predictions for modified replay values. Step information, parameters
 and channel sections use responsive columns to reduce vertical scrolling.
 

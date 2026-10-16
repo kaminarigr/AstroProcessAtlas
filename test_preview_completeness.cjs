@@ -123,7 +123,7 @@ console.log('Passed: linear/log sampled histogram counts, out-of-range grouping,
  const measured=api.captureAtlasImageStatistics(image([0.1,0.2,0.5]));
  const sidebar=api.atlasSampleHistogramHTML({before:measured,after:measured},true);
  assert.match(sidebar,/<section class="image-histogram"><h4>/);assert.ok(!sidebar.includes('<details'));assert.match(api.atlasSampleHistogramHTML(null,true),/Historical histogram unavailable/);
- assert.ok(api.reportStyles().includes('.step-detail-layout{display:grid'));assert.ok(api.reportStyles().includes('@media(max-width:1250px)'));
+ assert.ok(api.reportStyles().includes('.step-detail-layout{display:grid'));assert.ok(api.reportStyles().includes('@media(max-width:1650px)'));
 }
 console.log('Passed: persistent histogram sidebar and responsive detail-grid styles.');
 
@@ -134,7 +134,18 @@ console.log('Passed: persistent histogram sidebar and responsive detail-grid sty
  const resized=JSON.parse(JSON.stringify(after));resized.width++;const mixed=api.atlasClippingHTML({before,after:resized});assert.match(mixed,/incompatible states/);assert.ok(!mixed.includes('clipping-increase'));
  const missing=api.atlasClippingHTML({before:null,after});assert.match(missing,/—/);assert.ok(!missing.includes('clipping-increase'));
  assert.match(api.atlasClippingHTML(null),/unavailable/);
- const legacy=JSON.parse(JSON.stringify(after));delete legacy.channels[0].histogram;assert.match(api.atlasSampleHistogramHTML({before:null,after:legacy},true),/50.000%/,'Endpoint fractions work without histogram bins');
+ const legacy=JSON.parse(JSON.stringify(after));delete legacy.channels[0].histogram;assert.match(api.atlasClippingHTML({before:null,after:legacy}),/50.000%/,'Endpoint fractions work without histogram bins');
  const assignments=Array.from({length:12},(_,i)=>['parameter'+i,String(i)]),tables=api.integrationParameterTable(assignments,true);assert.match(tables,/parameter-columns/);assert.equal((tables.match(/class="integration-parameters"/g)||[]).length,2);for(let i=0;i<12;i++)assert.equal((tables.match(new RegExp('>parameter'+i+'<','g'))||[]).length,1);
 }
 console.log('Passed: clipping fractions/deltas, increased/decreased highlighting, missing/geometry safeguards, old bins and balanced parameter columns.');
+
+{
+ const plain=api.captureAtlasImageStatistics(image([0.2,0.3,0.4,0.5])),limited=api.captureAtlasImageStatistics(image([0,0,0.5,1]));
+ const increased=api.atlasClippingHTML({before:plain,after:limited});assert.match(increased,/More samples at black; possible shadow clipping/);assert.match(increased,/More samples at white; possible highlight clipping/);
+ const decreased=api.atlasClippingHTML({before:limited,after:plain});assert.match(decreased,/Fewer samples at black/);assert.match(decreased,/Fewer samples at white/);
+ assert.match(api.atlasClippingHTML({before:plain,after:plain}),/No sampled pixels at either limit/);
+ assert.match(api.atlasClippingHTML({before:limited,after:limited}),/endpoint fractions unchanged/);
+ assert.match(api.atlasClippingHTML({before:null,after:limited}),/Change cannot be determined/);
+ assert.ok(!api.atlasSampleHistogramHTML({before:plain,after:limited},true).includes('sample-clipping'),'Clipping belongs in its own column');
+}
+console.log('Passed: clipping narratives for increased/decreased/unchanged/unknown samples and separate histogram component.');
