@@ -93,8 +93,16 @@ function captureAtlasImageStatistics(image) {
    }catch(error){result.channels=[];result.reason=String(error.message);}
    return result;
 }
+function atlasClippingHTML(statistics) {
+   if(!statistics)return '<section class="sample-clipping"><h4>Sampled clipping</h4><p>Clipping measurements unavailable.</p></section>';
+   var before=statistics.before,after=statistics.after,bValid=before&&before.available&&before.rawPixels===true&&Array.isArray(before.channels),aValid=after&&after.available&&after.rawPixels===true&&Array.isArray(after.channels),channels=aValid?after.channels:bValid?before.channels:[],rows='',comparable=bValid&&aValid&&typeof before.width==='number'&&before.width>0&&typeof before.height==='number'&&before.height>0&&before.width===after.width&&before.height===after.height&&before.isColor===after.isColor&&before.channels.length===after.channels.length;
+   function value(state,valid,index,key){var channel=valid&&state.channels[index];return channel&&typeof channel[key]==='number'&&isFinite(channel[key])&&channel[key]>=0&&channel[key]<=1?channel[key]:null;}
+   function percent(value){return value===null?'—':(100*value).toFixed(3)+'%';}
+   for(var c=0;c<channels.length;++c)for(var k=0;k<2;++k){var key=k?'whiteFraction':'blackFraction',b=value(before,bValid,c,key),a=value(after,aValid,c,key),match=comparable&&before.channels[c].channel===after.channels[c].channel&&typeof before.channels[c].samples==='number'&&before.channels[c].samples>0&&before.channels[c].samples===after.channels[c].samples&&(!('invalidSamples' in before.channels[c])||before.channels[c].invalidSamples===0)&&(!('invalidSamples' in after.channels[c])||after.channels[c].invalidSamples===0),delta=match&&b!==null&&a!==null?a-b:null,style=delta===null||Math.abs(delta)<1e-12?'':delta>0?' class="clipping-increase"':' class="clipping-decrease"',label=['R','G','B','K'].indexOf(channels[c].channel)>=0?channels[c].channel:'—';rows+='<tr><td>'+label+'</td><td>'+(k?'White ≥ 1':'Black ≤ 0')+'</td><td>'+percent(b)+'</td><td>'+percent(a)+'</td><td'+style+'>'+(delta===null?'—':(delta>0?'+':'')+(100*delta).toFixed(3))+'</td></tr>';}
+   return '<section class="sample-clipping"><h4>Sampled clipping</h4><p>Samples at the black/white limits, without STF. Delta is in percentage points. An increase is an endpoint warning, not proof of lost pixels. Small clipped areas may be missed by sampling.</p>'+(rows?'<div class="table-scroll"><table><thead><tr><th>Channel</th><th>Limit</th><th>Before</th><th>After</th><th>Δ pp</th></tr></thead><tbody>'+rows+'</tbody></table></div>':'<p>Clipping measurements unavailable.</p>')+(!comparable?'<p>Clipping delta unavailable: missing or incompatible states.</p>':'')+'</section>';
+}
 function atlasSampleHistogramHTML(statistics,persistent) {
-   function wrap(content){return persistent?'<section class="image-histogram"><h4>Image histogram — Before / After</h4>'+content+'</section>':'<details class="image-histogram"><summary>Image histogram — Before / After</summary>'+content+'</details>';}
+   function wrap(content){content+=atlasClippingHTML(statistics);return persistent?'<section class="image-histogram"><h4>Image histogram — Before / After</h4>'+content+'</section>':'<details class="image-histogram"><summary>Image histogram — Before / After</summary>'+content+'</details>';}
    if(!statistics)return persistent?wrap('<p>Historical histogram unavailable.</p>'):'';var sides=[statistics.before,statistics.after],usable=[];
    function valid(channel,logarithmic){if(!channel||!channel.histogram||channel.histogram.version!==1||!channel.samples)return false;var histogram=channel.histogram,bins=logarithmic?histogram.logBins:histogram.bins;if(!Array.isArray(bins)||bins.length!==128||(logarithmic&&histogram.logStrength!==10000))return false;var total=0;for(var i=0;i<128;++i){if(typeof bins[i]!=='number'||!isFinite(bins[i])||bins[i]<0||Math.floor(bins[i])!==bins[i])return false;total+=bins[i];}return total===channel.samples;}
    for(var side=0;side<2;++side)usable.push(!!(sides[side]&&sides[side].available&&Array.isArray(sides[side].channels)&&sides[side].channels.length&&sides[side].channels.every(function(channel){return valid(channel,false);})));if(!usable[0]&&!usable[1])return wrap('<p>Histogram bins unavailable. Generate a new report from PixInsight to capture them.</p>');
@@ -113,7 +121,7 @@ function atlasImageStatisticsHTML(statistics) {
    if(!validBefore&&!validAfter)return '<details><summary>Recorded image statistics</summary><p>Historical pixel statistics unavailable for this step.</p></details>';
    var compatible=validBefore&&validAfter&&before.width===after.width&&before.height===after.height&&before.channels.length===after.channels.length,rows=[],channels=validAfter?after.channels:before.channels,metrics=[['median','Median'],['mean','Mean'],['p01','P01'],['p10','P10'],['p90','P90'],['p99','P99'],['minimum','Sample minimum'],['maximum','Sample maximum'],['stddev','Standard deviation'],['mad','Median absolute deviation'],['blackFraction','Samples at or below 0'],['whiteFraction','Samples at or above 1']];
    for(var c=0;c<channels.length;++c)for(var m=0;m<metrics.length;++m){var key=metrics[m][0],b=validBefore&&before.channels[c]&&before.channels[c].channel===channels[c].channel?before.channels[c][key]:null,a=validAfter&&after.channels[c]&&after.channels[c].channel===channels[c].channel?after.channels[c][key]:null,percentage=key==='blackFraction'||key==='whiteFraction',format=function(value){return value===null?'—':percentage?(100*value).toFixed(3)+'%':Number(value).toPrecision(6);};rows.push([channels[c].channel,metrics[m][1],format(b),format(a),compatible&&b!==null&&a!==null?format(a-b):'—']);}
-   return '<details class="image-statistics"><summary>Recorded image statistics</summary><p>'+((validAfter&&after.channels[0].regions)||(validBefore&&before.channels[0].regions)?'Includes 4 x 4 regional measurements from the same sampled pixels. ':'')+'Estimates from up to 4096 uniformly sampled raw pixels per channel, before any preview stretch. Alpha is excluded. MAD measures image spread, not a noise estimate. These are recorded statistics, not predictions for edited replay steps.</p><p>Before: '+(validBefore?before.width+' × '+before.height:'unavailable')+' · After: '+(validAfter?after.width+' × '+after.height:'unavailable')+(compatible?'':' · Delta unavailable: missing or incompatible image states.')+'</p>'+parameterTable(['Channel','Statistic','Before','After','Delta'],rows)+'</details>';
+   return '<details class="image-statistics"><summary>Recorded image statistics</summary><p>'+((validAfter&&after.channels[0].regions)||(validBefore&&before.channels[0].regions)?'Includes 4 x 4 regional measurements from the same sampled pixels. ':'')+'Estimates from up to 4096 uniformly sampled raw pixels per channel, before any preview stretch. Alpha is excluded. MAD measures image spread, not a noise estimate. These are recorded statistics, not predictions for edited replay steps.</p><p>Before: '+(validBefore?before.width+' × '+before.height:'unavailable')+' · After: '+(validAfter?after.width+' × '+after.height:'unavailable')+(compatible?'':' · Delta unavailable: missing or incompatible image states.')+'</p>'+'<div class="statistics-channel-columns">'+channels.map(function(channel,index){return '<div><h5>'+escapeHTML(channel.channel)+'</h5>'+parameterTable(['Statistic','Before','After','Delta'],rows.slice(index*metrics.length,(index+1)*metrics.length).map(function(row){return row.slice(1);}))+'</div>';}).join('')+'</div></details>';
 }
 function previewAppearance(image) {
    var info = {state:'unknown', auto:false, black:0, midtones:0.5};
@@ -418,7 +426,8 @@ function compactParameterValue(value) {
       escapeHTML(label) + '</summary><pre class="parameter-value">' + escapeHTML(rest) + '</pre></details>';
 }
 
-function integrationParameterTable(assignments) {
+function integrationParameterTable(assignments,columns) {
+   if(columns&&assignments.length>8){var middle=Math.ceil(assignments.length/2);return '<div class="parameter-columns">'+integrationParameterTable(assignments.slice(0,middle))+integrationParameterTable(assignments.slice(middle))+'</div>';}
    var html = '<div class="table-scroll"><table class="integration-parameters"><thead><tr><th>Parameter</th><th>Value</th></tr></thead><tbody>';
    for (var i = 0; i < assignments.length; ++i)
       html += '<tr><td data-no-i18n>' + escapeHTML(assignments[i][0]) + '</td><td>' + compactParameterValue(assignments[i][1]) + '</td></tr>';
@@ -565,12 +574,12 @@ function readableParameters(proc, source) {
                ' — ' + type + (identity ? ' — unchanged' : ' — ' + points.length + ' points') + '</summary>';
             html += '<div class="curve-layout" data-matrix-parameter="'+key+'">' + curveGraph(points, type) + '<div>'+parameterTable(["Input (X)", "Output (Y)"], points, 1)+'</div></div></details>';
          }
-         return html;
+         return '<div class="curve-channel-columns">'+html+'</div>';
       }
       // Parse display-only assignments, never evaluate generated process code.
       var assignments = [], match, re = /\b\w+\.([A-Za-z_$][\w$]*)\s*=\s*([\s\S]*?);/g;
       while ((match = re.exec(source)) !== null) assignments.push([match[1], match[2].trim()]);
-      return assignments.length ? integrationParameterTable(assignments) : '<p>Parameters are shown in the full code below.</p>';
+      return assignments.length ? integrationParameterTable(assignments,true) : '<p>Parameters are shown in the full code below.</p>';
    } catch (e) {
       return html + '<p>Could not format parameters: ' + escapeHTML(e.message) + '</p>';
    }
@@ -634,6 +643,7 @@ function reportStyles() {
    html += '.report-footer{margin-top:40px;padding:24px 12px;border-top:1px solid #313244;text-align:center;color:#a6adc8;font-size:13px}.report-footer .project-links{display:flex;justify-content:center;gap:12px 20px;flex-wrap:wrap;margin:16px 0}.report-footer .project-links a{padding:8px 12px;border:1px solid #45475a;border-radius:6px}.report-footer a{color:#89b4fa;text-decoration:none}.report-footer a:hover{text-decoration:underline}@media(max-width:1000px){.step-card{flex-direction:column}.thumb-box{width:auto;min-width:0;border-right:0;border-bottom:1px solid #313244}}';
    html += ".details-box { padding: 14px 20px; flex-grow: 1; display: flex; flex-direction: column; justify-content: center; }\n";
    html += '.step-detail-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,340px);gap:20px;align-items:start}.step-information{min-width:0;display:flex;flex-direction:column}.step-histogram{min-width:0;border-left:1px solid #45475a;padding-left:16px}.step-histogram .image-histogram{margin:0}.step-histogram h4{margin:0 0 10px;color:#89b4fa}.step-histogram p{font-size:11px;line-height:1.5;margin:8px 0}.step-histogram label{font-size:12px;display:block}.step-histogram select{width:100%;box-sizing:border-box;margin-top:5px}@media(max-width:1250px){.step-detail-layout{grid-template-columns:minmax(0,1fr)}.step-histogram{border-left:0;border-top:1px solid #45475a;padding-left:0;padding-top:16px}}';
+   html += '.step-info-sections{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:16px 24px;align-items:start}.step-info-context,.step-info-parameters{min-width:0}.parameter-columns,.curve-channel-columns,.statistics-channel-columns{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:12px 18px;align-items:start}.parameter-columns{grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr))}.sample-clipping{border-top:1px solid #45475a;margin-top:14px;padding-top:12px}.sample-clipping table{width:100%;font-size:11px}.sample-clipping th,.sample-clipping td{padding:4px 3px;white-space:nowrap}.clipping-increase{color:#fab387;font-weight:bold}.clipping-decrease{color:#a6e3a1}.step-histogram .sample-clipping h4{font-size:13px}.statistics-channel-columns h5{margin:12px 0 4px;color:#89b4fa}';
    html += ".step-num { font-size: 13px; font-weight: bold; color: #f5e0dc; text-transform: uppercase; letter-spacing: 1px; }\n";
    html += ".step-title { font-size: 17px; font-weight: bold; color: #89b4fa; margin: 4px 0 8px 0; }\n";
    html += ".params-text { font-size: 12px; color: #bac2de; background: #11111b; padding: 8px 12px; border-radius: 6px; font-family: 'Consolas', monospace; overflow-wrap: anywhere; white-space: pre-wrap; margin-top: 6px; }\n";
@@ -1402,6 +1412,7 @@ function imageReportHTML(record, emit, structuredHistory) {
          'Position ' + step.liveIndex + ' in history') + (step.redo ? ' [Redo / not applied at the current position]' : '') +
          (step.time ? ' · ' + escapeHTML(step.time) : ' · Execution time: not recorded') + '</p>';
       html += completenessHTML(step);
+      html += '<div class="step-info-sections"><div class="step-info-context">';
       html += atlasImageStatisticsHTML('statistics' in step?step.statistics:null);
       html += historyMaskHTML(step.mask, step.maskThumb);
       if (step.possibleInputs && step.possibleInputs.length) {
@@ -1413,8 +1424,9 @@ function imageReportHTML(record, emit, structuredHistory) {
             provenanceLabel(step.references[j].kind === 'mask' ? 'recorded' : 'parameter') + ('resolvedImage' in step.references[j]?' — recorded alias of '+step.references[j].resolvedImage:'') + ' — unknown historical version']);
          html += parameterTable(['Image reference', 'Role', 'Parameter', 'Connection origin'], rows);
       }
+      html += '</div><div class="step-info-parameters">';
       html += replayStepHTML(record, step) + readableParameters(step.proc, step.source) + pixelMathSection(step.proc, step.source, record.isColor) +
-         '<details><summary>Full process code / all parameters</summary>' + copyBlock('PixInsight JavaScript', step.source,structuredHistory?structuredHistory.steps[i].source:null) + '</details></div><aside class="step-histogram">'+atlasSampleHistogramHTML('statistics' in step?step.statistics:null,true)+'</aside></div></div></div>';
+         '<details><summary>Full process code / all parameters</summary>' + copyBlock('PixInsight JavaScript', step.source,structuredHistory?structuredHistory.steps[i].source:null) + '</details></div></div></div><aside class="step-histogram">'+atlasSampleHistogramHTML('statistics' in step?step.statistics:null,true)+'</aside></div></div></div>';
       if (groupEnd) html += '</details></div>';
       if (emit) { emit(html); html = ''; }
    }
@@ -2825,7 +2837,7 @@ function updateAtlasParameterColumns(card,changes,document){
    var old=card.querySelectorAll('[data-replay-parameter]');for(var i=0;i<old.length;++i)old[i].parentNode.removeChild(old[i]);
    var added=card.querySelectorAll('[data-replay-added-row]');for(var i=0;i<added.length;++i)added[i].parentNode.removeChild(added[i]);
    var matrices=card.querySelectorAll('[data-matrix-parameter]');for(var m=0;m<matrices.length;++m){var key=matrices[m].getAttribute('data-matrix-parameter'),change=null;for(var c=0;c<changes.length;++c)if(changes[c].name===key)change=changes[c];if(!change)continue;var tables=matrices[m].querySelectorAll('table'),offset=0;for(var t=0;t<tables.length;++t){var header=tables[t].querySelector('thead > tr'),body=tables[t].querySelector('tbody');if(!header||!body)continue;var rows=Array.prototype.slice.call(body.children),column=document.createElement('th');column.textContent='Replay changes';column.setAttribute('data-replay-parameter','');column.setAttribute('data-no-i18n','');header.appendChild(column);for(var r=0;r<rows.length;++r){var cell=document.createElement('td'),index=offset++;cell.setAttribute('data-replay-parameter','');cell.setAttribute('data-no-i18n','');cell.style.color='#fab387';cell.textContent=JSON.stringify(change.original[index])===JSON.stringify(change.value[index])?'':index<change.value.length?JSON.stringify(change.value[index]):'Removed';rows[r].appendChild(cell);}if(t===tables.length-1)for(var r=offset;r<change.value.length;++r){var row=document.createElement('tr');row.setAttribute('data-replay-added-row','');for(var col=0;col<header.children.length;++col){var cell=document.createElement('td');cell.textContent=col===header.children.length-1?JSON.stringify(change.value[r]):'—';cell.setAttribute('data-no-i18n','');row.appendChild(cell);}body.appendChild(row);}}}
-   var methods=changes.filter(function(change){return /^[RGBAKLabcHS]t$/.test(change.name);});if(methods.length){var table=document.createElement('table');table.setAttribute('data-replay-parameter','');table.setAttribute('data-no-i18n','');var header=document.createElement('tr');for(var h=0;h<3;++h){var th=document.createElement('th');th.textContent=['Parameter','Value','Replay changes'][h];header.appendChild(th);}table.appendChild(header);for(var r=0;r<methods.length;++r){var row=document.createElement('tr');for(var c=0;c<3;++c){var cell=document.createElement('td');cell.textContent=String(c===0?methods[r].name:c===1?methods[r].original:methods[r].value);row.appendChild(cell);}table.appendChild(row);}var box=card.querySelector('.step-information')||card.querySelector('.details-box')||card;box.appendChild(table);}
+   var methods=changes.filter(function(change){return /^[RGBAKLabcHS]t$/.test(change.name);});if(methods.length){var table=document.createElement('table');table.setAttribute('data-replay-parameter','');table.setAttribute('data-no-i18n','');var header=document.createElement('tr');for(var h=0;h<3;++h){var th=document.createElement('th');th.textContent=['Parameter','Value','Replay changes'][h];header.appendChild(th);}table.appendChild(header);for(var r=0;r<methods.length;++r){var row=document.createElement('tr');for(var c=0;c<3;++c){var cell=document.createElement('td');cell.textContent=String(c===0?methods[r].name:c===1?methods[r].original:methods[r].value);row.appendChild(cell);}table.appendChild(row);}var box=card.querySelector('.step-info-parameters')||card.querySelector('.step-information')||card.querySelector('.details-box')||card;box.appendChild(table);}
    if(!changes.length)return;var tables=card.querySelectorAll('table.integration-parameters');
    for(var t=0;t<tables.length;++t){var rows=tables[t].querySelectorAll('tbody > tr'),header=tables[t].querySelector('thead > tr');if(!header)continue;var column=document.createElement('th');column.textContent='Replay changes';column.setAttribute('data-no-i18n','');column.setAttribute('data-replay-parameter','');header.appendChild(column);
       for(var r=0;r<rows.length;++r){var name=rows[r].cells[0].textContent.trim(),cell=document.createElement('td');cell.setAttribute('data-replay-parameter','');cell.setAttribute('data-no-i18n','');for(var c=0;c<changes.length;++c)if(changes[c].name===name){cell.textContent=String(changes[c].value);cell.style.color='#fab387';cell.style.fontWeight='bold';break;}rows[r].appendChild(cell);}
@@ -3508,6 +3520,14 @@ function generateHistoryReport() {
 }
 
 var REPORT_TRANSLATIONS = [
+   ["Sampled clipping", "Clipping δειγμάτων"],
+   ["Clipping measurements unavailable.", "Δεν υπάρχουν μετρήσεις clipping."],
+   ["Limit", "Όριο"],
+   ["Black ≤ 0", "Μαύρο ≤ 0"],
+   ["White ≥ 1", "Λευκό ≥ 1"],
+   ["Δ pp", "Δ π.μ."],
+   ["Clipping delta unavailable: missing or incompatible states.", "Δεν υπάρχει μεταβολή clipping: ελλιπείς ή ασύμβατες καταστάσεις."],
+   ["Samples at the black/white limits, without STF. Delta is in percentage points. An increase is an endpoint warning, not proof of lost pixels. Small clipped areas may be missed by sampling.", "Δείγματα στα όρια μαύρου/λευκού, χωρίς STF. Η μεταβολή είναι σε ποσοστιαίες μονάδες. Η αύξηση είναι ένδειξη ορίων, όχι απόδειξη απώλειας pixels. Μικρές περιοχές clipping μπορεί να μη μετρηθούν από τη δειγματοληψία."],
    ["Image histogram — Before / After", "Ιστόγραμμα εικόνας — Πριν / Μετά"],
    ["Intensity axis", "Άξονας φωτεινότητας"],
    ["Linear", "Γραμμικός"],

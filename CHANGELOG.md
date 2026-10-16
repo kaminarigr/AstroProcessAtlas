@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Show sampled black/white endpoint fractions below step histograms with per-channel
+  Before/After percentages and percentage-point deltas. Highlight increases and
+  decreases, omit incomparable deltas and distinguish endpoint estimates from
+  confirmed full-image clipping or edited replay predictions.
+- Arrange step context and parameters in responsive columns. Split long scalar
+  parameter lists into balanced tables and distribute curve/statistics channels
+  across available width while preserving replay-change columns.
+
+
 - Move step histograms into a permanently open right-hand column beside existing
   step information and parameters. Stack the histogram below on narrow screens
   and keep replay changes in the information column.

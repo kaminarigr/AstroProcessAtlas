@@ -189,3 +189,19 @@ with a shared vertical scale across Before/After and channels. Old reports witho
 bins show an unavailable message rather than inferred distributions. Regenerating
 the report is required. The Histogram learner's sanitized training statistics
 exclude these arrays; its current features remain global/regional descriptors.
+
+### Sampled endpoint/clipping display
+
+The histogram sidebar also uses existing channel `blackFraction` (samples <= 0)
+and `whiteFraction` (samples >= 1), independent of histogram-bin availability.
+Before/After are percentages. Deltas are percentage points and require matching
+raw image geometry, color/channel identities and finite sample counts without
+invalid samples. Missing/incompatible values render as unavailable, never zero.
+Increased endpoint fractions are warnings; aggregate samples cannot prove which
+pixels clipped or detect every small clipped area. This describes recorded
+states, not the outcome of modified replay parameters.
+
+The step information area uses responsive context/parameter columns. Generic
+parameter lists longer than eight entries split into balanced tables, preserving
+all entries, compact-value expanders and replay-change matching. Curve channels
+and expanded statistics channels can also share horizontal space.

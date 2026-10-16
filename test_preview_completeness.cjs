@@ -126,3 +126,15 @@ console.log('Passed: linear/log sampled histogram counts, out-of-range grouping,
  assert.ok(api.reportStyles().includes('.step-detail-layout{display:grid'));assert.ok(api.reportStyles().includes('@media(max-width:1250px)'));
 }
 console.log('Passed: persistent histogram sidebar and responsive detail-grid styles.');
+
+{
+ const before=api.captureAtlasImageStatistics(image([0,0.2,0.4,0.6])),after=api.captureAtlasImageStatistics(image([0,0,0.4,1]));
+ const clipping=api.atlasClippingHTML({before,after});assert.match(clipping,/Black ≤ 0/);assert.match(clipping,/White ≥ 1/);assert.match(clipping,/25.000%/);assert.match(clipping,/50.000%/);assert.match(clipping,/class="clipping-increase">\+25.000/);
+ assert.match(api.atlasClippingHTML({before:after,after:before}),/class="clipping-decrease">-25.000/);
+ const resized=JSON.parse(JSON.stringify(after));resized.width++;const mixed=api.atlasClippingHTML({before,after:resized});assert.match(mixed,/incompatible states/);assert.ok(!mixed.includes('clipping-increase'));
+ const missing=api.atlasClippingHTML({before:null,after});assert.match(missing,/—/);assert.ok(!missing.includes('clipping-increase'));
+ assert.match(api.atlasClippingHTML(null),/unavailable/);
+ const legacy=JSON.parse(JSON.stringify(after));delete legacy.channels[0].histogram;assert.match(api.atlasSampleHistogramHTML({before:null,after:legacy},true),/50.000%/,'Endpoint fractions work without histogram bins');
+ const assignments=Array.from({length:12},(_,i)=>['parameter'+i,String(i)]),tables=api.integrationParameterTable(assignments,true);assert.match(tables,/parameter-columns/);assert.equal((tables.match(/class="integration-parameters"/g)||[]).length,2);for(let i=0;i<12;i++)assert.equal((tables.match(new RegExp('>parameter'+i+'<','g'))||[]).length,1);
+}
+console.log('Passed: clipping fractions/deltas, increased/decreased highlighting, missing/geometry safeguards, old bins and balanced parameter columns.');
