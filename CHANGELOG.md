@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Edit supported recorded UnsharpMask, NoiseXTerminator and BlurXTerminator
+  parameters in the report. Validate values, retain exact recorded defaults per
+  step and restore them after save/reopen, mode changes or copying. Apply variants
+  to both replay exports and show changes in the tree, plan and print view.
+  Keep recorded preview pixels and history tables explicitly separate from edits.
+
 ## 0.4.0 — 2026-10-15
 
 - Fix a PixInsight strict-mode warning in the print preview image-loading callback.

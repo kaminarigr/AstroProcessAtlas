@@ -131,6 +131,22 @@ Connected images appear first and disconnected images last, preserving the exist
 
 Replay code requires the correct preceding image state, references and mask settings. It does not recover missing historical image versions.
 
+## Customize replay parameters
+
+In **Replay linked dependency chain**, click a processing step in **Review the
+plan and download**, then **Customize parameters**. The optional workflow editor
+also provides a **Parameters** button. Supported recorded fields initially cover
+UnsharpMask (sigma, amount, luminance), NoiseXTerminator (denoise, detail) and
+BlurXTerminator (available sharpening, halo, PSF and correction settings).
+Only supported fields actually present in the recording are offered.
+
+Changes apply to both replay exports and appear in the plan, tree and PDF.
+Original history tables and image previews still describe the captured processing;
+they are not recalculated. **Restore recorded values** resets the selected step
+exactly to its captured parameter source, including after saving and reopening
+an edited HTML. Resetting one step leaves other steps unchanged. Save the edited
+HTML to keep parameter variants, connections and edit history together.
+
 ## Workflow replay
 
 New reports include **Export workflow for replay**. Select one image
