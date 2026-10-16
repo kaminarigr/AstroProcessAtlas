@@ -291,7 +291,10 @@ const originSuggestions=[
  image('Fast',[makeProcess('FastIntegration')]),
  image('Opened_Ha'),
  image('Later',[ht,makeProcess('ImageIntegration')]),
- image('Undone',[makeProcess('FastIntegration')],[],0)
+ image('Undone',[makeProcess('FastIntegration')],[],0),
+ image('Ha_clone',[],[makeProcess('ImageIntegration')]),
+ image('Ha_clone1',[],[makeProcess('ImageIntegration')]),
+ image('Ha_CLONE_mask',[],[makeProcess('FastIntegration')])
 ];
 assert.deepEqual(Array.from(helper.chooseWorkspaceWindows(originSuggestions).originalInputIds),['Integrated','Fast']);
 assert.equal(helper.hasRecordedIntegrationOrigin({mainView:{get initialProcessing(){throw Error('Unavailable');},get processing(){throw Error('Unavailable');}}}),false);
@@ -300,10 +303,11 @@ helper.TreeBox=function(){savedTreeBox.call(this);suggestionTrees.push(this);};
 helper.Dialog=function(){baseDialog.call(this);this.execute=()=>{
  suggestionTrees[0].child(0).checked=false; // User rejects an inherited Origin.
  suggestionTrees[0].child(2).checked=true; // User explicitly selects a file-only root.
+ suggestionTrees[0].child(5).checked=true; // Clone suggestions remain manually selectable.
  suggestionTrees[1].child(1).checked=false; // Excluded report images cannot be originals.
  return true;
 };};
-assert.deepEqual(Array.from(helper.chooseWorkspaceWindows(originSuggestions).originalInputIds),['Opened_Ha']);
+assert.deepEqual(Array.from(helper.chooseWorkspaceWindows(originSuggestions).originalInputIds),['Opened_Ha','Ha_clone']);
 helper.Dialog=baseDialog;helper.TreeBox=savedTreeBox;
 console.log('Passed: integration Origin suggestions, editable ticks, applied-only history and report selection intersection.');
 

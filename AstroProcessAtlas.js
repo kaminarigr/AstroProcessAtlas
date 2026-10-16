@@ -3425,14 +3425,14 @@ function chooseWorkspaceWindows(windows) {
    label.text = "Select the images for your report. The list includes all open PixInsight images, including hidden/iconized images and images in other virtual workspaces.";
    label.wordWrapping = true;
    var sourceLabel=new Label(dialog);
-   sourceLabel.text='Original input images: recorded ImageIntegration/FastIntegration origins are suggested below. Review the ticks and keep only your actual starting images; inherited history can also appear on clones.';
+   sourceLabel.text='Original input images: recorded ImageIntegration/FastIntegration origins are suggested below. Names containing _clone (with any suffix) are not preselected. Review the ticks and keep only your actual starting images.';
    sourceLabel.wordWrapping=true;
    var sources=new TreeBox(dialog);sources.numberOfColumns=1;sources.headerVisible=false;sources.setMinSize(520,120);
    for (var s = 0; s < windows.length; ++s) {
       var sourceNode = new TreeBoxNode(sources);
       sourceNode.setText(0, windows[s].mainView.fullId || windows[s].mainView.id);
       sourceNode.checkable = true;
-      sourceNode.checked = hasRecordedIntegrationOrigin(windows[s]);
+      sourceNode.checked = !/_clone.*$/i.test(windows[s].mainView.fullId || windows[s].mainView.id) && hasRecordedIntegrationOrigin(windows[s]);
    }
    var tree = new TreeBox(dialog);
    tree.numberOfColumns = 1;

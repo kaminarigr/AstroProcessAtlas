@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Exclude image names ending in `_clone*` from automatic original-input
+  suggestions, even with an integration Origin; keep manual selection available.
+
 - Precheck original input suggestions in the initial image dialog from recorded
   ImageIntegration/FastIntegration Origins. Keep every tick editable; ignore
   filenames, later integration steps and undone entries. Explain inherited history.
