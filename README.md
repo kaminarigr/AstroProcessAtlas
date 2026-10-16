@@ -131,6 +131,27 @@ Connected images appear first and disconnected images last, preserving the exist
 
 Replay code requires the correct preceding image state, references and mask settings. It does not recover missing historical image versions.
 
+## Recorded image state
+
+Each step includes a collapsed **Recorded image statistics** section when its
+historical pixels are accessible. Before/After measurements include per-channel
+mean, median, P01/P10/P90/P99, sampled minimum/maximum, standard deviation, MAD and
+the sampled fractions at or below 0 / at or above 1. Compatible image states also
+show an absolute difference; dimension or channel changes suppress that difference.
+
+These are estimates from a deterministic grid of up to 64 × 64 raw pixels per
+nominal channel, excluding alpha. They use the original pixel values before STF
+or preview stretch, retain values outside [0,1], and are independent of report
+preview size. Sampling can miss small bright features or clipped regions; MAD
+measures image spread and is not a noise estimate. Measurements share cached
+history checkpoints and remain available if thumbnail export fails.
+
+Captured state is saved in the same HTML, including edited saves. Initial history
+without accessible pixels is explicitly unavailable. Statistics describe the
+recorded processing, not a prediction for modified steps or a target automatically
+applied to a new image. Replay behavior has not changed. Historical masked-region
+statistics and automatic adaptive parameter fitting are not included yet.
+
 ## Customize replay parameters
 
 In **Replay linked dependency chain**, click a processing step in **Review the

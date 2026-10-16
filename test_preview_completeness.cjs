@@ -89,3 +89,17 @@ assert.equal(api.recordedGameMask({steps:[liveGame]},0),false);
 assert.equal(api.recordedGameMask({steps:[liveGame]},1),true);
 assert.equal(api.recordedGameMask({steps:[],cloneFullSteps:[game]},0),true);
 console.log('Passed: GAME masks and clones are treated as stretched, with no automatic mask-value stretch or fabricated linear state.');
+
+// State measurements describe raw samples, not display stretch or replay predictions.
+{
+ const raw=image([-0.1,0,0.2,0.4,1,1.2]),stats=api.captureAtlasImageStatistics(raw),channel=stats.channels[0];assert.equal(stats.available,true);assert.equal(channel.samples,6);assert.ok(Math.abs(channel.median-0.3)<1e-12);assert.equal(channel.minimum,-0.1);assert.equal(channel.maximum,1.2);assert.equal(channel.blackFraction,2/6);assert.equal(channel.whiteFraction,2/6);assert.ok(Math.abs(channel.mean-0.45)<1e-12);assert.equal(raw.sample(0,0,0),-0.1);
+ const rgb=api.captureAtlasImageStatistics(image([0.2,0.4],true));assert.equal(rgb.channels.length,3);assert.ok(Math.abs(rgb.channels[1].median-0.15)<1e-12);assert.equal(rgb.alphaExcluded,true);
+ const nonfinite=api.captureAtlasImageStatistics(image([NaN,Infinity,0.25]));assert.equal(nonfinite.channels[0].invalidSamples,2);assert.equal(nonfinite.channels[0].median,0.25);assert.equal(api.captureAtlasImageStatistics(image([NaN])).available,false);assert.equal(api.captureAtlasImageStatistics({}).available,false);
+ let count=0;const large=api.captureAtlasImageStatistics({width:10000,height:10000,isColor:true,sample(){count++;return 0.2;}});assert.equal(count,4096*3);assert.equal(large.channels[0].mad,0);
+ assert.equal(record.steps[0].statistics.after,record.steps[1].statistics.before,'Shared checkpoints reuse measurements');assert.equal(record.steps[1].statistics.after,record.currentStatistics);assert.equal(position,2);assert.equal(record.steps[0].statistics.before.channels[0].median,api.captureAtlasImageStatistics(stateImages[0]).channels[0].median);assert.match(html,/Recorded image statistics/);assert.match(html,/not predictions/);
+ const noThumb=api.createThumbnailFromView,capture=api.captureAtlasImageStatistics;let captures=0;api.createThumbnailFromView=()=>false;api.captureAtlasImageStatistics=img=>{captures++;return capture(img);};api.collectWorkspaceThumbnails([record],'assets','assets');api.createThumbnailFromView=noThumb;api.captureAtlasImageStatistics=capture;assert.equal(position,2);assert.equal(captures,3);assert.equal(record.steps[0].statistics.after.available,true,'A preview export failure does not remove measured pixels');
+ const initial={...record,steps:[{...native,phase:'initial',anchor:'initial'}]};api.collectWorkspaceThumbnails([initial],'assets','assets');assert.equal(initial.steps[0].statistics.before,null);assert.equal(initial.steps[0].statistics.after,null);
+ const model=api.createAtlasReportData([htmlRecord],graph,{}),decoded=JSON.parse(api.atlasReportDataJSON(model));assert.equal(decoded.history[0].steps[0].statistics.before.available,true);assert.equal(decoded.history[0].statistics.available,true);assert.equal(api.atlasReportWithProject(model,{version:1}).history[0].steps[0].statistics.before.available,true);
+ const mismatch={before:stats,after:rgb};assert.match(api.atlasImageStatisticsHTML(mismatch),/incompatible image states/);assert.match(api.atlasImageStatisticsHTML({before:null,after:null}),/unavailable/);
+}
+console.log('Passed: raw percentile/channel statistics, bounded sampling, invalid samples, cache reuse/history restoration, missing pixels, preview failure and single-file model persistence.');

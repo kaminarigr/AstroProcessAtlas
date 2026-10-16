@@ -115,3 +115,21 @@ Printing does not write project edits or execution results back into the model.
 Preview bytes are resolved from the shared asset map, and copied steps do not
 pretend to have newly computed preview pixels. Browser print/Save as PDF provides
 the PDF output; the editable standalone HTML remains the project document.
+
+
+## Sampled image-state measurements
+
+Schema 1 has optional additive statistics fields: `history[].statistics` describes
+current pixels; `history[].steps[].statistics` contains `before`, `after` and the
+corresponding live history indices. Missing historical states are `null`; a failed
+measurement has `available: false` and `reason`. Legacy reports can omit these fields.
+Measurements are captured before preview stretch and never alter replay sources.
+
+Available measurements carry `version: 1`, `method: uniform-grid`, grid dimensions,
+image dimensions/color metadata, `rawPixels: true`, `alphaExcluded: true` and
+per-channel samples/invalid counts, mean, median, P01/P10/P90/P99, minimum/maximum,
+population standard deviation, MAD and black/white fractions. Fractions use finite
+sample counts, with thresholds <=0 and >=1; raw values are not clamped. Up to
+64 × 64 deterministic grid samples are read per nominal channel. These are sample
+estimates, not full-image histograms, localized mask statistics or noise estimates.
+The viewer only shows deltas for matching dimensions and channel counts.

@@ -67,6 +67,29 @@ var ICON_ERROR = (typeof StdIcon_Error !== "undefined") ? StdIcon_Error : 4;
 var ICON_INFO = (typeof StdIcon_Information !== "undefined") ? StdIcon_Information : 2;
 var BUTTON_OK = (typeof StdButton_Ok !== "undefined") ? StdButton_Ok : 0x00000400;
 
+function captureAtlasImageStatistics(image) {
+   var result={version:1,available:false,method:'uniform-grid',grid:64,rawPixels:true,alphaExcluded:true,channels:[]};
+   if(!image||typeof image.sample!=='function'||!image.width||!image.height){result.reason='Image samples unavailable';return result;}
+   try{
+      result.width=image.width;result.height=image.height;result.isColor=!!image.isColor;
+      var count=image.isColor?3:1,nx=Math.min(64,image.width),ny=Math.min(64,image.height);result.gridWidth=nx;result.gridHeight=ny;
+      if('bitsPerSample' in image)result.bitsPerSample=image.bitsPerSample;
+      for(var c=0;c<count;++c){var values=[],sum=0,black=0,white=0,invalid=0;
+         for(var y=0;y<ny;++y)for(var x=0;x<nx;++x){var value=image.sample(Math.min(image.width-1,Math.floor((x+0.5)*image.width/nx)),Math.min(image.height-1,Math.floor((y+0.5)*image.height/ny)),c);if(typeof value!=='number'||!isFinite(value)){invalid++;continue;}values.push(value);sum+=value;if(value<=0)black++;if(value>=1)white++;}
+         if(!values.length)throw Error('No finite image samples');values.sort(function(a,b){return a-b;});var quantile=function(p){var index=(values.length-1)*p,lo=Math.floor(index),fraction=index-lo;return values[lo]+(values[Math.min(lo+1,values.length-1)]-values[lo])*fraction;},median=quantile(0.5),mean=sum/values.length,variance=0,deviations=[];
+         for(var i=0;i<values.length;++i){variance+=(values[i]-mean)*(values[i]-mean);deviations.push(Math.abs(values[i]-median));}deviations.sort(function(a,b){return a-b;});var mid=(deviations.length-1)/2,mad=(deviations[Math.floor(mid)]+deviations[Math.ceil(mid)])/2;
+         result.channels.push({channel:image.isColor?['R','G','B'][c]:'K',samples:values.length,invalidSamples:invalid,mean:mean,median:median,p01:quantile(0.01),p10:quantile(0.1),p90:quantile(0.9),p99:quantile(0.99),minimum:values[0],maximum:values[values.length-1],stddev:Math.sqrt(variance/values.length),mad:mad,blackFraction:black/values.length,whiteFraction:white/values.length});
+      }result.available=true;
+   }catch(error){result.channels=[];result.reason=String(error.message);}
+   return result;
+}
+function atlasImageStatisticsHTML(statistics) {
+   if(!statistics)return '';var before=statistics.before,after=statistics.after,validBefore=before&&before.available,validAfter=after&&after.available;
+   if(!validBefore&&!validAfter)return '<details><summary>Recorded image statistics</summary><p>Historical pixel statistics unavailable for this step.</p></details>';
+   var compatible=validBefore&&validAfter&&before.width===after.width&&before.height===after.height&&before.channels.length===after.channels.length,rows=[],channels=validAfter?after.channels:before.channels,metrics=[['median','Median'],['mean','Mean'],['p01','P01'],['p10','P10'],['p90','P90'],['p99','P99'],['minimum','Sample minimum'],['maximum','Sample maximum'],['stddev','Standard deviation'],['mad','Median absolute deviation'],['blackFraction','Samples at or below 0'],['whiteFraction','Samples at or above 1']];
+   for(var c=0;c<channels.length;++c)for(var m=0;m<metrics.length;++m){var key=metrics[m][0],b=validBefore&&before.channels[c]&&before.channels[c].channel===channels[c].channel?before.channels[c][key]:null,a=validAfter&&after.channels[c]&&after.channels[c].channel===channels[c].channel?after.channels[c][key]:null,percentage=key==='blackFraction'||key==='whiteFraction',format=function(value){return value===null?'—':percentage?(100*value).toFixed(3)+'%':Number(value).toPrecision(6);};rows.push([channels[c].channel,metrics[m][1],format(b),format(a),compatible&&b!==null&&a!==null?format(a-b):'—']);}
+   return '<details class="image-statistics"><summary>Recorded image statistics</summary><p>Estimates from up to 4096 uniformly sampled raw pixels per channel, before any preview stretch. Alpha is excluded. MAD measures image spread, not a noise estimate. These are recorded statistics, not predictions for edited replay steps.</p><p>Before: '+(validBefore?before.width+' × '+before.height:'unavailable')+' · After: '+(validAfter?after.width+' × '+after.height:'unavailable')+(compatible?'':' · Delta unavailable: missing or incompatible image states.')+'</p>'+parameterTable(['Channel','Statistic','Before','After','Delta'],rows)+'</details>';
+}
 function previewAppearance(image) {
    var info = {state:'unknown', auto:false, black:0, midtones:0.5};
    if (!image || typeof image.sample !== 'function' || !image.width || !image.height) return info;
@@ -659,6 +682,7 @@ function collectWorkspaceThumbnails(records, thumbDir, relativeDir, progress, pr
       if (progress) progress(15 + 10*r/records.length, 'Current image and masks: ' + records[r].id);
       var record = records[r], filename = record.anchor + "_current.png";
       record.appearance=historyPreviewAppearance(record,record.historyIndex);
+      record.currentStatistics=captureAtlasImageStatistics(record.view.image);
       if (createThumbnailFromView(record.view, thumbDir + "/" + filename, profile.thumbnail, record.appearance)) {
          record.currentThumb = relativeDir + "/" + filename;generatedFiles.push(thumbDir+'/'+filename);
       }
@@ -676,13 +700,14 @@ function collectWorkspaceThumbnails(records, thumbDir, relativeDir, progress, pr
    }
    for (var r = 0; r < records.length; ++r) {
       var record = records[r];
-      var states = {}, dimensions = {}, appearances={}, linkedStretch=record.appearance&&record.appearance.auto?record.appearance:null;
+      var states = {}, dimensions = {}, appearances={}, stateStatistics={}, linkedStretch=record.appearance&&record.appearance.auto?record.appearance:null;
       var captureState = function(index, filename) {
          if (Object.prototype.hasOwnProperty.call(states, '$'+index)) return states['$'+index];
          try {
             if (record.view.historyIndex !== index) record.view.historyIndex = index;
             if (record.view.historyIndex !== index) return '';
             dimensions['$'+index] = {width:record.view.image.width,height:record.view.image.height};
+            stateStatistics['$'+index]=index===record.historyIndex?record.currentStatistics:captureAtlasImageStatistics(record.view.image);
             var appearance=historyPreviewAppearance(record,index);
             if(appearance.auto){if(!linkedStretch)linkedStretch=appearance;appearance.black=linkedStretch.black;appearance.midtones=linkedStretch.midtones;}
             appearances['$'+index]=appearance;
@@ -702,14 +727,17 @@ function collectWorkspaceThumbnails(records, thumbDir, relativeDir, progress, pr
             step.appearance=record.appearance;
             step.thumbNote = "Current image — no pixels are available for this step.";
             step.beforeThumb = ''; step.afterThumb = '';
+            step.statistics={before:null,after:null,beforeIndex:step.phase==='initial'?null:step.liveIndex-1,afterIndex:step.phase==='initial'?null:step.liveIndex};
             if (step.phase === "initial") continue;
             step.beforeThumb = captureState(step.liveIndex-1, record.anchor + '_state_' + (step.liveIndex-1) + '.png');
+            step.statistics.before=Object.prototype.hasOwnProperty.call(stateStatistics,'$'+(step.liveIndex-1))?stateStatistics['$'+(step.liveIndex-1)]:null;
             step.beforeAppearance=appearances['$'+(step.liveIndex-1)];
             try {
                if (record.view.historyIndex !== step.liveIndex) record.view.historyIndex = step.liveIndex;
                if (record.view.historyIndex === step.liveIndex) {
                   var filename = step.anchor + ".png";
                   var after = states['$'+step.liveIndex] || captureState(step.liveIndex, filename);
+                  step.statistics.after=Object.prototype.hasOwnProperty.call(stateStatistics,'$'+step.liveIndex)?stateStatistics['$'+step.liveIndex]:null;
                   if (after) {
                      step.thumb = step.afterThumb = after;
                      step.appearance=step.afterAppearance=appearances['$'+step.liveIndex];
@@ -1348,6 +1376,7 @@ function imageReportHTML(record, emit, structuredHistory) {
          'Position ' + step.liveIndex + ' in history') + (step.redo ? ' [Redo / not applied at the current position]' : '') +
          (step.time ? ' · ' + escapeHTML(step.time) : ' · Execution time: not recorded') + '</p>';
       html += completenessHTML(step);
+      html += atlasImageStatisticsHTML('statistics' in step?step.statistics:null);
       html += historyMaskHTML(step.mask, step.maskThumb);
       if (step.possibleInputs && step.possibleInputs.length) {
          html += '<p class="possible-info">Possible inputs from user-selected originals (unconfirmed): <span data-no-i18n>' + escapeHTML(step.possibleInputs.join(', ')) + '</span></p>';
@@ -2542,9 +2571,9 @@ function createAtlasReportData(records,graph,options){
    for(var ri=0;ri<images.length;++ri)for(var si=0;si<images[ri].steps.length;++si)if(images[ri].steps[si].source)sourceKey(images[ri].steps[si].source,{image:ri,step:si});
    function optional(object,key,fallback){return key in object?object[key]:fallback;}
    for(var r=0;r<records.length;++r){var record=records[r],steps=[];
-      for(var i=0;i<record.steps.length;++i){var step=record.steps[i];steps.push({anchor:step.anchor,title:step.title,tool:getProcessName(step.proc),origin:isImageOriginStep(step,i),source:sourceKey(step.source),number:optional(step,'displayNumber',i+1),groupAnchor:optional(step,'groupAnchor',step.anchor),phase:optional(step,'phase',''),redo:optional(step,'redo',false),time:optional(step,'time',''),mask:step.mask,references:optional(step,'references',[]),preview:{current:optional(step,'thumb',''),before:optional(step,'beforeThumb',''),after:optional(step,'afterThumb',''),appearance:optional(step,'appearance',null),mask:optional(step,'maskThumb',null)}});}
+      for(var i=0;i<record.steps.length;++i){var step=record.steps[i];steps.push({anchor:step.anchor,title:step.title,tool:getProcessName(step.proc),statistics:optional(step,'statistics',null),origin:isImageOriginStep(step,i),source:sourceKey(step.source),number:optional(step,'displayNumber',i+1),groupAnchor:optional(step,'groupAnchor',step.anchor),phase:optional(step,'phase',''),redo:optional(step,'redo',false),time:optional(step,'time',''),mask:step.mask,references:optional(step,'references',[]),preview:{current:optional(step,'thumb',''),before:optional(step,'beforeThumb',''),after:optional(step,'afterThumb',''),appearance:optional(step,'appearance',null),mask:optional(step,'maskThumb',null)}});}
       var containers=[],raw=optional(record,'historySources',[]);for(var hi=0;hi<raw.length;++hi)containers.push({phase:raw[hi].phase,source:sourceKey(raw[hi].source)});
-      history.push({containers:containers,id:record.id,anchor:record.anchor,isColor:record.isColor,originalInput:!!optional(record,'isOriginalInput',false),historyIndex:record.historyIndex,currentPreview:record.currentThumb,appearance:optional(record,'appearance',null),steps:steps});
+      history.push({containers:containers,id:record.id,anchor:record.anchor,isColor:record.isColor,originalInput:!!optional(record,'isOriginalInput',false),historyIndex:record.historyIndex,currentPreview:record.currentThumb,statistics:optional(record,'currentStatistics',null),appearance:optional(record,'appearance',null),steps:steps});
    }
    return {format:'AstroProcessAtlasReport',schemaVersion:1,generator:{name:'AstroProcessAtlas',version:ASTROPROCESS_ATLAS_VERSION},createdAt:(new Date()).toISOString(),options:{embeddedPreviews:!!options.embeddedPreviews,reportSize:options.reportSize||'normal'},workspace:{images:images,graph:graph},sources:sources,history:history,project:null};
 }
@@ -3309,6 +3338,13 @@ function generateHistoryReport() {
 }
 
 var REPORT_TRANSLATIONS = [
+   ['Recorded image statistics','Καταγεγραμμένα στατιστικά εικόνας'],
+   ['Historical pixel statistics unavailable for this step.','Δεν είναι διαθέσιμα ιστορικά στατιστικά pixels για αυτό το βήμα.'],
+   ['Estimates from up to 4096 uniformly sampled raw pixels per channel, before any preview stretch. Alpha is excluded. MAD measures image spread, not a noise estimate. These are recorded statistics, not predictions for edited replay steps.','Εκτιμήσεις από έως 4096 ομοιόμορφα επιλεγμένα αρχικά pixels ανά κανάλι, πριν από stretch προεπισκόπησης. Το Alpha εξαιρείται. Το MAD μετρά τη διασπορά της εικόνας, δεν είναι εκτίμηση θορύβου. Τα στοιχεία αφορούν την καταγραφή, όχι το αποτέλεσμα αλλαγμένων βημάτων replay.'],
+   ['Statistic','Στατιστικό'],['Delta','Διαφορά'],['Median','Διάμεσος'],['Mean','Μέση τιμή'],
+   ['Sample minimum','Ελάχιστο δείγματος'],['Sample maximum','Μέγιστο δείγματος'],
+   ['Standard deviation','Τυπική απόκλιση'],['Median absolute deviation','Διάμεση απόλυτη απόκλιση'],
+   ['Samples at or below 0','Δείγματα στο 0 ή μικρότερα'],['Samples at or above 1','Δείγματα στο 1 ή μεγαλύτερα'],
    ['Print full report / PDF','Εκτύπωση όλης της καταγραφής / PDF'],['Print linked chain / PDF','Εκτύπωση συνδεδεμένης αλυσίδας / PDF'],
    ['Copy naming: the last ImageIdentifier in the selected range, or the selected input name, followed by _APA_replay. Existing names receive a numeric suffix.',
     'Όνομα αντιγράφου: το τελευταίο ImageIdentifier στο επιλεγμένο εύρος ή το όνομα της επιλεγμένης εισόδου, με κατάληξη _APA_replay. Αν το όνομα υπάρχει, προστίθεται αριθμός.'],

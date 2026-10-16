@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Capture sampled raw image statistics before/after accessible history steps,
+  cache shared checkpoints and retain measurements even if preview export fails.
+  Show per-channel brightness/distribution/clipping estimates with compatible-state
+  deltas in collapsed details; save them in the one-file report data. Explicitly
+  mark missing pixels and distinguish image spread from noise. Replay is unchanged.
+
 - Avoid literal comment delimiters in the structured-parameter parser regexes,
   preventing PixInsight preprocessing from truncating the script.
 
