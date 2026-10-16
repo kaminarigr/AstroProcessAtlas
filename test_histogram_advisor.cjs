@@ -172,3 +172,34 @@ const overrideInput=runtime(),overrideBoxes=[];overrideInput.input.keywords=[{na
 console.log('Passed: explicit user filter correction is recorded separately from detected metadata.');
 
 assert.equal(types.infer([{kind:'camera',value:'Unknown'}],[],false,'Image').cameras.length,0,'Unknown placeholders are not camera identities');
+
+// Purpose inference uses recorded topology and stage context, not mono/RGB alone.
+const purposeTools=api.atlasHistogramPurposeTools();
+function purposeFixture(beforeValues,afterValues,color=false){
+ const step={anchor:'source_ht',tool:'HistogramTransformation',source:'H',mask:{status:'unrecorded'},statistics:{before:stats(beforeValues,color),after:stats(afterValues,color)}};
+ return {format:'AstroProcessAtlasReport',schemaVersion:1,history:[{id:'Source',isColor:color,steps:[step]}],sources:{H:'var P=new HistogramTransformation;P.H='+JSON.stringify(identity())+';'},workspace:{graph:{nodes:[{id:'source',image:'Source',header:true},{id:'source_ht',image:'Source'},{id:'target',image:'Target',label:'CurvesTransformation'}],edges:[]}}};
+}
+const resolver=(m,k)=>m.sources[k];
+const stretchPurpose=purposeTools.infer(purposeFixture([0.001,0.003,0.01],[0.1,0.2,0.3]),'Source',0,resolver);
+assert.equal(stretchPurpose.purpose,'initial-stretch');
+const toneFixture=purposeFixture([0.1,0.2,0.3],[0.12,0.22,0.32]);
+assert.equal(purposeTools.infer(toneFixture,'Source',0,resolver).purpose,'tone-adjustment');
+toneFixture.workspace.graph.edges.push({from:'source',to:'target',kind:'mask',provenance:'recorded'});
+const maskPurpose=purposeTools.infer(toneFixture,'Source',0,resolver);assert.equal(maskPurpose.purpose,'mask-preparation');assert.equal(maskPurpose.role,'mask');
+const stretchMask=purposeFixture([0.001,0.003,0.01],[0.1,0.2,0.3]);stretchMask.workspace.graph.edges.push({from:'source',to:'target',kind:'mask'});
+assert.equal(purposeTools.infer(stretchMask,'Source',0,resolver).purpose,'unknown','Do not label every earlier stretch as mask preparation');
+toneFixture.workspace.graph.edges[0].provenance='possible';assert.equal(purposeTools.infer(toneFixture,'Source',0,resolver).purpose,'tone-adjustment');
+toneFixture.workspace.graph.edges[0].provenance='manual';assert.equal(purposeTools.infer(toneFixture,'Source',0,resolver).purpose,'mask-preparation','User-provided connections count as evidence');
+const earlierMask=purposeFixture([0.1,0.2,0.3],[0.12,0.22,0.32]);earlierMask.history[0].steps.unshift({anchor:'earlier',tool:'Invert'});earlierMask.workspace.graph.nodes.push({id:'earlier',image:'Source'});earlierMask.workspace.graph.edges.push({from:'earlier',to:'target',kind:'mask'});assert.equal(purposeTools.infer(earlierMask,'Source',1,resolver).purpose,'tone-adjustment','An earlier mask checkpoint cannot identify later transforms');
+const maskedTone=purposeFixture([0.1,0.2,0.3],[0.12,0.22,0.32]);maskedTone.history[0].steps[0].mask={status:'recorded',name:'Mask'};assert.equal(purposeTools.infer(maskedTone,'Source',0,resolver).scope,'masked');assert.equal(purposeTools.infer(maskedTone,'Source',0,resolver).role,'image','Using a mask is distinct from constructing one');
+const balance=purposeFixture([0.1,0.2,0.3],[0.12,0.22,0.32],true),balanceH=identity();balanceH[0][1]=0.4;balance.sources.H='P.H='+JSON.stringify(balanceH)+';';assert.equal(purposeTools.infer(balance,'Source',0,resolver).purpose,'color-balance');
+const convergence=purposeFixture([0.1,0.2,0.3],[0.2,0.3,0.4]);convergence.workspace.graph.nodes[2].label='ChannelCombination';convergence.workspace.graph.nodes.push({id:'sibling',image:'Sibling',header:true});convergence.history.push({id:'Sibling',isColor:false,steps:[{tool:'HistogramTransformation',anchor:'sibling_ht',mask:{status:'unrecorded'},statistics:{before:stats([0.3,0.4,0.5]),after:stats([0.2,0.31,0.4])}}]});convergence.workspace.graph.edges.push({from:'source',to:'target',kind:'input'},{from:'sibling',to:'target',kind:'input'});assert.equal(purposeTools.infer(convergence,'Source',0,resolver).purpose,'channel-match');
+const purposeExamples=[{...prior,id:'purpose-mask',purpose:maskPurpose},{...prior,id:'purpose-stretch',purpose:stretchPurpose,H:preferred}];
+const purposeModel=learner.train(learner.merge(learner.empty(),purposeExamples,[]));
+assert.equal(learner.predict(purposeModel,prior.before,identity(),null,stretchPurpose).neighbours[0].id,'purpose-stretch');
+assert.equal(learner.predict(purposeModel,prior.before,identity(),null,{...stretchPurpose,purpose:'unknown'}).learned,false);
+assert.equal(learner.predict(learner.train(library),prior.before,identity(),null,stretchPurpose).learned,false,'Known purpose never falls back to unclassified legacy examples');
+const purposeReview=learner.feedback({...review,id:'purpose-review',purpose:stretchPurpose});assert.equal(learner.merge(learner.empty(),[],[purposeReview]).examples[0].purpose.purpose,'initial-stretch');
+const purposeHistory=learner.history(convergence,resolver);assert.equal(purposeHistory.examples[0].purpose.purpose,'channel-match');
+const nativePurpose=runtime();const purposeScript=api.buildAtlasHistogramExperiment({...config,purpose:stretchPurpose});vm.runInNewContext(purposeScript.replace(/^#.*$/gm,''),nativePurpose.ctx);const savedPurpose=decodeTrial(Object.values(nativePurpose.settings)[0]);assert.equal(savedPurpose.purpose.purpose,'initial-stretch');
+console.log('Passed: purpose/context inference, mask ambiguity, historical checkpoints, manual vs possible links, channel convergence, purpose-separated prediction and native trial persistence.');

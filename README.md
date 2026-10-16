@@ -988,3 +988,21 @@ Replay input dropdowns suggest open images with a recorded integration Origin an
 a matching filter/composition, even when their IDs differ (for example Ha versus
 integration_0). Clone names are excluded. Ambiguous matches keep the existing
 selection; explicit chain input IDs take priority. Always confirm processing state.
+
+Histogram steps now carry an estimated processing purpose: initial stretch,
+channel matching, mask preparation, tonal adjustment or color balance. The
+estimate combines recorded cross-image links, adjacent applied steps, per-channel
+matrices and sampled Before/After distributions. Role, mask scope, confidence
+and evidence are shown separately. A dark distribution does not prove linearity;
+a later mask use does not prove that every earlier step constructed that mask.
+Possible links and undone checkpoints are excluded. Conflicting evidence remains
+unknown. Channel matching requires sibling Histogram steps feeding a recorded
+combination and convergence of sampled medians, which is an indication only.
+
+Local Histogram comparisons carry this intended purpose into evaluations and
+accepted examples. Known-purpose trials use matching purpose/role/scope examples;
+unknown or incompatible examples do not supply a proposal. Older unclassified
+libraries remain readable but need new contextual examples for these trials.
+The advisor offers an optional purpose correction before download. Recorded masked
+steps remain outside the current three-copy trial support; their context can still
+be described. Capture measurements and previews remain unchanged by inference.

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Estimate HistogramTransformation purpose from recorded workflow relationships,
+  adjacent applied steps, masks, channel-combination context and sampled states.
+  Show role/scope, evidence and confidence; preserve ambiguity rather than treating
+  mono/RGB or later mask use as proof. Separate local examples by purpose and retain
+  recorded settings when no compatible examples exist. Allow trial-purpose correction.
+
 ## 0.4.1 — 2026-10-16
 
 - Edit recorded UnsharpMask, NoiseXTerminator and BlurXTerminator parameters in
