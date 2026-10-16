@@ -36,7 +36,7 @@ The embedded previews are reduced to at most 640 pixels and compressed for a sma
 
 1. Download the release ZIP (recommended), or download [AstroProcessAtlas.js](https://github.com/kaminarigr/AstroProcessAtlas/blob/main/AstroProcessAtlas.js) and [AstroProcessAtlas.svg](https://github.com/kaminarigr/AstroProcessAtlas/blob/main/AstroProcessAtlas.svg) into the same folder. The SVG is the PixInsight feature icon.
 2. Open the script in PixInsight's Script Editor and run it with your images open.
-3. Select the images to include. Explicitly select the actual original inputs; images reopened after external editing are not automatically originals.
+3. Select the images to include. Images with a recorded ImageIntegration/FastIntegration Origin are prechecked as original inputs. Review these suggestions and adjust the ticks: clones can inherit an Origin, while a filename alone does not qualify an image.
 4. Leave **Single HTML file (embed thumbnails)** enabled for a portable report.
 5. Save the report and open it in a browser. If embedding is disabled, keep the HTML and its `_thumbs` folder together.
 

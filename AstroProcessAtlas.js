@@ -3401,6 +3401,23 @@ function showAboutDialog() {
    dialog.adjustToContents(); dialog.execute();
 }
 
+function hasRecordedIntegrationOrigin(window) {
+   var view = window.mainView, initial = null;
+   try { initial = view.initialProcessing; } catch (error) {}
+   if (initial && typeof initial.at === 'function') {
+      for (var i = 0; i < initial.length; ++i) {
+         try { if (isImageOriginStep({proc:initial.at(i), phase:'initial', redo:false}, i)) return true; } catch (error) {}
+      }
+   }
+   // Only the first applied live entry can be an Origin; ignore undone entries.
+   try {
+      var live = view.processing;
+      if (view.historyIndex > 0 && live && live.length && typeof live.at === 'function')
+         return isImageOriginStep({proc:live.at(0), phase:'live', redo:false}, initial ? initial.length : 0);
+   } catch (error) {}
+   return false;
+}
+
 function chooseWorkspaceWindows(windows) {
    var dialog = new Dialog;
    dialog.windowTitle = "AstroProcessAtlas — Select images";
@@ -3408,14 +3425,14 @@ function chooseWorkspaceWindows(windows) {
    label.text = "Select the images for your report. The list includes all open PixInsight images, including hidden/iconized images and images in other virtual workspaces.";
    label.wordWrapping = true;
    var sourceLabel=new Label(dialog);
-   sourceLabel.text='Original input images: select only the actual starting images. Reopened images and edited exports are not selected automatically.';
+   sourceLabel.text='Original input images: recorded ImageIntegration/FastIntegration origins are suggested below. Review the ticks and keep only your actual starting images; inherited history can also appear on clones.';
    sourceLabel.wordWrapping=true;
    var sources=new TreeBox(dialog);sources.numberOfColumns=1;sources.headerVisible=false;sources.setMinSize(520,120);
    for (var s = 0; s < windows.length; ++s) {
       var sourceNode = new TreeBoxNode(sources);
       sourceNode.setText(0, windows[s].mainView.fullId || windows[s].mainView.id);
       sourceNode.checkable = true;
-      sourceNode.checked = false;
+      sourceNode.checked = hasRecordedIntegrationOrigin(windows[s]);
    }
    var tree = new TreeBox(dialog);
    tree.numberOfColumns = 1;

@@ -285,6 +285,28 @@ for(const [index,profile] of [[0,'small'],[2,'detailed']]){
 helper.Dialog=baseDialog;
 
 
+// Original-input suggestions use the same recorded Origin rule as report/replay.
+const originSuggestions=[
+ image('Integrated',[],[makeProcess('ImageIntegration')]),
+ image('Fast',[makeProcess('FastIntegration')]),
+ image('Opened_Ha'),
+ image('Later',[ht,makeProcess('ImageIntegration')]),
+ image('Undone',[makeProcess('FastIntegration')],[],0)
+];
+assert.deepEqual(Array.from(helper.chooseWorkspaceWindows(originSuggestions).originalInputIds),['Integrated','Fast']);
+assert.equal(helper.hasRecordedIntegrationOrigin({mainView:{get initialProcessing(){throw Error('Unavailable');},get processing(){throw Error('Unavailable');}}}),false);
+const savedTreeBox=helper.TreeBox;const suggestionTrees=[];
+helper.TreeBox=function(){savedTreeBox.call(this);suggestionTrees.push(this);};
+helper.Dialog=function(){baseDialog.call(this);this.execute=()=>{
+ suggestionTrees[0].child(0).checked=false; // User rejects an inherited Origin.
+ suggestionTrees[0].child(2).checked=true; // User explicitly selects a file-only root.
+ suggestionTrees[1].child(1).checked=false; // Excluded report images cannot be originals.
+ return true;
+};};
+assert.deepEqual(Array.from(helper.chooseWorkspaceWindows(originSuggestions).originalInputIds),['Opened_Ha']);
+helper.Dialog=baseDialog;helper.TreeBox=savedTreeBox;
+console.log('Passed: integration Origin suggestions, editable ticks, applied-only history and report selection intersection.');
+
 const cards=graph.nodes.filter(n=>!n.header).map(n=>({id:n.id,hidden:false}));
 const languageQuery=browser.document.querySelectorAll;
 browser.document.querySelectorAll=selector=>selector==='.step-card'?cards:languageQuery(selector);

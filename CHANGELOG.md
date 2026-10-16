@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Precheck original input suggestions in the initial image dialog from recorded
+  ImageIntegration/FastIntegration Origins. Keep every tick editable; ignore
+  filenames, later integration steps and undone entries. Explain inherited history.
+
 - Record acquisition identities independently of image IDs: canonical filter sets,
   camera, narrowband/broadband/mixed/unknown family and evidence provenance. Read
   current FITS/XISF metadata and enabled ImageIntegration/FastIntegration paths;
