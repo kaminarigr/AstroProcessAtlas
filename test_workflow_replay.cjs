@@ -408,7 +408,7 @@ const complete=api.buildWorkspaceReplayScript(plan,0,1);
  assert.deepEqual(Array.from(data.originalInputs),['Sii']);
  const code=api.buildWorkspaceReplayScript(data,0,0);
  const helper=code.slice(code.indexOf('var replayOriginalInputs'),code.indexOf('function applyReplayMask'));
- const context={HistogramTransformation:function(){}};vm.runInNewContext(helper,context);
+ const context={HistogramTransformation:function(){},suggestAcquisitionInput:api.suggestAcquisitionInput};vm.runInNewContext(helper,context);
  const candidates=['SII_final','Sii','Ha','OiiI','Sii_clone'].map(id=>({mainView:{id,image:{isColor:false}}}));
  assert.equal(context.suggestPaletteInput('SII_final',candidates),1,'Prefer original Sii over the processed exact match');
  assert.equal(context.suggestPaletteInput('Ha_final',candidates),2);

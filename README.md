@@ -975,3 +975,8 @@ manual connection (purple target outline), or drop between steps to copy the
 process (orange insertion line). Connections use the same saved annotations and
 chain replay rules as the manual form. Save the report to keep your edits.
 Outside edit mode, tile dragging continues to compare stages and deletion is hidden.
+
+Replay input dropdowns suggest open images with a recorded integration Origin and
+a matching filter/composition, even when their IDs differ (for example Ha versus
+integration_0). Clone names are excluded. Ambiguous matches keep the existing
+selection; explicit chain input IDs take priority. Always confirm processing state.

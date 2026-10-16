@@ -1104,7 +1104,7 @@ console.log('Passed: arbitrary current/before/after selection, shared comparison
  assert.equal(elements.replay_export.disabled,true);
  assert.match(elements.replay_readiness.children[0].textContent,/STOP.*PixelMath needs/);
  const standaloneBuilder={};
- vm.runInNewContext(helper.copyReplayMetadata.toString()+';'+helper.pixelMathTextTokens.toString()+';'+helper.compareAtlasImages.toString()+';'+helper.previewAppearance.toString()+';'+helper.comparisonPreviewBitmap.toString()+';'+helper.comparisonIsGameMask.toString()+';'+helper.showAtlasComparisonResult.toString()+';'+helper.showAtlasComparisonDialog.toString()+';'+helper.atlasReplaySession.toString()+';'+helper.historyParameterKey.toString()+';'+helper.readHistoryMasks.toString()+';'+helper.preparedReplayPrefix.toString()+';'+helper.buildWorkspaceReplayScript.toString(),standaloneBuilder);
+ vm.runInNewContext(helper.atlasAcquisitionTools.toString()+';'+helper.getProcessName.toString()+';'+helper.isImageOriginStep.toString()+';'+helper.hasRecordedIntegrationOrigin.toString()+';'+helper.suggestAcquisitionInput.toString()+';'+helper.copyReplayMetadata.toString()+';'+helper.pixelMathTextTokens.toString()+';'+helper.compareAtlasImages.toString()+';'+helper.previewAppearance.toString()+';'+helper.comparisonPreviewBitmap.toString()+';'+helper.comparisonIsGameMask.toString()+';'+helper.showAtlasComparisonResult.toString()+';'+helper.showAtlasComparisonDialog.toString()+';'+helper.atlasReplaySession.toString()+';'+helper.historyParameterKey.toString()+';'+helper.readHistoryMasks.toString()+';'+helper.preparedReplayPrefix.toString()+';'+helper.buildWorkspaceReplayScript.toString(),standaloneBuilder);
  const exported=standaloneBuilder.buildWorkspaceReplayScript(helper.workspaceReplayData([rec])[0],0,1);
  new vm.Script(exported.replace(/^#.*$/gm,''));
  console.log('Passed: PixelMath reference warnings, EN/EL text, ready no-reference step, unsupported syntax blocker, download and isolated browser builder dependencies.');
@@ -1157,3 +1157,15 @@ console.log('Passed: full source pooling/reference reuse, lazy detail hydration,
 
 // Optional local visual-QA fixture; no real user report is copied or published.
 if(process.env.APA_PRINT_FIXTURE){fs.mkdirSync(__dirname+'/dist/print-qa',{recursive:true});fs.writeFileSync(__dirname+'/dist/print-qa/report.html',fullOutput);}
+
+const typedRoots=['Ha','SII','OIII'].map((filter,i)=>{
+ const w=image('integration_'+i,[],[makeProcess('ImageIntegration')]);
+ w.keywords=[{name:'FILTER',value:filter}];return w;
+});
+assert.equal(helper.suggestAcquisitionInput('Ha_final',null,typedRoots),0);
+assert.equal(helper.suggestAcquisitionInput('SII_final',null,typedRoots),1);
+assert.equal(helper.suggestAcquisitionInput('OIII_final',null,typedRoots),2);
+assert.equal(helper.suggestAcquisitionInput('Ha',null,[typedRoots[0],typedRoots[0]]),-1,'Ambiguous types need a user choice');
+const cloneRoot=image('Ha_clone1',[],[makeProcess('ImageIntegration')]);cloneRoot.keywords=[{name:'FILTER',value:'Ha'}];
+assert.equal(helper.suggestAcquisitionInput('Ha',null,[cloneRoot]),-1);
+console.log('Passed: Origin/filter replay suggestions with unrelated IDs, ambiguity and clone exclusion.');

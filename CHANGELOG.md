@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Suggest native replay starting inputs and palette channels from recorded
+  integration Origin/filter identities, independently of view names. Preserve
+  explicit chain selections and avoid ambiguous or clone candidates.
+
 - Exclude image names ending in `_clone*` from automatic original-input
   suggestions, even with an integration Origin; keep manual selection available.
 
