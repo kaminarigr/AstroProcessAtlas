@@ -255,7 +255,8 @@ processing suffixes. Suggestions remain editable.
 Workflow replay supports native HistogramTransformation,
 CurvesTransformation, RGBWorkingSpace, SCNR, ColorSaturation, BlurXTerminator,
 NoiseXTerminator, GradientCorrection, StarXTerminator, NarrowbandNormalization,
-UnsharpMask, MultiscaleLinearTransform, Invert, ColorCalibration,
+UnsharpMask, MultiscaleLinearTransform, HDRMultiscaleTransform, ChannelExtraction,
+Invert, ColorCalibration,
 BackgroundNeutralization, LRGBCombination, ChannelCombination,
 SpectrophotometricFluxCalibration, DynamicCrop and FastRotation instances with
 supported serialization. ImageBlend uses its installed CosmicPhotons engine
@@ -508,6 +509,37 @@ checked against the installed 1.7 source; newer interfaces need validation.
 ImageBlend is by Mike Cranfield, distributed under GPL-3.0-only. Generated replays
 that include its engine carry the GPL notice and license; AstroProcessAtlas
 portions retain their MIT attribution. See [Cosmic Photons](https://cosmicphotons.com/scripts/).
+
+### ChannelExtraction and HDRMultiscaleTransform
+
+ChannelExtraction replays the recorded native color space, enabled channel rows,
+sample format and astrometric-inheritance option on an RGB replay copy. Output
+IDs are unique and never reuse the recorded original channel IDs. Disabled rows
+remain disabled. Default channel references use the recorded color-space suffixes
+(RGB, HSV, HSI, CIEXYZ, CIELab or CIELch). Explicit valid IDs remain identifiable
+without guessing a missing default suffix.
+
+PixInsight records extraction on the generated grayscale images, often without
+an extraction entry or source RGB ID in the original RGB history. For such an
+initial channel step, replay asks for the RGB source before extraction, identifies
+the enabled row from its recorded output ID and continues on that grayscale
+channel. Other channel outputs remain separate. An ambiguous renamed output is
+blocked instead of selecting an arbitrary row. Sibling output histories do not
+create false producer links or dependency cycles.
+
+In linked chains, an unambiguous grayscale output identified by the enabled row's
+recorded ID/alias is supplied by its producer checkpoint. Later channel processing
+and combinations use the generated replay view. Competing producers/aliases do not
+silently choose a branch. Extraction runs again even when an input has prepared
+history, because the side outputs must actually be created. Failed extraction
+cleans its partial new channels. An external historical mask on extraction is
+blocked; channel generation is not treated as a masked edit of the RGB source.
+
+HDRMultiscaleTransform preserves its serialized parameters, including layers,
+iterations, scaling functions, intensity/lightness options and deringing settings.
+It uses the normal replay mask selection and supports both single and chain
+replay. The native PixInsight process supplies the numerical transform; suitable
+image dimensions and the installed process version remain required.
 
 ### ChannelCombination
 

@@ -882,3 +882,18 @@ console.log('Passed: native geometry/flux manifests, ImageBlend parameter valida
  const incomplete={...values};delete incomplete.view2Hue;assert.equal(api.narrowbandHueReplaySource(recorded(incomplete)),null);const missing=api.workspaceReplayData([{id:'Missing',steps:[recorded({})]}])[0].steps[0];assert.match(missing.reason,/needs complete saved/);const masked=recorded(values);masked.mask={status:'recorded',name:'Mask'};assert.match(api.workspaceReplayData([{id:'Masked',steps:[masked]}])[0].steps[0].reason,/External masks/);
 }
 console.log('Passed: NarrowbandHueCombination export, reference discovery, optional inputs and missing/invalid-parameter blockers.');
+
+const ceValues={channels:[[true,''],[true,'Green'],[false,'']],sampleFormat:0,inheritAstrometricSolution:true};
+const ce=step('ChannelExtraction','P.colorSpace=ChannelExtraction.prototype.RGB;P.channels='+JSON.stringify(ceValues.channels)+';P.sampleFormat=ChannelExtraction.prototype.SameAsSource;P.inheritAstrometricSolution=true;',{proc:{processId:()=> 'ChannelExtraction',...ceValues},anchor:'ce'});
+const ceRecord={id:'RGB',anchor:'rgb',isColor:true,steps:[ce]},ceChild={id:'RGB_R',anchor:'red',isColor:false,steps:[]};
+const ceData=api.workspaceReplayData([ceRecord,ceChild]);assert.equal(ceData[0].steps[0].reason,'');assert.equal(ceData[0].steps[0].action,'extraction');assert.deepEqual(JSON.parse(JSON.stringify(ceData[1].extraction)),{source:'RGB',stage:1,row:0});
+assert.equal(ceData[0].steps[0].channelOutputs[0].name,'RGB_R');assert.equal(ceData[0].steps[0].channelOutputs[1].name,'Green');
+assert.match(api.workspaceReplayData([{...ceRecord,steps:[{...ce,proc:{...ce.proc,channels:[[false,''],[false,''],[false,'']]}}]}])[0].steps[0].reason,/no enabled/);
+assert.match(api.workspaceReplayData([{...ceRecord,steps:[{...ce,mask:{status:'recorded',name:'Mask'}}]}])[0].steps[0].reason,/external mask/);
+const hdr=step('HDRMultiscaleTransform','P.numberOfLayers=4;P.numberOfIterations=2;P.lightnessMask=true;P.scalingFunctionData=[0.25,0.5,0.25];',{mask:{status:'recorded',name:'Mask',inverted:true}});
+const hdrExport=api.workspaceReplayData([{id:'RGB',steps:[hdr]}])[0];assert.equal(hdrExport.steps[0].reason,'');assert.equal(hdrExport.steps[0].mask.inverted,true);assert.match(api.buildWorkspaceReplayScript(hdrExport,0,0),/P.lightnessMask=true/);
+console.log('Passed: ChannelExtraction output metadata/default names/derived branch, invalid rows/masks and HDR settings/mask preservation.');
+
+const grayExtraction=step('ChannelExtraction','P.colorSpace=ChannelExtraction.prototype.RGB;P.channels=[[true,"R"],[true,"G"],[true,"B"]];',{proc:{processId:()=> 'ChannelExtraction',channels:[[true,'R'],[true,'G'],[true,'B']]},anchor:'r_extract'});
+const grayData=api.workspaceReplayData([{id:'R',anchor:'red',isColor:false,steps:[grayExtraction]}])[0];assert.equal(grayData.steps[0].reason,'');assert.equal(grayData.steps[0].extractionResultRow,0);assert.match(grayData.steps[0].warning,/RGB source/);
+console.log('Passed: native extracted-image initial history selects its own grayscale output.');

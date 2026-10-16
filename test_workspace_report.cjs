@@ -83,6 +83,7 @@ const unresolvedGraph = helper.workspaceGraph([...records,missing]);
 assert.ok(unresolvedGraph.unresolved.some(e=>e.name==='ClosedHa'));
 assert.ok(!unresolvedGraph.edges.some(e=>e.detail==='Channel 2'&&e.to===missing.steps[0].anchor));
 const extraction = helper.collectWorkspaceRecord(image('OSC',[makeProcess('ChannelExtraction',{channels:[[true,'Ha'],[false,'OIII']]})]),6);
+extraction.isColor=true;
 assert.equal(helper.workspaceGraph([...records,extraction]).edges.filter(e=>e.kind==='output').length,1);
 
 // Exercise the real top-level orchestration and native selection dialog with API mocks.
@@ -1104,7 +1105,7 @@ console.log('Passed: arbitrary current/before/after selection, shared comparison
  assert.equal(elements.replay_export.disabled,true);
  assert.match(elements.replay_readiness.children[0].textContent,/STOP.*PixelMath needs/);
  const standaloneBuilder={};
- vm.runInNewContext(helper.atlasAcquisitionTools.toString()+';'+helper.getProcessName.toString()+';'+helper.isImageOriginStep.toString()+';'+helper.hasRecordedIntegrationOrigin.toString()+';'+helper.suggestAcquisitionInput.toString()+';'+helper.copyReplayMetadata.toString()+';'+helper.pixelMathTextTokens.toString()+';'+helper.compareAtlasImages.toString()+';'+helper.previewAppearance.toString()+';'+helper.comparisonPreviewBitmap.toString()+';'+helper.comparisonIsGameMask.toString()+';'+helper.showAtlasComparisonResult.toString()+';'+helper.showAtlasComparisonDialog.toString()+';'+helper.atlasReplaySession.toString()+';'+helper.historyParameterKey.toString()+';'+helper.readHistoryMasks.toString()+';'+helper.preparedReplayPrefix.toString()+';'+helper.buildWorkspaceReplayScript.toString(),standaloneBuilder);
+ vm.runInNewContext(helper.runChannelExtractionReplay.toString()+';'+helper.atlasAcquisitionTools.toString()+';'+helper.getProcessName.toString()+';'+helper.isImageOriginStep.toString()+';'+helper.hasRecordedIntegrationOrigin.toString()+';'+helper.suggestAcquisitionInput.toString()+';'+helper.copyReplayMetadata.toString()+';'+helper.pixelMathTextTokens.toString()+';'+helper.compareAtlasImages.toString()+';'+helper.previewAppearance.toString()+';'+helper.comparisonPreviewBitmap.toString()+';'+helper.comparisonIsGameMask.toString()+';'+helper.showAtlasComparisonResult.toString()+';'+helper.showAtlasComparisonDialog.toString()+';'+helper.atlasReplaySession.toString()+';'+helper.historyParameterKey.toString()+';'+helper.readHistoryMasks.toString()+';'+helper.preparedReplayPrefix.toString()+';'+helper.buildWorkspaceReplayScript.toString(),standaloneBuilder);
  const exported=standaloneBuilder.buildWorkspaceReplayScript(helper.workspaceReplayData([rec])[0],0,1);
  new vm.Script(exported.replace(/^#.*$/gm,''));
  console.log('Passed: PixelMath reference warnings, EN/EL text, ready no-reference step, unsupported syntax blocker, download and isolated browser builder dependencies.');
@@ -1169,3 +1170,8 @@ assert.equal(helper.suggestAcquisitionInput('Ha',null,[typedRoots[0],typedRoots[
 const cloneRoot=image('Ha_clone1',[],[makeProcess('ImageIntegration')]);cloneRoot.keywords=[{name:'FILTER',value:'Ha'}];
 assert.equal(helper.suggestAcquisitionInput('Ha',null,[cloneRoot]),-1);
 console.log('Passed: Origin/filter replay suggestions with unrelated IDs, ambiguity and clone exclusion.');
+
+const nativeExtractionHistory=makeProcess('ChannelExtraction',{channels:[[true,'R'],[true,'G'],[false,'']]});
+const redHistory=helper.collectWorkspaceRecord(image('R',[],[nativeExtractionHistory]),150),greenHistory=helper.collectWorkspaceRecord(image('G',[],[nativeExtractionHistory]),151);
+assert.equal(helper.workspaceGraph([redHistory,greenHistory]).edges.filter(e=>e.kind==='output').length,0,'Sibling grayscale extraction histories are not producers of each other');
+console.log('Passed: no false sibling ChannelExtraction output cycle.');

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Support ChannelExtraction replay with preserved settings, unique side-output
+  IDs and default channel references. Rebuild unambiguous connected channel
+  branches in linked chains, avoid prepared-history output skipping and clean
+  partial extraction results on failure. Handle native grayscale extraction
+  origins by requesting RGB input and continuing on the selected channel; avoid
+  false sibling dependencies. Block external extraction masks.
+- Support native HDRMultiscaleTransform replay, preserving full serialized
+  parameters and standard mask handling, including safe ProcessContainer groups.
+
 - Support recorded masked HistogramTransformation three-version trials: select a
   mask and Color invert in PixInsight, share a private snapshot across candidates,
   verify its state on resume and release it after saving/discarding. Keep original
