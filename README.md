@@ -549,7 +549,7 @@ Generate a new report and open **Replay linked dependency chain**:
 2. **Review the input images and masks.** Reference cards are grouped by the image
    using them. Labelled icons and color accents distinguish inputs from masks.
    Select the source image and the required processing stage for each reference;
-   palette inputs also require their preparation state. Name matches such as
+   palette inputs use the selected pixels by default; optional extra stretching is under advanced settings. Name matches such as
    `SII_final` → `Sii` are suggestions requiring review.
 3. **Review the plan and download.** Resolve the listed blockers, then confirm
    source checkpoints, palette preparation and mask inversion. The download button
@@ -846,7 +846,7 @@ exported. Unsupported parent tools remain blockers; execution cannot bypass them
 
 PerfectPalettePicker replay supports its recorded final multi-channel arithmetic
 PixelMath combination as one parent operation. Start the export range at that
-step. In PixInsight select a grayscale image and its preparation state for each historical image
+step. In PixInsight select a grayscale image for each historical image
 identifier displayed in the dialog; names may differ from the recorded names.
 Dimensions must match. Replay creates a new RGB image named after the report image
 (or selected ImageIdentifier) plus `_APA_replay`, then runs subsequent supported
@@ -865,13 +865,16 @@ result, including a preceding PerfectPalettePicker RGB result, without a second
 input selection. The installed module is required; unknown mask states/historical references
 and invalid serialization remain blockers.
 
-For PerfectPalettePicker, each input now requires an explicit preparation state:
-**Already prepared** or **Linear - apply PPP stretch (median 0.25) on a copy**.
+For PerfectPalettePicker, inputs default to **Use selected pixels (default)**.
+No linear/stretched classification or additional stretch is required. In the HTML,
+**Optional input processing** is collapsed unless extra stretch is enabled.
+Enable **Apply PPP input stretch on a copy (median 0.25)** only when wanted.
 The linear option normalizes the blackpoint using the larger of the minimum and
 median minus 2.7 standard deviations, then applies a midtones transfer targeting
 median 0.25 before combination. It modifies temporary copies, not the selected
-images, and closes those copies after execution or failure. Choose already
-prepared for channels at the original combination state to avoid stretching twice.
+images, and closes those copies after execution or failure. Keep the default for channels at the intended combination state to avoid stretching twice.
+Saved explicit stretch choices are retained; legacy unselected input-state values
+now resolve to using the selected pixels unchanged.
 This recovers the installed PPP linear-input preparation; other unrecorded steps
 (including OSC extraction/averaging or an unidentified Script) are not inferred.
 
