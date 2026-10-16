@@ -2,14 +2,10 @@
 
 ## Unreleased
 
-- Emit Histogram trial helpers as uniquely named top-level function declarations,
-  replacing named function expressions rejected in reported PixInsight runs.
-  Preserve trial configuration and add native-runtime structure/RGB checks.
-
-- Replace the nested learning factory in downloaded Histogram trials with a flat,
-  inference-only runtime to avoid the PixInsight return-outside-function syntax
-  failure. Keep training/import logic in HTML and verify equivalent predictions,
-  evaluation data and strict-mode generated-script parsing.
+- Normalize generated Histogram trial source to LF. Mixed CRLF/LF from serialized
+  functions and joined sections caused PixInsight preprocessing to report
+  return-outside-function errors. Verify the complete generated source with the
+  installed PixInsight runtime; retain flat, uniquely named inference helpers.
 
 - Preserve Histogram trial ownership as a permanent, storable view property and
   reassert it after generated processing. Recover missing legacy markers only

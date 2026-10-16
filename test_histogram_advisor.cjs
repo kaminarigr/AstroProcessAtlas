@@ -77,3 +77,16 @@ const rgbBefore=stats([0.01,0.03,0.08],true);
 assert.deepEqual(JSON.parse(JSON.stringify(nativeRuntime.atlasHistogramRuntimeAPI.stats(rgbBefore))),JSON.parse(JSON.stringify(learner.stats(rgbBefore))));
 assert.throws(()=>nativeRuntime.atlasHistogramRuntimeAPI.stats({...rgbBefore,channels:[]}),/raw image statistics/);
 console.log('Passed: unique top-level native helper declarations and RGB statistics validation.');
+
+// PJSR preprocessing rejects mixed line endings even when ordinary JS parsing succeeds.
+assert.ok(!script.includes('\r'),'Complete native trial must use uniform LF');
+assert.ok(!api.atlasHistogramRuntimeSource().includes('\r'),'Standalone native helpers must use uniform LF');
+for(const eol of ['\n','\r\n']){
+ const variant={Console:{writeln(){}}};
+ vm.runInNewContext(source.replace(/\r\n?/g,'\n').replace(/\n/g,eol),variant);
+ const generated=variant.buildAtlasHistogramExperiment(config);
+ assert.ok(!generated.includes('\r'),'Normalize serialized functions from '+JSON.stringify(eol));
+ new vm.Script(generated.replace(/^#.*$/gm,''));
+ assert.deepEqual(JSON.parse(/^var atlasHistogramConfig=(.*);$/m.exec(generated)[1]),JSON.parse(JSON.stringify(config)));
+}
+console.log('Passed: LF-only exports from both LF and CRLF source files; trial configuration preserved.');
