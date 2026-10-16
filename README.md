@@ -131,6 +131,11 @@ Connected images appear first and disconnected images last, preserving the exist
 
 Replay code requires the correct preceding image state, references and mask settings. It does not recover missing historical image versions.
 
+Step details also include **Image histogram — Before / After**: sampled RGB or
+grayscale distributions without STF, with linear/logarithmic intensity axes and
+shared frequency scaling. Generate a new report to capture histogram bins; older
+HTML files cannot reconstruct them from summary statistics alone.
+
 ## Local Histogram advisor
 
 For a recorded, unmasked HistogramTransformation, open **Customize parameters**

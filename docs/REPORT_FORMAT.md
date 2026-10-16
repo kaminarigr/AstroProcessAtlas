@@ -172,3 +172,19 @@ The shared-folder path is kept only in PixInsight Settings, not in the report.
 The native trial includes a validated library snapshot, merges the latest shared
 library at runtime and atomically replaces the shared JSON on evaluation save,
 keeping one recovery `.bak`. No network or directory path inference is used.
+
+### Sampled histograms
+
+Captured `statistics.before/after.channels[].histogram` optionally stores
+`version: 1`, `bins` (128 integer counts on linear [0,1]), `logBins` (128 counts
+on `log(1 + 10000*x) / log(10001)`), `logStrength: 10000`, and `below`/`above`
+counts strictly outside [0,1]. Finite samples outside the interval are grouped
+in the first/last bin; each bin array sums to the channel's finite sample count.
+No additional image reads are used. These are sampled distributions, not a
+full-resolution PixInsight histogram.
+
+Step-detail SVGs offer linear/log intensity axes and normalized sample frequency
+with a shared vertical scale across Before/After and channels. Old reports without
+bins show an unavailable message rather than inferred distributions. Regenerating
+the report is required. The Histogram learner's sanitized training statistics
+exclude these arrays; its current features remain global/regional descriptors.

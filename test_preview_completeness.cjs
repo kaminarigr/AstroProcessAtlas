@@ -103,3 +103,18 @@ console.log('Passed: GAME masks and clones are treated as stretched, with no aut
  const mismatch={before:stats,after:rgb};assert.match(api.atlasImageStatisticsHTML(mismatch),/incompatible image states/);assert.match(api.atlasImageStatisticsHTML({before:null,after:null}),/unavailable/);
 }
 console.log('Passed: raw percentile/channel statistics, bounded sampling, invalid samples, cache reuse/history restoration, missing pixels, preview failure and single-file model persistence.');
+
+{
+ const values=[-0.2,0,0.00001,0.001,0.5,1,1.2],sampled=api.captureAtlasImageStatistics(image(values)),hist=sampled.channels[0].histogram;
+ assert.equal(hist.bins.length,128);assert.equal(hist.logBins.length,128);
+ assert.equal(hist.bins.reduce((a,b)=>a+b,0),values.length);assert.equal(hist.logBins.reduce((a,b)=>a+b,0),values.length);
+ assert.equal(hist.below,1);assert.equal(hist.above,1);assert.equal(hist.bins[0],4);assert.equal(hist.bins[127],2);
+ assert.ok(hist.logBins.filter(n=>n>0).length>hist.bins.filter(n=>n>0).length,'Log intensity separates dark samples');
+ const rendered=api.atlasSampleHistogramHTML({before:sampled,after:sampled});assert.match(rendered,/data-hist-scale="linear"/);assert.match(rendered,/data-hist-scale="log"/);assert.equal((rendered.match(/role="img"/g)||[]).length,4);assert.ok(!rendered.includes('NaN'));
+ assert.match(api.atlasSampleHistogramHTML({before:null,after:sampled}),/Historical histogram unavailable/);
+ const legacy=JSON.parse(JSON.stringify(sampled));delete legacy.channels[0].histogram;assert.match(api.atlasSampleHistogramHTML({before:legacy,after:null}),/Generate a new report/);
+ const invalid=JSON.parse(JSON.stringify(sampled));invalid.channels[0].histogram.bins[0]=-1;assert.match(api.atlasSampleHistogramHTML({before:invalid,after:null}),/bins unavailable/);
+ const rgb=api.captureAtlasImageStatistics(image([0.01,0.2,0.7],true));const colors=api.atlasSampleHistogramHTML({before:rgb,after:rgb});for(const color of ['#f38ba8','#a6e3a1','#89b4fa'])assert.ok(colors.includes('stroke="'+color+'"'));
+ const restored=JSON.parse(JSON.stringify({statistics:{before:sampled,after:rgb}}));assert.equal(restored.statistics.before.channels[0].histogram.bins.reduce((a,b)=>a+b,0),values.length);
+}
+console.log('Passed: linear/log sampled histogram counts, out-of-range grouping, RGB curves, legacy/missing/invalid bins and serialization.');

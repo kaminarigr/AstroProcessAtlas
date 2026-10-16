@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Capture 128-bin linear/log-intensity histograms from the existing raw sample
+  grid and show responsive Before/After RGB or grayscale plots in step details.
+  Use a shared frequency scale, explicit missing-data states and English/Greek
+  labels. Preserve bins in report data without adding them to training features.
+
+
 - Add 4 x 4 regional statistics from the existing sample grid and distribution-based
   local features for the Histogram learner; keep global fallback for old captures.
 - Add a persistent shared training folder in PixInsight. Trials refresh their

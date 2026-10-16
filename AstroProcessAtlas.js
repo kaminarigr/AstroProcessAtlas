@@ -71,14 +71,14 @@ var BUTTON_OK = (typeof StdButton_Ok !== "undefined") ? StdButton_Ok : 0x0000040
 function captureAtlasImageStatistics(image) {
    var result={version:1,available:false,method:'uniform-grid',grid:64,rawPixels:true,alphaExcluded:true,channels:[]};
    if(!image||typeof image.sample!=='function'||!image.width||!image.height){result.reason='Image samples unavailable';return result;}
-   function summarize(values){
-      values.sort(function(a,b){return a-b;});var sum=0,black=0,white=0;
+   function summarize(values,withHistogram){
+      values.sort(function(a,b){return a-b;});var sum=0,black=0,white=0,bins=[],logBins=[],below=0,above=0;if(withHistogram)for(var b=0;b<128;++b){bins.push(0);logBins.push(0);}
       function quantile(p){var position=(values.length-1)*p,lo=Math.floor(position);return values[lo]+(values[Math.min(lo+1,values.length-1)]-values[lo])*(position-lo);}
-      for(var i=0;i<values.length;++i){sum+=values[i];if(values[i]<=0)black++;if(values[i]>=1)white++;}
+      for(var i=0;i<values.length;++i){sum+=values[i];if(values[i]<=0)black++;if(values[i]>=1)white++;if(withHistogram){var unit=Math.max(0,Math.min(1,values[i]));bins[Math.min(127,Math.floor(unit*128))]++;logBins[Math.min(127,Math.floor(Math.log(1+10000*unit)/Math.log(10001)*128))]++;if(values[i]<0)below++;if(values[i]>1)above++;}}
       var median=quantile(0.5),mean=sum/values.length,variance=0,deviations=[];
       for(var i=0;i<values.length;++i){variance+=(values[i]-mean)*(values[i]-mean);deviations.push(Math.abs(values[i]-median));}
       deviations.sort(function(a,b){return a-b;});var mid=(deviations.length-1)/2;
-      return {samples:values.length,mean:mean,median:median,p01:quantile(0.01),p10:quantile(0.1),p90:quantile(0.9),p99:quantile(0.99),minimum:values[0],maximum:values[values.length-1],stddev:Math.sqrt(variance/values.length),mad:(deviations[Math.floor(mid)]+deviations[Math.ceil(mid)])/2,blackFraction:black/values.length,whiteFraction:white/values.length};
+      var summary={samples:values.length,mean:mean,median:median,p01:quantile(0.01),p10:quantile(0.1),p90:quantile(0.9),p99:quantile(0.99),minimum:values[0],maximum:values[values.length-1],stddev:Math.sqrt(variance/values.length),mad:(deviations[Math.floor(mid)]+deviations[Math.ceil(mid)])/2,blackFraction:black/values.length,whiteFraction:white/values.length};if(withHistogram)summary.histogram={version:1,bins:bins,logBins:logBins,logStrength:10000,below:below,above:above};return summary;
    }
    try{
       result.width=image.width;result.height=image.height;result.isColor=!!image.isColor;
@@ -86,12 +86,26 @@ function captureAtlasImageStatistics(image) {
       if('bitsPerSample' in image)result.bitsPerSample=image.bitsPerSample;
       for(var c=0;c<count;++c){var values=[],tiles=[],invalid=0;for(var t=0;t<16;++t)tiles.push([]);
          for(var y=0;y<ny;++y)for(var x=0;x<nx;++x){var value=image.sample(Math.min(image.width-1,Math.floor((x+0.5)*image.width/nx)),Math.min(image.height-1,Math.floor((y+0.5)*image.height/ny)),c);if(typeof value!=='number'||!isFinite(value)){invalid++;continue;}values.push(value);tiles[Math.floor(y*4/ny)*4+Math.floor(x*4/nx)].push(value);}
-         if(!values.length)throw Error('No finite image samples');var channel=summarize(values);channel.channel=image.isColor?['R','G','B'][c]:'K';channel.invalidSamples=invalid;
+         if(!values.length)throw Error('No finite image samples');var channel=summarize(values,true);channel.channel=image.isColor?['R','G','B'][c]:'K';channel.invalidSamples=invalid;
          if(nx>=4&&ny>=4&&!invalid){channel.regions=[];for(var t=0;t<16;++t){var tile=summarize(tiles[t]);channel.regions.push({samples:tile.samples,mean:tile.mean,median:tile.median,mad:tile.mad,stddev:tile.stddev,blackFraction:tile.blackFraction,whiteFraction:tile.whiteFraction});}}
          result.channels.push(channel);
       }result.available=true;
    }catch(error){result.channels=[];result.reason=String(error.message);}
    return result;
+}
+function atlasSampleHistogramHTML(statistics) {
+   if(!statistics)return '';var sides=[statistics.before,statistics.after],usable=[];
+   function valid(channel,logarithmic){if(!channel||!channel.histogram||channel.histogram.version!==1||!channel.samples)return false;var histogram=channel.histogram,bins=logarithmic?histogram.logBins:histogram.bins;if(!Array.isArray(bins)||bins.length!==128||(logarithmic&&histogram.logStrength!==10000))return false;var total=0;for(var i=0;i<128;++i){if(typeof bins[i]!=='number'||!isFinite(bins[i])||bins[i]<0||Math.floor(bins[i])!==bins[i])return false;total+=bins[i];}return total===channel.samples;}
+   for(var side=0;side<2;++side)usable.push(!!(sides[side]&&sides[side].available&&Array.isArray(sides[side].channels)&&sides[side].channels.length&&sides[side].channels.every(function(channel){return valid(channel,false);})));if(!usable[0]&&!usable[1])return '<details class="image-histogram"><summary>Image histogram — Before / After</summary><p>Histogram bins unavailable. Generate a new report from PixInsight to capture them.</p></details>';
+   function panels(logarithmic){var maximum=0,available=[];for(var side=0;side<2;++side){available[side]=usable[side]&&sides[side].channels.every(function(channel){return valid(channel,logarithmic);});if(available[side])for(var c=0;c<sides[side].channels.length;++c){var channel=sides[side].channels[c],bins=logarithmic?channel.histogram.logBins:channel.histogram.bins;for(var i=0;i<128;++i)maximum=Math.max(maximum,bins[i]/channel.samples);}}var html='';
+      for(var side=0;side<2;++side){var title=side?'After':'Before';html+='<div style="min-width:0"><b>'+title+'</b>';if(!available[side]){html+='<p>Historical histogram unavailable.</p></div>';continue;}var ticks=logarithmic?[0,0.001,0.01,0.1,1]:[0,0.25,0.5,0.75,1];html+='<svg role="img" aria-label="'+title+' sampled histogram" viewBox="0 0 360 190" style="display:block;width:100%;height:auto;background:#11111b;border:1px solid #45475a"><title>'+title+'</title><path d="M36 18V158H348" fill="none" stroke="#6c7086"/>';
+         for(var t=0;t<ticks.length;++t){var value=ticks[t],x=36+312*(logarithmic?Math.log(1+10000*value)/Math.log(10001):value),anchor=t===0?'start':t===ticks.length-1?'end':'middle';html+='<path d="M'+x.toFixed(2)+' 18V162" stroke="#313244"/><text x="'+x.toFixed(2)+'" y="177" text-anchor="'+anchor+'" fill="#bac2de" font-size="11">'+value+'</text>';}
+         html+='<text x="4" y="15" fill="#bac2de" font-size="10">'+(maximum*100).toFixed(1)+'%</text>';for(var c=0;c<sides[side].channels.length;++c){var channel=sides[side].channels[c],bins=logarithmic?channel.histogram.logBins:channel.histogram.bins,color=sides[side].isColor?['#f38ba8','#a6e3a1','#89b4fa'][c]:'#cdd6f4',line='';for(var i=0;i<128;++i){var x=36+312*(i+0.5)/128,y=158-140*(bins[i]/channel.samples)/(maximum||1);line+=(i?'L':'M')+x.toFixed(2)+' '+y.toFixed(2);}html+='<path d="M36 158'+line.replace(/^M/,'L')+'L348 158Z" fill="'+color+'" fill-opacity="0.12"/><path d="'+line+'" fill="none" stroke="'+color+'" stroke-width="1.5"/>';}
+         html+='</svg></div>';
+      }return html;
+   }
+   var switcher="var boxes=this.parentNode.parentNode.querySelectorAll('[data-hist-scale]');for(var i=0;i<boxes.length;++i)boxes[i].style.display=boxes[i].getAttribute('data-hist-scale')===this.value?'grid':'none';",grid='grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:12px;margin:12px 0';
+   return '<details class="image-histogram"><summary>Image histogram — Before / After</summary><p>Sampled raw pixels, without STF. 128 bins; shared vertical scale (fraction of samples per bin). Values outside [0,1] are grouped at the ends. These charts describe recorded pixels, not edited replay results.</p><label>Intensity axis <select onchange="'+switcher+'"><option value="linear">Linear</option><option value="log">Logarithmic — dark / linear images</option></select></label><p>'+((usable[0]&&sides[0].isColor)||(usable[1]&&sides[1].isColor)?'<span style="color:#f38ba8">R</span> · <span style="color:#a6e3a1">G</span> · <span style="color:#89b4fa">B</span>':'<span>Grayscale: K</span>')+'</p><div data-hist-scale="linear" style="display:grid;'+grid+'">'+panels(false)+'</div><div data-hist-scale="log" style="display:none;'+grid+'">'+panels(true)+'</div></details>';
 }
 function atlasImageStatisticsHTML(statistics) {
    if(!statistics)return '';var before=statistics.before,after=statistics.after,validBefore=before&&before.available,validAfter=after&&after.available;
@@ -1386,6 +1400,7 @@ function imageReportHTML(record, emit, structuredHistory) {
          'Position ' + step.liveIndex + ' in history') + (step.redo ? ' [Redo / not applied at the current position]' : '') +
          (step.time ? ' · ' + escapeHTML(step.time) : ' · Execution time: not recorded') + '</p>';
       html += completenessHTML(step);
+      html += atlasSampleHistogramHTML('statistics' in step?step.statistics:null);
       html += atlasImageStatisticsHTML('statistics' in step?step.statistics:null);
       html += historyMaskHTML(step.mask, step.maskThumb);
       if (step.possibleInputs && step.possibleInputs.length) {
@@ -3492,6 +3507,14 @@ function generateHistoryReport() {
 }
 
 var REPORT_TRANSLATIONS = [
+   ["Image histogram — Before / After", "Ιστόγραμμα εικόνας — Πριν / Μετά"],
+   ["Intensity axis", "Άξονας φωτεινότητας"],
+   ["Linear", "Γραμμικός"],
+   ["Logarithmic — dark / linear images", "Λογαριθμικός — σκοτεινές / linear εικόνες"],
+   ["Grayscale: K", "Ασπρόμαυρη: K"],
+   ["Historical histogram unavailable.", "Το ιστορικό ιστόγραμμα δεν είναι διαθέσιμο."],
+   ["Histogram bins unavailable. Generate a new report from PixInsight to capture them.", "Δεν υπάρχουν δεδομένα ιστογράμματος. Δημιούργησε νέο report από το PixInsight για να καταγραφούν."],
+   ["Sampled raw pixels, without STF. 128 bins; shared vertical scale (fraction of samples per bin). Values outside [0,1] are grouped at the ends. These charts describe recorded pixels, not edited replay results.", "Δείγματα αρχικών pixels, χωρίς STF. 128 διαστήματα με κοινή κατακόρυφη κλίμακα (ποσοστό δειγμάτων ανά διάστημα). Τιμές εκτός [0,1] ομαδοποιούνται στα άκρα. Τα διαγράμματα δείχνουν τα καταγεγραμμένα pixels, όχι αλλαγμένα αποτελέσματα replay."],
    ['Recorded image statistics','Καταγεγραμμένα στατιστικά εικόνας'],
    ['Historical pixel statistics unavailable for this step.','Δεν είναι διαθέσιμα ιστορικά στατιστικά pixels για αυτό το βήμα.'],
    ['Estimates from up to 4096 uniformly sampled raw pixels per channel, before any preview stretch. Alpha is excluded. MAD measures image spread, not a noise estimate. These are recorded statistics, not predictions for edited replay steps.','Εκτιμήσεις από έως 4096 ομοιόμορφα επιλεγμένα αρχικά pixels ανά κανάλι, πριν από stretch προεπισκόπησης. Το Alpha εξαιρείται. Το MAD μετρά τη διασπορά της εικόνας, δεν είναι εκτίμηση θορύβου. Τα στοιχεία αφορούν την καταγραφή, όχι το αποτέλεσμα αλλαγμένων βημάτων replay.'],
