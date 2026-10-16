@@ -65,3 +65,15 @@ const invalidLegacy=runtime();vm.runInNewContext(script.replace(/^#.*$/gm,''),in
 console.log('Passed: permanent view metadata, automatic validated legacy recovery and refusal to relabel altered/current trials.');
 const nativeRuntime={};vm.runInNewContext(api.atlasHistogramRuntimeSource(),nativeRuntime);assert.equal(typeof nativeRuntime.atlasHistogramRuntimeAPI.predict,'function');assert.equal(nativeRuntime.atlasHistogramRuntimeAPI.train,undefined);assert.ok(!script.includes('function atlasHistogramLearning()'));assert.ok(!script.includes('function history(model,resolve)'));assert.deepEqual(JSON.parse(JSON.stringify(nativeRuntime.atlasHistogramRuntimeAPI.predict(model,prior.before,originalH))),JSON.parse(JSON.stringify(learner.predict(model,prior.before,originalH))));assert.deepEqual(JSON.parse(JSON.stringify(nativeRuntime.atlasHistogramRuntimeAPI.feedback(review))),JSON.parse(JSON.stringify(learner.feedback(review))));new vm.Script('"use strict";\n'+script.replace(/^#.*$/gm,''));
 console.log('Passed: flat inference-only native runtime matches browser prediction/evaluation and compiles in strict mode.');
+
+// Native helper declarations must not retain generic named function expressions.
+const declarationSource=api.atlasHistogramRuntimeSource();
+for(const name of ['hash','matrix','stats','features','predict','feedback','readMatrix']){
+ assert.ok(declarationSource.includes('function atlasHistogram_'+name+'('));
+ assert.ok(!declarationSource.includes('=function '+name+'('));
+}
+// Exercise the actual downloaded configuration as well as the small gray fixture.
+const rgbBefore=stats([0.01,0.03,0.08],true);
+assert.deepEqual(JSON.parse(JSON.stringify(nativeRuntime.atlasHistogramRuntimeAPI.stats(rgbBefore))),JSON.parse(JSON.stringify(learner.stats(rgbBefore))));
+assert.throws(()=>nativeRuntime.atlasHistogramRuntimeAPI.stats({...rgbBefore,channels:[]}),/raw image statistics/);
+console.log('Passed: unique top-level native helper declarations and RGB statistics validation.');
