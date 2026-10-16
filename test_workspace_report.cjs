@@ -974,7 +974,7 @@ console.log('Passed: arbitrary current/before/after selection, shared comparison
  assert.match(elements.replay_readiness.children[0].textContent,/Choose prepared inputs/);
  assert.match(elements.replay_status.textContent,/2 consecutive/);
  browser.window.exportReplayScript();
- assert.match(exportedBlob,/Selected pixels are used unchanged/);
+ assert.match(exportedBlob,/select each input and its preparation state/);
  new vm.Script(exportedBlob.replace(/^#.*$/gm,''));
  browser.workspaceReplayData=[{id:'LaterPalette',steps:[browser.workspaceReplayData[0].steps[1],browser.workspaceReplayData[0].steps[0]]}];
  browser.window.updateReplayRange(true);

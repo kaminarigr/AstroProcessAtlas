@@ -2,11 +2,6 @@
 
 ## Unreleased
 
-- Simplify palette input selection: use selected pixels unchanged by default,
-  remove the mandatory linear/stretched question and place optional PPP input
-  stretch in a collapsed advanced section. Preserve explicit saved stretch
-  choices and use the same default in standalone PixInsight replay.
-
 - Avoid literal comment delimiters in the structured-parameter parser regexes,
   preventing PixInsight preprocessing from truncating the script.
 
