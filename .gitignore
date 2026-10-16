@@ -20,3 +20,9 @@ Thumbs.db
 !test_chain_replay.cjs
 
 WORKSPACE_HISTORY_README.md
+
+!test_histogram_advisor.cjs
+
+# Private local Histogram trials and learning transfers
+AstroProcessAtlas_histogram_*.json
+AstroProcessAtlas_histogram_trial_*.js

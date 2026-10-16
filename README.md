@@ -131,6 +131,23 @@ Connected images appear first and disconnected images last, preserving the exist
 
 Replay code requires the correct preceding image state, references and mask settings. It does not recover missing historical image versions.
 
+## Local Histogram advisor
+
+For a recorded, unmasked HistogramTransformation, open **Customize parameters**
+and **Compare three versions and learn locally**. Download a trial that creates
+Recorded / Suggested / User copies in PixInsight. The script finishes so you can
+adjust User normally; rerun the same file to compare without STF and save your
+preference. Import that evaluation JSON in the report and save the HTML.
+
+The first local learner uses historical statistics/H matrices and learns from
+your accepted results, with ties and rejection options. Its dataset stays inside
+the saved HTML, can be transferred via library JSON, and requires no service or
+additional installation. Sparse or dissimilar examples fall back to recorded
+values; suggestions are not guaranteed improvements. It supports one unmasked
+Histogram stage, not an automatic adaptive chain.
+
+See [the complete local-advisor workflow and limits](docs/HISTOGRAM_ADVISOR.md).
+
 ## Recorded image state
 
 Each step includes a collapsed **Recorded image statistics** section when its

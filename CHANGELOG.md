@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Add a fully local, trainable Histogram advisor for recorded unmasked steps.
+  Compare recorded settings, a weighted-neighbour proposal and a user-adjusted
+  copy in PixInsight with neutral STF and real script finish/resume. Capture
+  explicit preferences, ties/rejections and raw outcomes in evaluation JSON.
+  Import historical reports and feedback, fit the local learner, save its dataset
+  in the edited HTML and optionally apply an accepted matrix to the workflow.
+  Preserve originals, refuse altered/masked/multi-process trial candidates and
+  fall back to recorded values outside learned data. No service or extra runtime
+  is required. Add regression and browser integration coverage.
+
+
 - Capture sampled raw image statistics before/after accessible history steps,
   cache shared checkpoints and retain measurements even if preview export fails.
   Show per-channel brightness/distribution/clipping estimates with compatible-state

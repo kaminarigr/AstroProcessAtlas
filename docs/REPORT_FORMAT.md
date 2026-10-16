@@ -133,3 +133,22 @@ sample counts, with thresholds <=0 and >=1; raw values are not clamped. Up to
 64 × 64 deterministic grid samples are read per nominal channel. These are sample
 estimates, not full-image histograms, localized mask statistics or noise estimates.
 The viewer only shows deltas for matching dimensions and channel counts.
+
+
+## Local Histogram learning
+
+The optional project.histogramLearning field stores an
+AstroProcessAtlasHistogramLibrary version-1 document with examples and
+evaluations. Historical examples contain validated raw before/after statistics
+and a five-row H matrix; preference examples come from explicitly accepted trial
+outcomes. Evaluations contain recorded/suggested/user candidates, accepted IDs
+(including ties or an empty rejection), optional reason and captured-step context.
+No raster data, executable imported code or model-service credentials are stored.
+
+The fitted model is separately embedded in a downloaded local trial script;
+its format is AstroProcessAtlasHistogramModel, version 1, with feature
+normalization and weighted-neighbour exemplars. Model IDs are informational
+fingerprints, not cryptographic signatures. Trial state uses a per-script Settings
+key with ASCII-hex JSON and owned view IDs. Runtime evaluations transfer through
+AstroProcessAtlasHistogramFeedback version-1 JSON. Importing and saving the HTML
+makes the transfer file optional thereafter. See [advisor details](HISTOGRAM_ADVISOR.md).
