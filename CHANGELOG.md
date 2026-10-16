@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Avoid literal comment delimiters in the structured-parameter parser regexes,
+  preventing PixInsight preprocessing from truncating the script.
+
 - Edit HistogramTransformation channel matrices and CurvesTransformation control
   points/interpolation in HTML. Add/remove intermediate curve points, show a
   control-point outline, validate numeric bounds and ordering, retain masks and

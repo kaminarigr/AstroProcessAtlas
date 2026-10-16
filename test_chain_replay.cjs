@@ -598,3 +598,9 @@ console.log('Passed: inline replay parameter columns preserve recorded cells, up
  assert.throws(()=>api.editReplayWorkflow(data,{}, {...curveOp,values:{Rt:'eval(evil)'}}),/interpolation/);const invalid=JSON.parse(JSON.stringify(H));invalid[0][0]=0.9;invalid[0][2]=0.2;assert.throws(()=>api.editReplayWorkflow(data,{}, {...op,values:{H:invalid}}),/ordered/);assert.ok(api.buildWorkspaceReplayScript(changed.data[0],0,1).includes('CurvesTransformation.prototype.CubicSpline'));
 }
 console.log('Passed: histogram channels, curve points/interpolation, safe numeric serialization, malformed inputs, exact reset and persisted replay variants.');
+
+// PixInsight preprocessing must not mistake regex delimiters for JavaScript comments.
+{
+ const parser=api.atlasStructuredParameterFields.toString();assert.ok(!parser.includes('/*'));assert.ok(!parser.includes('*/'));assert.ok(!parser.includes('//'));const preprocessed=parser.replace(/\/\*[\s\S]*?\*\//g,'').replace(/\/\/[^\r\n]*/g,''),ctx={atlasParameterLiteral:api.atlasParameterLiteral};vm.runInNewContext(preprocessed,ctx);const fields=ctx.atlasStructuredParameterFields(process('CurvesTransformation','P.R = [ // coordinates\n[0,0], /* middle */ [0.5,0.4], [1,1] ];P.Rt=CurvesTransformation.prototype.Linear;'));assert.equal(fields.length,2);assert.equal(fields[0].value[1][1],0.4);
+}
+console.log('Passed: structured-parameter parser survives comment preprocessing and reads commented history arrays.');
