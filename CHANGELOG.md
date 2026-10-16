@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Add 4 x 4 regional statistics from the existing sample grid and distribution-based
+  local features for the Histogram learner; keep global fallback for old captures.
+- Add a persistent shared training folder in PixInsight. Trials refresh their
+  model from the latest library and merge evaluations with atomic replacement and
+  a recovery backup. New reports carry a snapshot; open HTML reports can load the
+  folder explicitly, including in Firefox. Keep folder paths out of HTML exports.
+- Extend regression/browser/native PixInsight checks for regional matching,
+  shared-library persistence, rollback, corruption and old-data compatibility.
+
+
 - Normalize generated Histogram trial source to LF. Mixed CRLF/LF from serialized
   functions and joined sections caused PixInsight preprocessing to report
   return-outside-function errors. Verify the complete generated source with the

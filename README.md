@@ -137,7 +137,8 @@ For a recorded, unmasked HistogramTransformation, open **Customize parameters**
 and **Compare three versions and learn locally**. Download a trial that creates
 Recorded / Suggested / User copies in PixInsight. The script finishes so you can
 adjust User normally; rerun the same file to compare without STF and save your
-preference. Import that evaluation JSON in the report and save the HTML.
+preference. Without a shared folder, import that evaluation JSON in the report
+and save the HTML.
 
 The first local learner uses historical statistics/H matrices and learns from
 your accepted results, with ties and rejection options. Its dataset stays inside
@@ -145,6 +146,13 @@ the saved HTML, can be transferred via library JSON, and requires no service or
 additional installation. Sparse or dissimilar examples fall back to recorded
 values; suggestions are not guaranteed improvements. It supports one unmasked
 Histogram stage, not an automatic adaptive chain.
+
+Choose **Training folder...** in the initial PixInsight dialog to share learning
+between reports. Trials read the latest library and save evaluations there
+automatically. New reports include its current snapshot; an open HTML can refresh
+through **Load shared training folder**. Firefox requires explicit folder selection.
+New captures add 4 x 4 regional distribution features using the same sampled
+pixels; older training data remains compatible through global-feature fallback.
 
 See [the complete local-advisor workflow and limits](docs/HISTOGRAM_ADVISOR.md).
 

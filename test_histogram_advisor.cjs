@@ -63,7 +63,7 @@ const legacy=runtime();vm.runInNewContext(script.replace(/^#.*$/gm,''),legacy.ct
 const absent=runtime();vm.runInNewContext(script.replace(/^#.*$/gm,''),absent.ctx);absent.windows[1].mainView.deleteProperty('AstroProcessAtlas:HistogramTrial');vm.runInNewContext(script.replace(/^#.*$/gm,''),absent.ctx);assert.ok(absent.messages.at(-1).includes('ownership marker is missing'));assert.equal(Object.keys(absent.writes).length,0);
 const invalidLegacy=runtime();vm.runInNewContext(script.replace(/^#.*$/gm,''),invalidLegacy.ctx);const badKey=Object.keys(invalidLegacy.settings)[0],badState=decodeTrial(invalidLegacy.settings[badKey]);delete badState.ownershipVersion;invalidLegacy.settings[badKey]=encodeTrial(badState);invalidLegacy.windows[1].mainView.deleteProperty('AstroProcessAtlas:HistogramTrial');new invalidLegacy.ctx.HistogramTransformation().executeOn(invalidLegacy.windows[1].mainView);invalidLegacy.windows[1].mainView.deleteProperty('AstroProcessAtlas:HistogramTrial');vm.runInNewContext(script.replace(/^#.*$/gm,''),invalidLegacy.ctx);assert.ok(invalidLegacy.messages.at(-1).includes('were edited'));assert.equal(invalidLegacy.windows[1].mainView.hasProperty('AstroProcessAtlas:HistogramTrial'),false,'Failed validation must not reattach ownership');
 console.log('Passed: permanent view metadata, automatic validated legacy recovery and refusal to relabel altered/current trials.');
-const nativeRuntime={};vm.runInNewContext(api.atlasHistogramRuntimeSource(),nativeRuntime);assert.equal(typeof nativeRuntime.atlasHistogramRuntimeAPI.predict,'function');assert.equal(nativeRuntime.atlasHistogramRuntimeAPI.train,undefined);assert.ok(!script.includes('function atlasHistogramLearning()'));assert.ok(!script.includes('function history(model,resolve)'));assert.deepEqual(JSON.parse(JSON.stringify(nativeRuntime.atlasHistogramRuntimeAPI.predict(model,prior.before,originalH))),JSON.parse(JSON.stringify(learner.predict(model,prior.before,originalH))));assert.deepEqual(JSON.parse(JSON.stringify(nativeRuntime.atlasHistogramRuntimeAPI.feedback(review))),JSON.parse(JSON.stringify(learner.feedback(review))));new vm.Script('"use strict";\n'+script.replace(/^#.*$/gm,''));
+const nativeRuntime={};vm.runInNewContext(api.atlasHistogramRuntimeSource(),nativeRuntime);assert.equal(typeof nativeRuntime.atlasHistogramRuntimeAPI.predict,'function');assert.equal(nativeRuntime.atlasHistogramRuntimeAPI.train,undefined);assert.ok(script.includes('function atlasHistogramLearning()'),'Native trials refresh the model from the shared library');assert.deepEqual(JSON.parse(JSON.stringify(nativeRuntime.atlasHistogramRuntimeAPI.predict(model,prior.before,originalH))),JSON.parse(JSON.stringify(learner.predict(model,prior.before,originalH))));assert.deepEqual(JSON.parse(JSON.stringify(nativeRuntime.atlasHistogramRuntimeAPI.feedback(review))),JSON.parse(JSON.stringify(learner.feedback(review))));new vm.Script('"use strict";\n'+script.replace(/^#.*$/gm,''));
 console.log('Passed: flat inference-only native runtime matches browser prediction/evaluation and compiles in strict mode.');
 
 // Native helper declarations must not retain generic named function expressions.
@@ -90,3 +90,48 @@ for(const eol of ['\n','\r\n']){
  assert.deepEqual(JSON.parse(/^var atlasHistogramConfig=(.*);$/m.exec(generated)[1]),JSON.parse(JSON.stringify(config)));
 }
 console.log('Passed: LF-only exports from both LF and CRLF source files; trial configuration preserved.');
+
+// Regional signatures distinguish spatial distributions without extra pixel reads.
+function spatialImage(blocked){let calls=0;return {width:64,height:64,isColor:false,get calls(){return calls;},sample(x,y){calls++;return blocked?(x<32?0.1:0.7):((x+y)%2?0.1:0.7);}};}
+const imageA=spatialImage(false),imageB=spatialImage(true),localA=api.captureAtlasImageStatistics(imageA),localB=api.captureAtlasImageStatistics(imageB);
+assert.equal(imageA.calls,4096);assert.equal(imageB.calls,4096);
+assert.equal(localA.channels[0].regions.length,16);
+assert.deepEqual(learner.features(localA),learner.features(localB),'Global distributions are identical');
+assert.notDeepEqual(learner.features(localA,true),learner.features(localB,true));
+const rotated=api.captureAtlasImageStatistics({width:64,height:64,isColor:false,sample(x,y){return y<32?0.1:0.7;}});
+assert.deepEqual(learner.features(localB,true),learner.features(rotated,true),'Regional distribution signatures ignore tile positions');
+const regionalLibrary=learner.merge(learner.empty(),[{...example(originalH,localA),after:localA},{...example(preferred,localB),after:localB}],[]),regionalModel=learner.train(regionalLibrary);
+assert.ok(regionalModel.groups.graySpatial);assert.ok(regionalModel.groups.gray);
+const regionPrediction=learner.predict(regionalModel,localB,originalH);
+assert.ok(regionPrediction.reason.includes('4x4'));assert.ok(Math.abs(regionPrediction.H[3][1]-preferred[3][1])<Math.abs(regionPrediction.H[3][1]-originalH[3][1]));
+assert.ok(!learner.predict(regionalModel,prior.before,originalH).reason.includes('4x4'),'Old captures fall back to global features');
+const broken=JSON.parse(JSON.stringify(localA));broken.channels[0].regions[0].samples++;assert.throws(()=>learner.stats(broken),/sample counts/);
+console.log('Passed: 4x4 regional signatures, rotation invariance, identical global distributions distinguished, old captures supported and no extra samples.');
+
+function storeRuntime(){const data={},settings={};let failMove=false;function File(){this.createForWriting=p=>this.path=p;this.write=t=>data[this.path]=t;this.close=()=>{};}File.exists=p=>Object.hasOwn(data,p);File.readTextFile=p=>{if(!File.exists(p))throw Error('Missing file');return data[p];};File.remove=p=>delete data[p];File.move=(from,to)=>{if(failMove&&from.includes('.tmp_')){failMove=false;throw Error('Simulated replace failure');}if(!File.exists(from)||File.exists(to))throw Error('Invalid move');data[to]=data[from];delete data[from];};const ctx={File,Settings:{read:k=>settings[k]||null,write:(k,t,v)=>settings[k]=v,remove:k=>delete settings[k]},DataType_String:13,ByteArray:{stringToUTF8:x=>x}};vm.runInNewContext(api.atlasHistogramStore.toString(),ctx);const store=ctx.atlasHistogramStore(learner);settings[store.setting]='D:/training';return {store,data,settings,ctx,fail:()=>failMove=true};}
+const shared=storeRuntime(),libraryPath='D:/training/AstroProcessAtlas_histogram_library.json';
+shared.store.save(library);assert.equal(shared.store.read().examples.length,1);
+const other=storeRuntime();Object.assign(other.data,shared.data);other.store.save(learned);assert.equal(other.store.read().evaluations.length,1);
+Object.assign(shared.data,other.data);shared.store.save(library);assert.equal(shared.store.read().evaluations.length,1,'Stale report cannot erase newer evaluations');
+const intact=shared.data[libraryPath];shared.fail();assert.throws(()=>shared.store.save(library),/replace failure/);assert.equal(shared.data[libraryPath],intact);assert.ok(!Object.keys(shared.data).some(p=>p.includes('.tmp_')));
+shared.data[libraryPath]='corrupt';assert.throws(()=>shared.store.save(library));assert.equal(shared.data[libraryPath],'corrupt','Never replace a corrupt library silently');
+console.log('Passed: shared folder merge, deduplication, stale snapshot preservation, atomic replacement rollback and corrupt-file refusal.');
+
+// New trials load the latest shared data and save the preference without another transfer dialog.
+const connected=runtime(),disk=storeRuntime();connected.ctx.File=disk.ctx.File;
+connected.settings[disk.store.setting]='D:/training';disk.data[libraryPath]=JSON.stringify(learned);
+const connectedConfig={...config,library};const connectedScript=api.buildAtlasHistogramExperiment(connectedConfig).replace(/^#.*$/gm,'');
+vm.runInNewContext(connectedScript,connected.ctx);
+const connectedSuggested=connected.windows.find(w=>w.mainView.id.includes('_Suggested_'));
+assert.ok(connectedSuggested.mainView.history[0].toSource().includes('HistogramTransformation'));
+const selectedUser=connected.windows.find(w=>w.mainView.id.includes('_User_'));new connected.ctx.HistogramTransformation().executeOn(selectedUser.mainView);
+vm.runInNewContext(connectedScript,connected.ctx);
+const updated=learner.validate(JSON.parse(disk.data[libraryPath]));assert.equal(updated.evaluations.length,2);
+assert.equal(Object.keys(connected.settings).length,1,'Only the shared folder preference remains');
+assert.ok(connected.messages.at(-1).includes('shared training folder'));
+console.log('Passed: native trial refreshes the shared learner, saves evaluation automatically and retains the shared setting.');
+
+const configured=storeRuntime();configured.ctx.atlasHistogramLearning=()=>learner;configured.ctx.GetDirectoryDialog=function(){this.directory='D:/new-training';this.execute=()=>true;};vm.runInNewContext(api.chooseAtlasLearningFolder.toString(),configured.ctx);assert.equal(configured.ctx.chooseAtlasLearningFolder(),true);assert.equal(configured.store.folder(),'D:/new-training');assert.ok(configured.data['D:/new-training/AstroProcessAtlas_histogram_library.json']);
+configured.data['D:/broken-training/AstroProcessAtlas_histogram_library.json']='invalid';configured.ctx.GetDirectoryDialog=function(){this.directory='D:/broken-training';this.execute=()=>true;};assert.throws(()=>configured.ctx.chooseAtlasLearningFolder());assert.equal(configured.store.folder(),'D:/new-training','Restore the prior folder after invalid library selection');
+const recover=storeRuntime();recover.data[libraryPath+'.bak']=JSON.stringify(learned);assert.equal(recover.store.read().evaluations.length,1);recover.store.save(library);assert.equal(recover.store.read().evaluations.length,1);
+console.log('Passed: remembered folder selection, empty-library initialization, invalid-folder rollback and backup recovery.');

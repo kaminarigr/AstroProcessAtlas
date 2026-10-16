@@ -26,3 +26,6 @@ WORKSPACE_HISTORY_README.md
 # Private local Histogram trials and learning transfers
 AstroProcessAtlas_histogram_*.json
 AstroProcessAtlas_histogram_trial_*.js
+
+AstroProcessAtlas_histogram_library.json.bak
+AstroProcessAtlas_histogram_library.json.tmp_*

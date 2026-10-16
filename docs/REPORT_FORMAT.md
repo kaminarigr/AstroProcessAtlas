@@ -152,3 +152,23 @@ fingerprints, not cryptographic signatures. Trial state uses a per-script Settin
 key with ASCII-hex JSON and owned view IDs. Runtime evaluations transfer through
 AstroProcessAtlasHistogramFeedback version-1 JSON. Importing and saving the HTML
 makes the transfer file optional thereafter. See [advisor details](HISTOGRAM_ADVISOR.md).
+
+### Regional statistics and shared-library snapshots
+
+Statistics schema version 1 optionally includes `channels[].regions`: 16 entries
+in row-major 4 x 4 order, each with `samples`, `mean`, `median`, `mad`, `stddev`,
+`blackFraction` and `whiteFraction`. Regional sample counts sum to the channel's
+sample count. Regions are omitted for tiny grids or invalid samples. Validation
+preserves regional measurements in training examples and evaluations.
+
+Model version 1 retains global `gray`/`rgb` groups and optionally adds
+`graySpatial`/`rgbSpatial`. Exemplars carry `featureVersion` 1 (global) or 2
+(global plus regional distribution quantiles). Older models without that field
+remain valid global models. Prediction selects a compatible feature group.
+
+The optional report-level `histogramLearning` field seeds a new report from the
+shared folder. Once edited/saved, `project.histogramLearning` takes precedence.
+The shared-folder path is kept only in PixInsight Settings, not in the report.
+The native trial includes a validated library snapshot, merges the latest shared
+library at runtime and atomically replaces the shared JSON on evaluation save,
+keeping one recovery `.bak`. No network or directory path inference is used.
