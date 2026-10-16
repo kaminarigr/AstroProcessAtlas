@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Preserve Histogram trial ownership as a permanent, storable view property and
+  reassert it after generated processing. Recover missing legacy markers only
+  after validating saved IDs, geometry and candidate histories; distinguish missing
+  images from mismatched ownership. Keep current-trial tamper checks strict.
+
 - Add a fully local, trainable Histogram advisor for recorded unmasked steps.
   Compare recorded settings, a weighted-neighbour proposal and a user-adjusted
   copy in PixInsight with neutral STF and real script finish/resume. Capture

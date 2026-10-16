@@ -40,6 +40,10 @@ the workflow automatically. Normal recorded-value restore still works.
 Closed/renamed/replaced trial images cannot be resumed safely. Download a new trial
 from the HTML if the originals are unavailable. Pending metadata is scoped to the
 downloaded script. Successful save removes it; no temporary image files are created.
+Trial ownership uses permanent view metadata so pixel processing and undo/redo do
+not remove it. Updated trial runtimes can recover a missing marker from the first
+implementation after validating all saved IDs, geometry and candidate histories.
+A conflicting marker or changed candidate still stops evaluation.
 Evaluation save retains result copies intentionally. Each run has its own trial ID,
 even when the same downloaded script is used again.
 
