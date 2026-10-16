@@ -118,3 +118,11 @@ console.log('Passed: raw percentile/channel statistics, bounded sampling, invali
  const restored=JSON.parse(JSON.stringify({statistics:{before:sampled,after:rgb}}));assert.equal(restored.statistics.before.channels[0].histogram.bins.reduce((a,b)=>a+b,0),values.length);
 }
 console.log('Passed: linear/log sampled histogram counts, out-of-range grouping, RGB curves, legacy/missing/invalid bins and serialization.');
+
+{
+ const measured=api.captureAtlasImageStatistics(image([0.1,0.2,0.5]));
+ const sidebar=api.atlasSampleHistogramHTML({before:measured,after:measured},true);
+ assert.match(sidebar,/<section class="image-histogram"><h4>/);assert.ok(!sidebar.includes('<details'));assert.match(api.atlasSampleHistogramHTML(null,true),/Historical histogram unavailable/);
+ assert.ok(api.reportStyles().includes('.step-detail-layout{display:grid'));assert.ok(api.reportStyles().includes('@media(max-width:1250px)'));
+}
+console.log('Passed: persistent histogram sidebar and responsive detail-grid styles.');

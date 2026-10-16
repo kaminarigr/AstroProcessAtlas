@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Move step histograms into a permanently open right-hand column beside existing
+  step information and parameters. Stack the histogram below on narrow screens
+  and keep replay changes in the information column.
+
+
 - Capture 128-bin linear/log-intensity histograms from the existing raw sample
   grid and show responsive Before/After RGB or grayscale plots in step details.
   Use a shared frequency scale, explicit missing-data states and English/Greek

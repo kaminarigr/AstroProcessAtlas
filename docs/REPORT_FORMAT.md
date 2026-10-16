@@ -183,7 +183,8 @@ in the first/last bin; each bin array sums to the channel's finite sample count.
 No additional image reads are used. These are sampled distributions, not a
 full-resolution PixInsight histogram.
 
-Step-detail SVGs offer linear/log intensity axes and normalized sample frequency
+Step-detail SVGs occupy a permanently open sidebar beside the original details,
+stacking below on narrow screens. They offer linear/log intensity axes and normalized sample frequency
 with a shared vertical scale across Before/After and channels. Old reports without
 bins show an unavailable message rather than inferred distributions. Regenerating
 the report is required. The Histogram learner's sanitized training statistics
