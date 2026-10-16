@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Edit HistogramTransformation channel matrices and CurvesTransformation control
+  points/interpolation in HTML. Add/remove intermediate curve points, show a
+  control-point outline, validate numeric bounds and ordering, retain masks and
+  other recorded settings, and save/replay or reset exact original sources.
+  Show edited/added/removed points in Replay changes beside recorded tables.
+
 - Show edited replay values beside recorded values in a Replay changes table
   column instead of inserting a separate panel beside the image. Remove the
   column when all parameters are restored.

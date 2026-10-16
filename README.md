@@ -138,6 +138,12 @@ plan and download**, then **Customize parameters**. The optional workflow editor
 also provides a **Parameters** button. Supported recorded fields initially cover
 UnsharpMask (sigma, amount, luminance), NoiseXTerminator (denoise, detail) and
 BlurXTerminator (available sharpening, halo, PSF and correction settings).
+HistogramTransformation provides a five-channel grid for shadows, midtones,
+highlights and output range. CurvesTransformation provides per-channel X/Y
+control points with add/remove controls, a control-point outline and the recorded
+Linear / CubicSpline / AkimaSubsplines interpolation selector. X coordinates must
+increase from 0 to 1; coordinates and histogram clipping/ordering are validated.
+The outline is not an interpolated curve or a preview of processed pixels.
 Only supported fields actually present in the recording are offered.
 
 Changes apply to both replay exports and appear in the plan, tree and PDF.
