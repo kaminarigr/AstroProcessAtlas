@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Show edited replay values beside recorded values in a Replay changes table
+  column instead of inserting a separate panel beside the image. Remove the
+  column when all parameters are restored.
+
 - Edit supported recorded UnsharpMask, NoiseXTerminator and BlurXTerminator
   parameters in the report. Validate values, retain exact recorded defaults per
   step and restore them after save/reopen, mode changes or copying. Apply variants

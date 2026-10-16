@@ -578,3 +578,11 @@ console.log('Passed: print details preserve all recorded components of grouped s
 
 }
 console.log('Passed: parameter validation, immutable originals, repeat edits, save/restore, exact reset, mode/copy isolation, replay settings and editor entry point.');
+
+// Replay values belong beside recorded values, never beside the preview image.
+{
+ const make=()=>({children:[],attrs:{},style:{},textContent:'',setAttribute(k,v){this.attrs[k]=v;},appendChild(n){n.parentNode=this;this.children.push(n);},removeChild(n){this.children.splice(this.children.indexOf(n),1);}}),header=make(),rows=['sigma','amount','useLuminance'].map(name=>({...make(),cells:[{textContent:name},{textContent:'recorded'}]})),table={querySelector:()=>header,querySelectorAll:()=>rows},card={querySelectorAll:selector=>selector==='table.integration-parameters'?[table]:[header,...rows].flatMap(row=>row.children)},doc={createElement:make};
+ api.updateAtlasParameterColumns(card,[{name:'amount',value:0.35}],doc);assert.equal(header.children[0].textContent,'Replay changes');assert.equal(rows[0].children[0].textContent,'');assert.equal(rows[1].children[0].textContent,'0.35');assert.equal(rows[1].cells[1].textContent,'recorded');
+ api.updateAtlasParameterColumns(card,[{name:'useLuminance',value:false}],doc);assert.equal(header.children.length,1);assert.equal(rows[1].children[0].textContent,'');assert.equal(rows[2].children[0].textContent,'false');api.updateAtlasParameterColumns(card,[],doc);assert.equal(header.children.length,0);assert.ok(rows.every(row=>!row.children.length));
+}
+console.log('Passed: inline replay parameter columns preserve recorded cells, update without duplication and disappear after reset.');
